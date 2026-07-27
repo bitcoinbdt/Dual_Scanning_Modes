@@ -61,12 +61,16 @@ function getMockReferralData(): ReferralCodeResponse {
     localStorage.setItem('mockReferralCode', mockCode);
   }
 
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  
   return {
     code: mockCode,
-    userId: 'mock-user-id',
-    totalReferrals: 0,
-    totalEarned: 0,
-    createdAt: new Date().toISOString(),
+    shareUrl: `${baseUrl}/?ref=${mockCode}`,
+    stats: {
+      totalReferrals: 0,
+      totalEarned: 0,
+      pendingReferrals: 0,
+    },
   };
 }
 
