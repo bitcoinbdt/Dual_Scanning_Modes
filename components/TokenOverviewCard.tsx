@@ -1,0 +1,118 @@
+'use client';
+
+import { motion } from 'framer-motion';
+import { Zap, Database, ShieldCheck, ShieldAlert, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import type { OnChainData } from '@/types/scanner';
+import { InfoTooltip } from './InfoTooltip';
+
+export const TokenOverviewCard = ({ token }: { token: OnChainData }) => {
+  const totalLiq = token.liquidityInfo?.totalLiquidityUsd || 0;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-card relative overflow-hidden border-2 rounded-2xl border-white/10"
+    >
+      <div className="p-4 md:p-6 space-y-4">
+        {/* Token Header */}
+        <div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <h3 className="text-2xl md:text-4xl font-black italic uppercase break-words">{token.tokenName}</h3>
+            <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 px-3 py-1.5 rounded text-xs font-mono font-bold flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5" />
+              {new Date().toLocaleString('en-US', { timeZoneName: 'short' })}
+            </div>
+          </div>
+          <p className="text-slate-500 font-mono text-[10px] md:text-sm break-all mt-1">{token.address}</p>
+        </div>
+        
+        {/* Quick Stats Badges */}
+        <motion.div 
+            className="flex flex-wrap gap-2 md:gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+        >
+            <div className="bg-white/5 px-4 py-2 rounded-full border border-white/10 flex items-center gap-2">
+                <Zap className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Target: {token.symbol || '??'}</span>
+            </div>
+            <div className="bg-white/5 px-4 py-2 rounded-full border border-white/10 flex items-center gap-2">
+                <Database className="w-3 h-3 text-primary-500" />
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">Supply: {token.totalSupply.toLocaleString()}</span>
+            </div>
+            <div className={`${token.contractVerified ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'} px-4 py-2 rounded-full border flex items-center gap-2`}>
+                {token.contractVerified ? <ShieldCheck className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest">
+                  {token.contractVerified ? 'Verified Authentic' : 'Unverified Threat'}
+                </span>
+            </div>
+        </motion.div>
+
+        {/* Core Metrics Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="bg-white/5 p-3 rounded border border-white/5">
+              <div className="flex items-center mb-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Base Liquidity</p>
+                  <InfoTooltip text="Indicates if the developer has locked the liquidity pool, preventing a sudden withdrawal (rug pull)." />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {token.liquidityLocked ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <XCircle className="w-3 h-3 text-red-500" />}
+                    <span className="text-xs font-mono">{token.liquidityLocked ? 'LOCKED' : 'UNLOCKED'}</span>
+                </div>
+                {totalLiq > 0 && (
+                  <span className="text-xs font-mono text-slate-400">
+                    ${totalLiq >= 1000000 
+                      ? (totalLiq / 1000000).toFixed(2) + 'M'
+                      : totalLiq >= 1000 
+                      ? (totalLiq / 1000).toFixed(2) + 'K'
+                      : totalLiq.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </span>
+                )}
+              </div>
+          </div>
+          <div className="bg-white/5 p-3 rounded border border-white/5">
+              <div className="flex items-center mb-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Tax B/S</p>
+                  <InfoTooltip text="The percentage tax applied to every buy and sell transaction by the smart contract." />
+              </div>
+              <span className="text-xs font-mono">{token.taxBuy} / {token.taxSell}</span>
+          </div>
+          <div className="bg-white/5 p-3 rounded border border-white/5">
+              <div className="flex items-center mb-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Wash Trade</p>
+                  <InfoTooltip text="Percentage of trading volume generated by bots trading with themselves to artificially inflate volume and trick buyers." />
+              </div>
+              <span className="text-xs font-mono">{token.washTradingPercentage !== undefined ? `${token.washTradingPercentage}%` : 'N/A'}</span>
+          </div>
+          <div className={`p-3 rounded border ${token.contractVerified ? 'bg-white/5 border-white/5' : 'bg-red-500/10 border-red-500/20'}`}>
+              <div className="flex items-center mb-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Verified</p>
+                  <InfoTooltip text="Indicates if the smart contract code is public and verified on the blockchain explorer. Unverified contracts are highly risky." />
+              </div>
+              <div className="flex items-center gap-2">
+                  {token.contractVerified ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <ShieldAlert className="w-3 h-3 text-red-500" />}
+                  <span className={`text-xs font-mono font-bold ${token.contractVerified ? 'text-slate-300' : 'text-red-500'}`}>
+                      {token.contractVerified ? 'AUTH' : 'THREAT'}
+                  </span>
+              </div>
+          </div>
+          <div className="bg-white/5 p-3 rounded border border-white/5">
+              <div className="flex items-center mb-1">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Supply</p>
+                  <InfoTooltip text="The total circulating supply of the token." />
+              </div>
+              <span className="text-xs font-mono">
+                {token.totalSupply >= 1e9 
+                  ? `${(token.totalSupply / 1e9).toFixed(1)}B` 
+                  : token.totalSupply >= 1e6 
+                  ? `${(token.totalSupply / 1e6).toFixed(1)}M` 
+                  : token.totalSupply.toLocaleString()}
+              </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};

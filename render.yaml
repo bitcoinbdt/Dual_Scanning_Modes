@@ -1,0 +1,21 @@
+services:
+  # Frontend - Next.js Application
+  - type: web
+    name: onchain-scanner-frontend
+    env: node
+    region: oregon
+    plan: free  # Change to 'starter' for production ($7/mo)
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_BACKEND_URL
+        sync: false  # Set manually in Render dashboard
+      - key: NEXT_PUBLIC_TREASURY_WALLET
+        sync: false  # Set manually in Render dashboard
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false  # Set manually in Render dashboard

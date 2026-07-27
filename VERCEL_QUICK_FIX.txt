@@ -1,0 +1,76 @@
+═══════════════════════════════════════════════════════════════
+   🔧 VERCEL ENVIRONMENT VARIABLES - QUICK FIX
+═══════════════════════════════════════════════════════════════
+
+COPY THESE EXACT VARIABLE NAMES INTO VERCEL:
+(Spelling and case matter!)
+
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Variable 1:                                                │
+│  Key:   NEXT_PUBLIC_BACKEND_URL                             │
+│  Value: https://dual-scanning-modes.onrender.com            │
+│         (or your actual backend URL)                        │
+│                                                             │
+│  Variable 2:                                                │
+│  Key:   NEXT_PUBLIC_TREASURY_WALLET                         │
+│  Value: YOUR_SOLANA_WALLET_ADDRESS                          │
+│         (from Phantom wallet)                               │
+│                                                             │
+│  Variable 3:                                                │
+│  Key:   NEXT_PUBLIC_SUPABASE_URL                            │
+│  Value: https://sanpifotyozeinatpyki.supabase.co            │
+│                                                             │
+│  Variable 4:                                                │
+│  Key:   NEXT_PUBLIC_SUPABASE_ANON_KEY                       │
+│  Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...            │
+│         (your full Supabase anon key - very long)           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════
+   COMMON MISTAKES (DO NOT USE THESE):
+═══════════════════════════════════════════════════════════════
+
+❌ NEXT_PUBLIC_URL                    (wrong - missing BACKEND_)
+❌ NEXT_PUBLIC_BACKEND                (wrong - missing _URL)
+❌ NEXT_PUBLIC_API_URL                (wrong - different name)
+❌ BACKEND_URL                        (wrong - missing NEXT_PUBLIC_)
+❌ SUPABASE_URL                       (wrong - missing NEXT_PUBLIC_)
+❌ next_public_backend_url            (wrong - lowercase)
+
+═══════════════════════════════════════════════════════════════
+   QUICK FIX STEPS:
+═══════════════════════════════════════════════════════════════
+
+1. Go to: https://vercel.com/dashboard
+2. Select your project
+3. Settings → Environment Variables
+4. Delete any incorrectly named variables
+5. Add 4 variables with EXACT names above
+6. Check all environments (Production, Preview, Development)
+7. Save
+8. Go to Deployments → Redeploy latest
+
+═══════════════════════════════════════════════════════════════
+   VERIFY VARIABLES ARE SET:
+═══════════════════════════════════════════════════════════════
+
+After deployment, open browser console (F12) and run:
+
+console.log({
+  backend: process.env.NEXT_PUBLIC_BACKEND_URL,
+  wallet: process.env.NEXT_PUBLIC_TREASURY_WALLET,
+  supabase: process.env.NEXT_PUBLIC_SUPABASE_URL
+})
+
+Should show your values, NOT "undefined"!
+
+═══════════════════════════════════════════════════════════════
+   NEED MORE HELP?
+═══════════════════════════════════════════════════════════════
+
+See: VERCEL_ENV_FIX.md (detailed guide)
+See: VERCEL_DEPLOYMENT_GUIDE.md (full deployment)
+
+═══════════════════════════════════════════════════════════════
