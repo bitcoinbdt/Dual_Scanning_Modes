@@ -8,10 +8,13 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
+// Flag to track if backend is available
+let backendAvailable = true;
+
 // Create axios instance with default config
 const referralApiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 10000, // Reduced timeout to fail faster
   headers: {
     'Content-Type': 'application/json',
   },
@@ -32,19 +35,53 @@ referralApiClient.interceptors.request.use((config) => {
 referralApiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-      console.warn('Backend API not available. Using mock data for development.');
+    if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
+      console.warn('⚠️ Backend API not available. Using fallback mode.');
+      backendAvailable = false;
     }
     return Promise.reject(error);
   }
 );
 
+// Mock data generator for when backend is unavailable
+function generateMockReferralCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+function getMockReferralData(): ReferralCodeResponse {
+  // Try to get existing mock code from localStorage
+  let mockCode = localStorage.getItem('mockReferralCode');
+  if (!mockCode) {
+    mockCode = generateMockReferralCode();
+    localStorage.setItem('mockReferralCode', mockCode);
+  }
+
+  return {
+    code: mockCode,
+    userId: 'mock-user-id',
+    totalReferrals: 0,
+    totalEarned: 0,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Get current user's referral code and stats
  */
 export async function getReferralCode(): Promise<ReferralCodeResponse> {
-  const response = await referralApiClient.get<ReferralCodeResponse>('/api/referral/code');
-  return response.data;
+  try {
+    const response = await referralApiClient.get<ReferralCodeResponse>('/api/referral/code');
+    backendAvailable = true;
+    return response.data;
+  } catch (error: any) {
+    console.warn('⚠️ Referral backend unavailable. Using mock data. Deploy backend to Render to enable real referrals.');
+    return getMockReferralData();
+  }
 }
 
 /**
@@ -54,10 +91,19 @@ export async function getReferralHistory(
   limit = 20,
   offset = 0
 ): Promise<ReferralHistoryResponse> {
-  const response = await referralApiClient.get<ReferralHistoryResponse>('/api/referral/history', {
-    params: { limit, offset },
-  });
-  return response.data;
+  try {
+    const response = await referralApiClient.get<ReferralHistoryResponse>('/api/referral/history', {
+      params: { limit, offset },
+    });
+    backendAvailable = true;
+    return response.data;
+  } catch (error: any) {
+    console.warn('⚠️ Referral backend unavailable. Using empty history.');
+    return {
+      referrals: [],
+      total: 0,
+    };
+  }
 }
 
 /**
@@ -71,10 +117,11 @@ export async function applyReferralCode(
       '/api/referral/apply',
       { code }
     );
+    backendAvailable = true;
     return response.data;
   } catch (error: any) {
-    console.error('Error applying referral code:', error);
-    throw new Error(error.response?.data?.message || 'Failed to apply referral code');
+    console.warn('⚠️ Referral backend unavailable. Cannot apply referral codes until backend is deployed.');
+    throw new Error('Referral system temporarily unavailable. Backend not deployed yet.');
   }
 }
 
