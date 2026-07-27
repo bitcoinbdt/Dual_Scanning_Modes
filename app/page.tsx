@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Target, Zap, Search, Database, Clock, ExternalLink, Cpu } from 'lucide-react';
@@ -21,7 +21,7 @@ import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
 import toast from 'react-hot-toast';
 
-export default function HomePage() {
+function HomePageContent() {
   useEventBus();
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
@@ -314,5 +314,20 @@ export default function HomePage() {
         currentBalance={balance.balance}
       />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Cpu className="w-12 h-12 text-primary-500 animate-pulse mx-auto" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   );
 }
