@@ -1,0 +1,33 @@
+{
+  "name": "onchain-scanner-backend",
+  "version": "1.0.0",
+  "description": "Backend API for OnChain Alpha Scanner",
+  "scripts": {
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "build": "nest build"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/config": "^3.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
+
+// ===========================================
+// INSTALLATION COMMAND:
+// ===========================================
+// Run this in your backend project root:
+//
+// npm install @supabase/supabase-js
+//
+// This is the ONLY new dependency needed!
