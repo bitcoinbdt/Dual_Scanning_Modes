@@ -1,28 +1,9 @@
-import axios from 'axios';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-
-const api = axios.create({
-  baseURL: BACKEND_URL,
-  timeout: 120000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add interceptor for better error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
-      throw new Error('Backend server is not running. Please start the backend server at ' + BACKEND_URL);
-    }
-    if (error.response?.data?.message) {
-      throw new Error(error.response.data.message);
-    }
-    throw error;
-  }
-);
+/**
+ * Scanner API Client
+ * 
+ * Now uses embedded Next.js API routes instead of external backend.
+ * All blockchain data collection happens server-side in the same app.
+ */
 
 export interface BasicScanResponse {
   address: string;
@@ -41,42 +22,78 @@ export interface BasicScanResponse {
   liquidityInfo?: any;
 }
 
-export async function getBasicScan(address: string, chain: string = 'evm'): Promise<BasicScanResponse> {
+/**
+ * Scan a token (EVM or Solana) using embedded blockchain services
+ */
+export async function getBasicScan(address: string, chain: string = '1'): Promise<BasicScanResponse> {
   try {
-    const res = await api.post(`/api/scanner/scan`, { address, chain, scanType: 'BASIC' });
-    return res.data;
+    const res = await fetch('/api/scan/basic', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ address, chain })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Scan failed');
+    }
+    
+    return data.data;
   } catch (error: any) {
     console.error('[Scanner API] Error:', error);
     throw error;
   }
 }
 
-export async function startElevatorScan(address: string, chain: string = 'evm', mood: string = 'neutral'): Promise<{ jobId: string, status: string, data?: any }> {
+/**
+ * Elevator scan - TODO: Implement deep analysis in the future
+ * For now, falls back to basic scan
+ */
+export async function startElevatorScan(
+  address: string, 
+  chain: string = '1', 
+  mood: string = 'neutral'
+): Promise<{ jobId: string, status: string, data?: any }> {
   try {
-    const res = await api.post('/api/scanner/scan', { address, chain, mood, scanType: 'ELEVATOR' });
-    return res.data;
+    // For now, just do a basic scan and return immediately
+    const data = await getBasicScan(address, chain);
+    return {
+      jobId: 'immediate',
+      status: 'completed',
+      data
+    };
   } catch (error: any) {
-    console.error('[Scanner API] Error:', error);
+    console.error('[Scanner API] Elevator scan error:', error);
     throw error;
   }
 }
 
+/**
+ * Get elevator job status - TODO: Implement job queue in the future
+ */
 export async function getElevatorJobStatus(jobId: string): Promise<{ status: string, address?: string, data?: any }> {
-  try {
-    const res = await api.get(`/api/scanner/elevator/job/${jobId}`);
-    return res.data;
-  } catch (error: any) {
-    console.error('[Scanner API] Error:', error);
-    throw error;
-  }
+  return {
+    status: 'completed',
+    data: null
+  };
 }
 
+/**
+ * Validate backend connection (now checks embedded API health)
+ */
 export async function validateBackendConnection() {
   try {
-    await api.get('/api/health');
-    return { connected: true, redis: true };
+    const res = await fetch('/api/health');
+    const data = await res.json();
+    return { 
+      connected: res.ok, 
+      scanner: data.scanner 
+    };
   } catch (error) {
-    console.warn('[Scanner API] Backend not available');
-    return { connected: false, redis: false };
+    console.warn('[Scanner API] Health check failed');
+    return { connected: false, scanner: 'offline' };
   }
 }
