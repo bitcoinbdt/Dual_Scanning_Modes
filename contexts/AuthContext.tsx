@@ -46,6 +46,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: session.user.email || '',
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User'
         });
+        // Store JWT token for API calls
+        if (session.access_token) {
+          localStorage.setItem('authToken', session.access_token);
+        }
       }
     });
 
@@ -58,8 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: session.user.email || '',
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User'
           });
+          // Store JWT token for API calls
+          if (session.access_token) {
+            localStorage.setItem('authToken', session.access_token);
+          }
         } else {
           setUser(null);
+          localStorage.removeItem('authToken');
         }
       }
     );
@@ -89,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (email: string, password: string, name: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -99,6 +108,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     });
     if (error) throw error;
+    
+    // Check for pending referral code and apply it
+    if (typeof window !== 'undefined') {
+      const pendingCode = localStorage.getItem('pendingReferralCode');
+      if (pendingCode && data.user) {
+        // Import the function dynamically to avoid circular dependency
+        import('../services/referralApi').then(async ({ applyReferralCode }) => {
+          try {
+            // Wait a bit for user profile to be created
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Apply referral code
+            await applyReferralCode(pendingCode);
+            localStorage.removeItem('pendingReferralCode');
+            
+            // Show success toast
+            if (typeof window !== 'undefined' && (window as any).toast) {
+              (window as any).toast.success('Referral code applied successfully!');
+            }
+          } catch (error) {
+            console.error('Failed to apply referral code:', error);
+          }
+        });
+      }
+    }
   };
 
   const logout = async () => {

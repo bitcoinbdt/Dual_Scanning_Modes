@@ -43,22 +43,8 @@ referralApiClient.interceptors.response.use(
  * Get current user's referral code and stats
  */
 export async function getReferralCode(): Promise<ReferralCodeResponse> {
-  try {
-    const response = await referralApiClient.get<ReferralCodeResponse>('/api/referral/code');
-    return response.data;
-  } catch (error: any) {
-    console.warn('Backend not available, using mock referral data for development');
-    // Return mock data for development
-    return {
-      code: 'DEV-MOC-K123',
-      shareUrl: `${window.location.origin}/?ref=DEV-MOC-K123`,
-      stats: {
-        totalReferrals: 5,
-        totalEarned: 150,
-        pendingReferrals: 2,
-      },
-    };
-  }
+  const response = await referralApiClient.get<ReferralCodeResponse>('/api/referral/code');
+  return response.data;
 }
 
 /**
@@ -68,53 +54,10 @@ export async function getReferralHistory(
   limit = 20,
   offset = 0
 ): Promise<ReferralHistoryResponse> {
-  try {
-    const response = await referralApiClient.get<ReferralHistoryResponse>('/api/referral/history', {
-      params: { limit, offset },
-    });
-    return response.data;
-  } catch (error: any) {
-    console.warn('Backend not available, using mock referral history for development');
-    return {
-      referrals: [
-        {
-          id: '1',
-          referrerUserId: 'user1',
-          referredUserId: 'user2',
-          referredUsername: 'alice_crypto',
-          referralCode: 'DEV-MOC-K123',
-          status: 'rewarded',
-          createdAt: '2026-07-20T10:30:00Z',
-          firstPurchaseAt: '2026-07-21T14:20:00Z',
-          firstPurchaseAmount: 1.6,
-          bonusCreditsAwarded: 40,
-        },
-        {
-          id: '2',
-          referrerUserId: 'user1',
-          referredUserId: 'user3',
-          referredUsername: 'bob_trader',
-          referralCode: 'DEV-MOC-K123',
-          status: 'rewarded',
-          createdAt: '2026-07-18T08:15:00Z',
-          firstPurchaseAt: '2026-07-19T11:45:00Z',
-          firstPurchaseAmount: 0.9,
-          bonusCreditsAwarded: 15,
-        },
-        {
-          id: '3',
-          referrerUserId: 'user1',
-          referredUserId: 'user4',
-          referredUsername: 'charlie_sol',
-          referralCode: 'DEV-MOC-K123',
-          status: 'pending',
-          createdAt: '2026-07-25T16:00:00Z',
-          bonusCreditsAwarded: 0,
-        },
-      ],
-      total: 3,
-    };
-  }
+  const response = await referralApiClient.get<ReferralHistoryResponse>('/api/referral/history', {
+    params: { limit, offset },
+  });
+  return response.data;
 }
 
 /**
