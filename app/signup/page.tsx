@@ -21,13 +21,19 @@ function SignupPageContent() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (but only on initial mount)
   useEffect(() => {
-    if (isAuthenticated) {
-      toast.error('You are already logged in!');
-      router.push('/');
-    }
-  }, [isAuthenticated, router]);
+    // Only check on initial mount, not when auth state changes during signup
+    const checkInitialAuth = async () => {
+      if (isAuthenticated && !loading) {
+        toast.error('You are already logged in!');
+        router.push('/');
+      }
+    };
+    
+    checkInitialAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   // Check for referral code from URL or localStorage
   useEffect(() => {
