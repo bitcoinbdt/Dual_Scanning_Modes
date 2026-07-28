@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Target, Zap, Search, Database, Clock, ExternalLink, Cpu } from 'lucide-react';
+import { Target, Zap, Search, Database, Clock, ExternalLink, Cpu, Info, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditContext';
 import { useEventBus } from '@/hooks/useEventBus';
@@ -17,6 +17,7 @@ import { TokenAuditCard } from '@/components/TokenAuditCard';
 import { MarketIntelligenceCard } from '@/components/MarketIntelligenceCard';
 import { RecentTransactionsCard } from '@/components/RecentTransactionsCard';
 import { ElevatorResultCard } from '@/components/ElevatorResultCard';
+import { RawTransactionTable } from '@/components/elevator/RawTransactionTable';
 import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
 import toast from 'react-hot-toast';
@@ -33,6 +34,7 @@ function HomePageContent() {
   const [isElevatorMode, setIsElevatorMode] = useState(false);
   const [address, setAddress] = useState('');
   const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR'>('BASIC');
+  const [selectedChain, setSelectedChain] = useState<'auto' | 'solana' | 'bsc' | 'eth'>('auto');
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
   const [showCreditStore, setShowCreditStore] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
@@ -101,30 +103,20 @@ function HomePageContent() {
       toast.success(`${required} credits deducted. Scanning...`);
 
       if (type === 'ELEVATOR') {
-        const res = await startElevatorScan(addr, 'evm', 'neutral');
-        if (res.jobId === 'cached') {
-          setElevatorData(res.data);
-          setIsElevatorMode(true);
-          setLoading(false);
-          return;
-        }
+        // Determine preferred chain (convert 'auto' to undefined)
+        const preferredChain = selectedChain === 'auto' ? undefined : selectedChain;
         
-        // Poll for results
-        const interval = setInterval(async () => {
-          try {
-            const statusRes = await getElevatorJobStatus(res.jobId);
-            if (statusRes.status === 'completed') {
-              clearInterval(interval);
-              setElevatorData(statusRes.data);
-              setIsElevatorMode(true);
-              setLoading(false);
-            }
-          } catch (e) {
-            clearInterval(interval);
-            setLoading(false);
-            toast.error('Job polling failed: ' + (e as Error).message);
-          }
-        }, 1000);
+        // Call new elevator API with credits spent and preferred chain
+        const res = await startElevatorScan(addr, required, preferredChain);
+        setElevatorData(res.rawData);
+        setIsElevatorMode(true);
+        setLoading(false);
+        
+        // Show metadata in console
+        if (res.metadata) {
+          console.log('[Elevator Scan] Metadata:', res.metadata);
+          toast.success(`Loaded ${res.metadata.transactionCount} transactions from ${res.metadata.holderCount} holders`);
+        }
       } else {
         const data = await getBasicScan(addr, 'evm');
         setTokenData(data as any);
@@ -172,6 +164,59 @@ function HomePageContent() {
                     </button>
                   </div>
                 </div>
+
+                {/* Chain Selector - Only for Elevator Mode */}
+                {scanType === 'ELEVATOR' && (
+                  <div className="flex flex-col items-center gap-3">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Select Blockchain
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedChain}
+                        onChange={(e) => setSelectedChain(e.target.value as 'auto' | 'solana' | 'bsc' | 'eth')}
+                        className="appearance-none bg-slate-900 border border-slate-700 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
+                      >
+                        <option value="auto">🔍 Auto-Detect</option>
+                        <option value="solana">🟢 Solana</option>
+                        <option value="bsc">🟡 BSC (Binance Smart Chain)</option>
+                        <option value="eth">🔵 Ethereum</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      </div>
+                    </div>
+                    {selectedChain === 'auto' && (
+                      <p className="text-xs text-slate-500 text-center max-w-md">
+                        Chain will be automatically detected from address format. 
+                        <span className="text-slate-400"> Solana: base58, EVM: 0x...</span>
+                      </p>
+                    )}
+                    {selectedChain !== 'auto' && (
+                      <p className="text-xs text-blue-400 text-center max-w-md flex items-center gap-2 justify-center">
+                        <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                        {selectedChain.toUpperCase()} chain selected manually
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Elevator Scan Info Banner */}
+                {scanType === 'ELEVATOR' && (
+                  <div className="flex items-start gap-3 p-4 bg-blue-900/20 border border-blue-400/30 rounded-xl backdrop-blur-sm">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+                        <Info className="w-3 h-3 text-blue-400" />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-300 leading-relaxed">
+                        <strong className="text-blue-200">Multi-Chain Support:</strong> Elevator Deep Scan now supports <span className="text-green-400">Solana</span>, <span className="text-yellow-400">BSC</span>, and <span className="text-blue-400">Ethereum</span> tokens. 
+                        <span className="text-blue-400/80"> More chains coming soon!</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className={`flex-1 rgb-border ${loading ? 'opacity-80' : ''}`}>
@@ -255,6 +300,19 @@ function HomePageContent() {
               <p className="text-slate-500 font-mono text-[10px] uppercase tracking-widest animate-pulse">
                 {isElevatorMode ? 'Deep Analysis In Progress...' : 'Establishing Secure Link...'}
               </p>
+              {/* Show selected chain if not auto */}
+              {scanType === 'ELEVATOR' && selectedChain !== 'auto' && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    selectedChain === 'solana' ? 'bg-green-400' :
+                    selectedChain === 'bsc' ? 'bg-yellow-400' :
+                    'bg-blue-400'
+                  }`}></div>
+                  <span className="text-xs text-slate-400">
+                    Scanning {selectedChain.toUpperCase()}
+                  </span>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -273,7 +331,16 @@ function HomePageContent() {
         {/* Elevator Scan Results */}
         {elevatorData && isElevatorMode && (
           <div className="space-y-6">
-            <ElevatorResultCard data={elevatorData} />
+            {/* NEW: Raw Transaction Table with P&L - PRIMARY FEATURE */}
+            <RawTransactionTable
+              rawData={elevatorData}
+              tokenSymbol={elevatorData.token?.symbol || 'TOKEN'}
+              tokenAddress={address}
+              network={(elevatorData.blockchain || 'solana') as 'solana' | 'ethereum' | 'bsc'}
+            />
+            
+            {/* OLD: Advanced analytics card - kept for future use but commented out */}
+            {/* <ElevatorResultCard data={elevatorData} /> */}
           </div>
         )}
 

@@ -49,21 +49,34 @@ export async function getBasicScan(address: string, chain: string = '1'): Promis
 }
 
 /**
- * Elevator scan - TODO: Implement deep analysis in the future
- * For now, falls back to basic scan
+ * Elevator scan - Deep blockchain analysis with raw transaction data
+ * Collects OHLCV, transactions, wallet balances, and holder metrics
  */
 export async function startElevatorScan(
-  address: string, 
-  chain: string = '1', 
-  mood: string = 'neutral'
-): Promise<{ jobId: string, status: string, data?: any }> {
+  address: string,
+  creditsSpent: number = 10,
+  preferredChain?: 'eth' | 'bsc' | 'solana'
+): Promise<{ jobId: string, status: string, rawData?: any, metadata?: any }> {
   try {
-    // For now, just do a basic scan and return immediately
-    const data = await getBasicScan(address, chain);
+    const res = await fetch('/api/scan/elevator', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ address, creditsSpent, preferredChain })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Elevator scan failed');
+    }
+    
     return {
       jobId: 'immediate',
       status: 'completed',
-      data
+      rawData: data.rawData,
+      metadata: data.metadata
     };
   } catch (error: any) {
     console.error('[Scanner API] Elevator scan error:', error);

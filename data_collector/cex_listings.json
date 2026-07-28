@@ -1,0 +1,22 @@
+{
+  "listings": [],
+  "description": "CEX listing events for external event tracking. Add entries manually or via API integration.",
+  "schema": {
+    "token_address": "string - Token contract address",
+    "exchange_name": "string - CEX name (e.g., Binance, Coinbase, Kraken)",
+    "listing_timestamp": "number - Unix timestamp of listing",
+    "price_before_listing_1h": "number|null - Price 1 hour before listing",
+    "price_after_listing_1h": "number|null - Price 1 hour after listing",
+    "price_after_listing_6h": "number|null - Price 6 hours after listing",
+    "price_after_listing_24h": "number|null - Price 24 hours after listing"
+  },
+  "example": {
+    "token_address": "So11111111111111111111111111111111111111112",
+    "exchange_name": "Binance",
+    "listing_timestamp": 1704153600,
+    "price_before_listing_1h": 0.000123,
+    "price_after_listing_1h": 0.000145,
+    "price_after_listing_6h": 0.000138,
+    "price_after_listing_24h": 0.000142
+  }
+}

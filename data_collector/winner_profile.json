@@ -1,0 +1,30 @@
+{
+  "profile_id": "historical_winners_v1",
+  "sample_size": 0,
+  "description": "Historical winner profile for pattern matching. MUST be populated with real data before use.",
+  "feature_ranges": {
+    "critical_features": {
+      "G1": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "W2": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "V2": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "T2": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null }
+    },
+    "important_features": {
+      "G4": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "W1": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "T3": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "W6": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null }
+    },
+    "supporting_features": {
+      "G3": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "G9": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "W4": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null },
+      "V7": { "min": null, "q1": null, "median": null, "q3": null, "max": null, "iqr": null }
+    }
+  },
+  "disqualifying_patterns": {
+    "extreme_concentration": { "threshold": 0.85, "description": "Gini coefficient > 0.85" },
+    "suspicious_timing": { "threshold": 300, "description": "ATH within first 5 minutes" }
+  },
+  "status": "EMPTY - Pattern matching DISABLED until populated with historical data"
+}
