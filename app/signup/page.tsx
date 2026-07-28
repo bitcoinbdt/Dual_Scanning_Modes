@@ -75,7 +75,18 @@ function SignupPageContent() {
       toast.success('Account created successfully! Welcome aboard! 🎉');
       router.push('/');
     } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+      // Supabase errors can be objects — extract a readable message
+      const raw = err?.message;
+      const msg =
+        typeof raw === 'string' && raw && raw !== '{}'
+          ? raw
+          : err?.error_description ||
+            err?.msg ||
+            (typeof err?.toString === 'function' && err.toString() !== '[object Object]'
+              ? err.toString()
+              : null) ||
+            'Signup failed. Please check your details and try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

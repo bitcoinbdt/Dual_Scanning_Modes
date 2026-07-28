@@ -59,7 +59,18 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       setReferralCode('');
       setIsReferralLocked(false);
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      // Supabase errors can be objects — extract a readable message
+      const raw = err?.message;
+      const msg =
+        typeof raw === 'string' && raw && raw !== '{}'
+          ? raw
+          : err?.error_description ||
+            err?.msg ||
+            (typeof err?.toString === 'function' && err.toString() !== '[object Object]'
+              ? err.toString()
+              : null) ||
+            'Authentication failed. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
