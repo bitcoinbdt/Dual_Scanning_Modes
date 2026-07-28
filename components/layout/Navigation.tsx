@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift } from 'lucide-react';
+import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useReferralSession } from '@/hooks/useReferralSession';
 import { CreditBadge } from '@/components/credits/CreditBadge';
 import AuthModal from '@/components/AuthModal';
 
@@ -17,7 +18,9 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const router = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { hasReferralCode } = useReferralSession();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -176,19 +179,41 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="ml-1 md:ml-2 pl-1 md:pl-2 border-l border-white/10 flex items-center gap-1.5 px-2 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold bg-primary-600 hover:bg-primary-500 text-white transition-colors"
-              >
-                <UserIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span>Login</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Sign Up Button */}
+                <button
+                  onClick={() => router.push('/signup')}
+                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-white transition-colors relative"
+                >
+                  <UserPlus className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span>Sign Up</span>
+                  {hasReferralCode && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Referral code detected" />
+                  )}
+                </button>
+                
+                {/* Login Button */}
+                <button
+                  onClick={() => {
+                    setAuthModalMode('login');
+                    setShowAuthModal(true);
+                  }}
+                  className="ml-1 md:ml-2 pl-1 md:pl-2 border-l border-white/10 flex items-center gap-1.5 px-2 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold bg-primary-600 hover:bg-primary-500 text-white transition-colors"
+                >
+                  <UserIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span>Login</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+        defaultMode={authModalMode}
+      />
     </>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Target, Zap, Search, Database, Clock, ExternalLink, Cpu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 function HomePageContent() {
   useEventBus();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { balance, hasEnoughCredits, deductCredits } = useCredits();
   const [loading, setLoading] = useState(false);
@@ -36,18 +37,35 @@ function HomePageContent() {
   const [showCreditStore, setShowCreditStore] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
 
-  // Capture referral code from URL parameter
+  // Capture referral code from URL parameter and redirect to signup
   useEffect(() => {
     const refCode = searchParams.get('ref');
     if (refCode) {
-      // Store in localStorage for later use during registration/purchase
-      localStorage.setItem('pendingReferralCode', refCode);
-      toast.success(`Referral code ${refCode} saved! It will be applied on your first purchase.`, {
-        duration: 5000,
+      // Check if user is already logged in
+      if (isAuthenticated) {
+        toast.error('You\'re already registered. Referral codes can only be used during signup.', {
+          duration: 5000,
+          icon: '❌',
+        });
+        return;
+      }
+
+      // Store referral code
+      localStorage.setItem('pendingReferralCode', refCode.toUpperCase());
+      sessionStorage.setItem('hasReferralCode', 'true');
+      
+      // Show success message and redirect to signup
+      toast.success(`Referral code ${refCode.toUpperCase()} detected! Redirecting to signup...`, {
+        duration: 3000,
         icon: '🎁',
       });
+      
+      // Redirect to signup page with referral code
+      setTimeout(() => {
+        router.push(`/signup?ref=${refCode.toUpperCase()}`);
+      }, 1000);
     }
-  }, [searchParams]);
+  }, [searchParams, isAuthenticated, router]);
 
   // Check backend connection on mount
   useEffect(() => {

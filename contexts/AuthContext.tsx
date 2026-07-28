@@ -13,7 +13,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, name: string, referralCode?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
   followedCoins: Set<string>;
@@ -97,41 +97,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) throw error;
   };
 
-  const signup = async (email: string, password: string, name: string) => {
+  const signup = async (email: string, password: string, name: string, referralCode?: string) => {
     const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           name: name,
+          referralCode: referralCode || null,
         },
       },
     });
     if (error) throw error;
     
-    // Check for pending referral code and apply it
-    if (typeof window !== 'undefined') {
-      const pendingCode = localStorage.getItem('pendingReferralCode');
-      if (pendingCode && data.user) {
-        // Import the function dynamically to avoid circular dependency
-        import('../services/referralApi').then(async ({ applyReferralCode }) => {
-          try {
-            // Wait a bit for user profile to be created
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Apply referral code
-            await applyReferralCode(pendingCode);
-            localStorage.removeItem('pendingReferralCode');
-            
-            // Show success toast
-            if (typeof window !== 'undefined' && (window as any).toast) {
-              (window as any).toast.success('Referral code applied successfully!');
-            }
-          } catch (error) {
-            console.error('Failed to apply referral code:', error);
-          }
-        });
+    // Apply referral code if provided
+    if (referralCode && data.user) {
+      try {
+        // Wait a bit for user profile to be created
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Import and apply referral code
+        const { applyReferralCode } = await import('../services/referralApi');
+        await applyReferralCode(referralCode);
+        
+        // Clear pending code from storage
+        localStorage.removeItem('pendingReferralCode');
+        sessionStorage.removeItem('hasReferralCode');
+        
+        // Show success toast
+        if (typeof window !== 'undefined' && (window as any).toast) {
+          (window as any).toast.success('Referral code applied successfully! 🎉');
+        }
+      } catch (error) {
+        console.error('Failed to apply referral code:', error);
+        // Show warning but don't fail signup
+        if (typeof window !== 'undefined' && (window as any).toast) {
+          (window as any).toast.error('Account created, but referral code could not be applied. Please contact support.');
+        }
       }
+    } else {
+      // Clear any pending referral code if no code was provided
+      localStorage.removeItem('pendingReferralCode');
+      sessionStorage.removeItem('hasReferralCode');
     }
   };
 

@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { X, Mail, Lock, User, AlertCircle, Gift, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface AuthModalProps {
@@ -16,9 +16,22 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [isReferralLocked, setIsReferralLocked] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, signup, loginWithGoogle } = useAuth();
+
+  // Check for pending referral code when switching to signup mode
+  useEffect(() => {
+    if (mode === 'signup' && isOpen) {
+      const pendingCode = localStorage.getItem('pendingReferralCode');
+      if (pendingCode) {
+        setReferralCode(pendingCode.toUpperCase());
+        setIsReferralLocked(true);
+      }
+    }
+  }, [mode, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +45,19 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         if (!name.trim()) {
           throw new Error('Name is required');
         }
-        await signup(email, password, name);
+        // Validate referral code format if provided
+        if (referralCode && !/^[A-Z0-9]{8}$/.test(referralCode)) {
+          throw new Error('Invalid referral code format. Must be 8 characters.');
+        }
+        await signup(email, password, name, referralCode || undefined);
       }
       onClose();
       // Reset form
       setEmail('');
       setPassword('');
       setName('');
+      setReferralCode('');
+      setIsReferralLocked(false);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
@@ -50,6 +69,11 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setError('');
     setLoading(true);
     try {
+      // Store referral code before OAuth redirect if in signup mode
+      if (mode === 'signup' && referralCode) {
+        localStorage.setItem('pendingReferralCode', referralCode);
+        sessionStorage.setItem('hasReferralCode', 'true');
+      }
       await loginWithGoogle();
       onClose();
     } catch (err: any) {
@@ -178,6 +202,44 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                         </p>
                       )}
                     </div>
+
+                    {/* Referral Code Field - Only in Signup Mode */}
+                    {mode === 'signup' && (
+                      <div>
+                        <label className="block text-sm font-bold text-slate-400 mb-2">
+                          Referral Code {!isReferralLocked && <span className="text-slate-600">(Optional)</span>}
+                        </label>
+                        <div className="rgb-border">
+                          <div className="relative">
+                            <Gift className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                            <input
+                              type="text"
+                              value={referralCode}
+                              onChange={(e) => !isReferralLocked && setReferralCode(e.target.value.toUpperCase())}
+                              placeholder={isReferralLocked ? "Code applied from referral link" : "Enter referral code (optional)"}
+                              className={`w-full bg-slate-900 rounded-lg py-3 pl-11 pr-11 text-white placeholder-slate-600 focus:outline-none border-0 ${
+                                isReferralLocked ? 'cursor-not-allowed opacity-75' : ''
+                              }`}
+                              readOnly={isReferralLocked}
+                              maxLength={8}
+                            />
+                            {isReferralLocked && (
+                              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-400" />
+                            )}
+                          </div>
+                        </div>
+                        {isReferralLocked ? (
+                          <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Referral code will be applied after signup
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500 mt-1">
+                            Have a referral code? Enter it to earn bonus credits
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <button
                       type="submit"
