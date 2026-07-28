@@ -33,11 +33,17 @@ referralApiClient.interceptors.request.use((config) => {
 });
 
 // Add response interceptor to handle network errors gracefully
+// Add response interceptor to detect backend availability
+let hasLoggedReferralBackendStatus = false;
+
 referralApiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-      console.warn('⚠️ Backend API not available. Using Supabase fallback.');
+      if (!hasLoggedReferralBackendStatus) {
+        console.log('💡 Referral API using Supabase fallback.');
+        hasLoggedReferralBackendStatus = true;
+      }
       backendAvailable = false;
     }
     return Promise.reject(error);
@@ -97,8 +103,7 @@ export async function getReferralCode(): Promise<ReferralCodeResponse> {
     backendAvailable = true;
     return response.data;
   } catch (error: any) {
-    console.warn('⚠️ Referral backend unavailable. Falling back to Supabase direct read.');
-    // Read from Supabase directly — the real code was created by the DB trigger on signup
+    // Silently fall back to Supabase
     return getReferralCodeFromSupabase();
   }
 }

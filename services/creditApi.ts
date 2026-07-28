@@ -31,11 +31,16 @@ creditApiClient.interceptors.request.use((config) => {
 });
 
 // Add response interceptor to handle network errors gracefully
+let hasLoggedBackendUnavailable = false;
+
 creditApiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-      console.warn('Backend API not available. Using mock data for development.');
+      if (!hasLoggedBackendUnavailable) {
+        console.log('💡 Backend API not available. Using Supabase and local data.');
+        hasLoggedBackendUnavailable = true;
+      }
     }
     return Promise.reject(error);
   }
@@ -49,8 +54,7 @@ export async function getCreditBalance(): Promise<CreditBalance> {
     const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
     return response.data;
   } catch (error: any) {
-    console.warn('Backend not available, using mock balance for development');
-    // Return mock balance with some credits for testing
+    // Silently fall back to mock balance - no need to spam console
     return {
       balance: 100,
       totalPurchased: 100,
@@ -67,8 +71,7 @@ export async function getCreditPackages(): Promise<CreditPackage[]> {
     const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/api/credits/packages');
     return response.data.packages;
   } catch (error: any) {
-    console.warn('Backend not available, using mock credit packages for development');
-    // Return mock packages for development
+    // Silently fall back to mock packages
     return getMockPackages();
   }
 }

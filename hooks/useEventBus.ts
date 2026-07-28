@@ -18,9 +18,21 @@ export function useEventBus() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const backoffRef = useRef(1000);
   const attemptCountRef = useRef(0);
-  const maxAttempts = 3; // Stop after 3 failed attempts
+  const maxAttempts = 1; // Only try once, then disable
+  const hasShownWarningRef = useRef(false);
 
   useEffect(() => {
+    // Only try to connect if backend URL is not the default Render URL
+    // or if we're in development mode
+    const isDev = process.env.NODE_ENV === 'development';
+    const isDefaultRenderUrl = BACKEND_URL.includes('dual-scanning-modes.onrender.com');
+    
+    // Skip connection if using the template Render URL (backend not deployed)
+    if (isDefaultRenderUrl && !isDev) {
+      console.log('[SSE] Backend not deployed. Event bus disabled.');
+      return;
+    }
+
     connect();
 
     return () => {
@@ -42,13 +54,14 @@ export function useEventBus() {
   const connect = () => {
     // Don't retry if we've exceeded max attempts
     if (attemptCountRef.current >= maxAttempts) {
-      console.log('[SSE] Max connection attempts reached. Event bus disabled.');
+      if (!hasShownWarningRef.current) {
+        console.log('[SSE] Event bus connection disabled. App will continue without real-time events.');
+        hasShownWarningRef.current = true;
+      }
       return;
     }
 
     cleanup();
-
-    console.log('[SSE] Attempting to connect... (Attempt', attemptCountRef.current + 1, ')');
     
     try {
       const es = new EventSource(`${BACKEND_URL}/api/stream/events`);
@@ -56,10 +69,11 @@ export function useEventBus() {
       attemptCountRef.current++;
 
       es.onopen = () => {
-        console.log('[SSE] Connected to EventBus');
+        console.log('[SSE] Connected to event bus');
         setIsConnected(true);
         backoffRef.current = 1000;
         attemptCountRef.current = 0; // Reset on successful connection
+        hasShownWarningRef.current = false;
       };
 
       es.onmessage = (event) => {
@@ -70,7 +84,6 @@ export function useEventBus() {
             return;
           }
 
-          console.log('[SSE] Received Event:', data);
           handleEvent(data);
           
         } catch (e) {
@@ -78,26 +91,22 @@ export function useEventBus() {
         }
       };
 
-      es.onerror = (error) => {
-        console.warn('[SSE] Connection Error (backend may not be running)', error);
+      es.onerror = () => {
         setIsConnected(false);
         es.close();
 
-        // Only retry if we haven't exceeded max attempts
-        if (attemptCountRef.current < maxAttempts) {
-          const nextBackoff = Math.min(backoffRef.current * 2, 30000);
-          backoffRef.current = nextBackoff;
-
-          console.log(`[SSE] Will retry in ${nextBackoff}ms... (${attemptCountRef.current}/${maxAttempts})`);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, nextBackoff);
-        } else {
+        // Don't retry - just disable silently
+        if (!hasShownWarningRef.current) {
           console.log('[SSE] Event bus connection disabled. App will continue without real-time events.');
+          hasShownWarningRef.current = true;
         }
+        attemptCountRef.current = maxAttempts; // Stop retrying
       };
     } catch (error) {
-      console.warn('[SSE] Failed to create EventSource:', error);
+      if (!hasShownWarningRef.current) {
+        console.log('[SSE] Event bus unavailable. App will continue without real-time events.');
+        hasShownWarningRef.current = true;
+      }
       attemptCountRef.current = maxAttempts; // Don't retry on initialization errors
     }
   };
