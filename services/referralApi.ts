@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from '@/lib/supabase';
 import type {
   ReferralCodeResponse,
   ReferralHistoryResponse,
@@ -36,46 +37,59 @@ referralApiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-      console.warn('⚠️ Backend API not available. Using fallback mode.');
+      console.warn('⚠️ Backend API not available. Using Supabase fallback.');
       backendAvailable = false;
     }
     return Promise.reject(error);
   }
 );
 
-// Mock data generator for when backend is unavailable
-function generateMockReferralCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+/**
+ * Fetch referral code directly from Supabase when backend is unavailable.
+ * This reads from the `referral_codes` table which is populated by the
+ * `on_auth_user_created` database trigger on signup.
+ */
+async function getReferralCodeFromSupabase(): Promise<ReferralCodeResponse> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    throw new Error('Not authenticated');
   }
-  return code;
-}
 
-function getMockReferralData(): ReferralCodeResponse {
-  // Try to get existing mock code from localStorage
-  let mockCode = localStorage.getItem('mockReferralCode');
-  if (!mockCode) {
-    mockCode = generateMockReferralCode();
-    localStorage.setItem('mockReferralCode', mockCode);
+  const { data, error } = await supabase
+    .from('referral_codes')
+    .select('code, total_referrals, total_earned_credits')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .single();
+
+  if (error || !data) {
+    throw new Error('No referral code found in database. Please ensure the database trigger is installed.');
   }
+
+  // Fetch pending referrals count (applied code but no purchase yet)
+  const { count: pendingCount } = await supabase
+    .from('referrals')
+    .select('id', { count: 'exact', head: true })
+    .eq('referrer_user_id', user.id)
+    .eq('status', 'confirmed'); // 'confirmed' = code applied, waiting for first purchase
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  
+
   return {
-    code: mockCode,
-    shareUrl: `${baseUrl}/?ref=${mockCode}`,
+    code: data.code,
+    shareUrl: `${baseUrl}/?ref=${data.code}`,
     stats: {
-      totalReferrals: 0,
-      totalEarned: 0,
-      pendingReferrals: 0,
+      totalReferrals: data.total_referrals ?? 0,
+      totalEarned: data.total_earned_credits ?? 0,
+      pendingReferrals: pendingCount ?? 0,
     },
   };
 }
 
 /**
- * Get current user's referral code and stats
+ * Get current user's referral code and stats.
+ * Tries the backend first, then falls back to reading directly from Supabase.
  */
 export async function getReferralCode(): Promise<ReferralCodeResponse> {
   try {
@@ -83,8 +97,9 @@ export async function getReferralCode(): Promise<ReferralCodeResponse> {
     backendAvailable = true;
     return response.data;
   } catch (error: any) {
-    console.warn('⚠️ Referral backend unavailable. Using mock data. Deploy backend to Render to enable real referrals.');
-    return getMockReferralData();
+    console.warn('⚠️ Referral backend unavailable. Falling back to Supabase direct read.');
+    // Read from Supabase directly — the real code was created by the DB trigger on signup
+    return getReferralCodeFromSupabase();
   }
 }
 
