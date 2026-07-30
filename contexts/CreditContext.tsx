@@ -78,7 +78,9 @@ export function CreditProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  // Add credits (after purchase confirmation)
+  // Add credits (optimistic update only)
+  // NOTE: In manual verification flow, credits are actually added by database trigger
+  // when admin approves the request. This function is for optimistic UI updates only.
   const addCredits = useCallback((amount: number) => {
     setBalance(prev => ({
       ...prev,
