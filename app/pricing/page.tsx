@@ -107,9 +107,9 @@ export default function PricingPage() {
                     <div className="text-2xl font-bold text-white">
                       ${pkg.priceUsd}
                     </div>
-                    {pkg.discount && (
+                    {pkg.bonusPercentage > 0 && (
                       <div className="text-sm text-green-400 font-bold mt-1">
-                        Save {pkg.discount}
+                        +{pkg.bonusPercentage}% Bonus
                       </div>
                     )}
                   </div>
