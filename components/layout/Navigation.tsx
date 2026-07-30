@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus } from 'lucide-react';
+import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus, Search, DollarSign, Menu, X } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useReferralSession } from '@/hooks/useReferralSession';
@@ -16,6 +16,7 @@ interface NavigationProps {
 
 export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { hasReferralCode } = useReferralSession();
@@ -23,7 +24,9 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const handleOpenCredits = () => {
     router.push('/credits');
@@ -43,10 +46,24 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
         setShowProfileMenu(false);
         setShowThemeDropdown(false);
       }
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setShowMobileMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const navLinks = [
+    { href: '/', label: 'Scanner', icon: Search },
+    { href: '/pricing', label: 'Pricing', icon: DollarSign },
+    { href: '/referrals', label: 'Referral', icon: Gift },
+  ];
+
+  const isActivePath = (path: string) => {
+    if (path === '/') return pathname === '/';
+    return pathname?.startsWith(path);
+  };
 
   const themes = [
     { id: 'default' as const, name: 'Dark Blue', color: 'bg-blue-500' },
@@ -58,7 +75,8 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2">
             <div className="relative w-10 h-10 flex-shrink-0">
               <svg viewBox="0 0 100 100" className="w-full h-full">
                 <rect x="2" y="2" width="96" height="96" rx="12" fill="none" stroke="#ef4444" strokeWidth="4" />
@@ -83,19 +101,43 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
                 Token Scanner
               </p>
             </div>
-          </div>
+          </Link>
 
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-1">
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = isActivePath(link.href);
+              
+              // Hide Referral link if not authenticated
+              if (link.href === '/referrals' && !isAuthenticated) return null;
+              
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    isActive
+                      ? 'bg-primary-600 text-white'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Right Side Actions */}
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Referrals Link - Only show when authenticated */}
-            {isAuthenticated && (
-              <Link
-                href="/referrals"
-                className="hidden sm:flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-lg transition-colors"
-              >
-                <Gift className="w-4 h-4 text-primary-400" />
-                <span>Referrals</span>
-              </Link>
-            )}
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
 
             {/* Credit Badge - Only show when authenticated */}
             {isAuthenticated && (
@@ -207,6 +249,40 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
             )}
           </div>
         </div>
+
+        {/* Mobile Slide-out Menu */}
+        {showMobileMenu && (
+          <div
+            ref={mobileMenuRef}
+            className="lg:hidden absolute top-full left-0 right-0 bg-slate-900/95 backdrop-blur-md border-b border-white/5 shadow-xl"
+          >
+            <nav className="max-w-7xl mx-auto px-4 py-4 space-y-1">
+              {navLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = isActivePath(link.href);
+                
+                // Hide Referral link if not authenticated
+                if (link.href === '/referrals' && !isAuthenticated) return null;
+                
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setShowMobileMenu(false)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-bold transition-all ${
+                      isActive
+                        ? 'bg-primary-600 text-white'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        )}
       </header>
 
       <AuthModal 
