@@ -8,8 +8,9 @@ import { requireAdmin } from '@/lib/auth/adminAuth';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Check admin authentication
     await requireAdmin();
@@ -31,7 +32,7 @@ export async function PUT(
     const { data: paymentMethod, error } = await supabase
       .from('payment_methods')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -59,8 +60,9 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Check admin authentication
     await requireAdmin();
@@ -69,7 +71,7 @@ export async function DELETE(
     const { data: requests, error: checkError } = await supabase
       .from('credit_purchase_requests')
       .select('id')
-      .eq('payment_method_id', params.id)
+      .eq('payment_method_id', id)
       .limit(1);
 
     if (checkError) {
@@ -91,7 +93,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('payment_methods')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) {
       console.error('Error deleting payment method:', error);

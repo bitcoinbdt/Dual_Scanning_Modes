@@ -8,8 +8,9 @@ import { requireAdmin } from '@/lib/auth/adminAuth';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Check admin authentication
     const admin = await requireAdmin();
@@ -37,7 +38,7 @@ export async function POST(
     const { data: existingRequest, error: fetchError } = await supabase
       .from('credit_purchase_requests')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (fetchError || !existingRequest) {
@@ -64,7 +65,7 @@ export async function POST(
         reviewed_by: admin.id,
         reviewed_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
