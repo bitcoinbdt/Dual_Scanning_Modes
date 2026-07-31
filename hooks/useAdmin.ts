@@ -25,7 +25,7 @@ export function useAdmin() {
       return;
     }
 
-    const adminStatus = user.email === ADMIN_EMAIL;
+    const adminStatus = user.email?.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
     setIsAdmin(adminStatus);
     setLoading(false);
   }, [user, isAuthenticated, sessionLoading]);

@@ -35,7 +35,7 @@ export async function getAdminUser() {
     if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (!error && user) {
-        if (user.email !== ADMIN_EMAIL) return null;
+        if (user.email?.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return null;
         return user;
       }
     }
@@ -47,7 +47,7 @@ export async function getAdminUser() {
       return null;
     }
 
-    if (session.user.email !== ADMIN_EMAIL) {
+    if (session.user.email?.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
       return null;
     }
 
