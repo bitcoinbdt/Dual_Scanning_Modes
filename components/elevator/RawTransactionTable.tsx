@@ -19,7 +19,7 @@ import { TxHashLink } from './TxHashLink';
 
 interface RawTransactionTableProps {
   rawData: {
-    transactions: RawTransaction[];
+    transactions: any[];
     holders: HolderInfo[];
     ohlcv: OHLCVCandle[];
     blockchain?: 'solana' | 'bsc' | 'eth';
@@ -102,10 +102,36 @@ export function RawTransactionTable({
     fetchPrice();
   }, [tokenAddress]);
   
+  // Normalize transactions to RawTransaction format if they are UniversalTransactions
+  const normalizedTransactions = useMemo<RawTransaction[]>(() => {
+    const txList = rawData?.transactions ?? [];
+    return txList.map(tx => {
+      if (tx && 'transfers' in tx) {
+        return tx as unknown as RawTransaction;
+      }
+      
+      const utx = tx as any;
+      return {
+        timestamp: utx.timestamp,
+        signature: utx.hash || utx.signature,
+        wallets: [utx.from, utx.to].filter(Boolean),
+        transfers: [
+          {
+            from: utx.from,
+            to: utx.to,
+            amount: utx.amount,
+            type: 'token',
+            mint: utx.token?.address || ''
+          }
+        ]
+      } as RawTransaction;
+    });
+  }, [rawData?.transactions]);
+  
   // Flatten transactions into individual rows
   const flatTransactions = useMemo<FlatTransaction[]>(() => {
     const flat: FlatTransaction[] = [];
-    const txList = rawData?.transactions ?? [];
+    const txList = normalizedTransactions;
     
     txList.forEach(tx => {
       const transfers = tx?.transfers ?? [];
@@ -143,19 +169,19 @@ export function RawTransactionTable({
     });
     
     return flat;
-  }, [rawData?.transactions]);
+  }, [normalizedTransactions]);
   
   // Calculate P&L for all wallets
   const walletPnL = useMemo<Map<string, WalletPnL>>(() => {
     if (currentPrice === 0) return new Map();
     
     return calculateAllWalletPnL(
-      rawData?.transactions ?? [],
+      normalizedTransactions,
       rawData?.holders ?? [],
       rawData?.ohlcv ?? [],
       currentPrice
     );
-  }, [rawData, currentPrice]);
+  }, [normalizedTransactions, rawData?.holders, rawData?.ohlcv, currentPrice]);
   
   // Filter transactions
   const filteredTransactions = useMemo(() => {
