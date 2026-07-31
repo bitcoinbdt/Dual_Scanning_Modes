@@ -109,13 +109,10 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validate API keys
+    // Validate API keys — only Birdeye (all chains) and Helius (Solana only) are required
     const birdeyeKey = process.env.BIRDEYE_API_KEY;
     const heliusKey = process.env.HELIUS_API_KEY;
-    const bscscanKey = process.env.BSCSCAN_API_KEY;
-    const etherscanKey = process.env.ETHERSCAN_API_KEY;
     
-    // Check required keys based on chain
     if (!birdeyeKey) {
       console.error('[API] Missing BIRDEYE_API_KEY');
       return NextResponse.json(
@@ -131,22 +128,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-
-    if (detection.chain === 'bsc' && !bscscanKey) {
-      console.error('[API] Missing BSCSCAN_API_KEY for BSC');
-      return NextResponse.json(
-        { error: 'Elevator scan API keys not configured (BscScan)' },
-        { status: 500 }
-      );
-    }
-
-    if (detection.chain === 'eth' && !etherscanKey) {
-      console.error('[API] Missing ETHERSCAN_API_KEY for Ethereum');
-      return NextResponse.json(
-        { error: 'Elevator scan API keys not configured (Etherscan)' },
-        { status: 500 }
-      );
-    }
     
     // Get config based on credits
     const config = getCollectorConfig(creditsSpent);
@@ -154,13 +135,10 @@ export async function POST(request: NextRequest) {
     console.log(`[API] Starting elevator scan for ${address}`);
     console.log(`[API] Credits: ${creditsSpent}, Tier: ${config.tier}, Max Transactions: ${config.maxTransactions}`);
     
-    // Create collector using factory pattern
-    // Type assertion is safe here because we validated the chain is supported above
+    // Create collector — BSC/ETH use GeckoTerminal (free, no key) + Birdeye fallback
     const collector = CollectorFactory.create(detection.chain as 'solana' | 'bsc' | 'eth', {
       BIRDEYE_API_KEY: birdeyeKey,
       HELIUS_API_KEY: heliusKey,
-      BSCSCAN_API_KEY: bscscanKey,
-      ETHERSCAN_API_KEY: etherscanKey
     });
     
     console.log(`[API] Using ${collector.getBlockchain()} collector`);
