@@ -12,6 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  sessionLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string, referralCode?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -34,11 +35,12 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true); // true until initial session check completes
   const [followedCoins, setFollowedCoins] = useState<Set<string>>(new Set());
   const [followedWhales, setFollowedWhales] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session — keep sessionLoading=true until this resolves
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({
@@ -46,11 +48,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: session.user.email || '',
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User'
         });
-        // Store JWT token for API calls
         if (session.access_token) {
           localStorage.setItem('authToken', session.access_token);
         }
       }
+      setSessionLoading(false); // session check done — auth state is now reliable
     });
 
     // Listen for auth changes
@@ -192,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         isAuthenticated: !!user,
+        sessionLoading,
         login,
         signup,
         loginWithGoogle,
