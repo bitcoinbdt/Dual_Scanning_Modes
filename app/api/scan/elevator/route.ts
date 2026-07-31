@@ -7,9 +7,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCollectorConfig } from '@/lib/elevator/collectors/config';
 import { detectChain, isChainSupported, getUnsupportedChainMessage } from '@/lib/elevator/utils/chainDetector';
 import { CollectorFactory } from '@/lib/elevator/collectors/CollectorFactory';
+import { supabase } from '@/lib/supabase';
+import { headers } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Authenticate user from Authorization header
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required to scan tokens' },
+        { status: 401 }
+      );
+    }
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Invalid session. Please log in again.' },
+        { status: 401 }
+      );
+    }
+
     const { address, creditsSpent = 10, preferredChain } = await request.json();
     
     // Validate input
@@ -56,6 +78,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Credits must be between 5 and 100' },
         { status: 400 }
+      );
+    }
+
+    // 2. Deduct credits from user profile atomically using RPC
+    const { data: newBalance, error: rpcError } = await supabase.rpc(
+      'deduct_credits_for_scan',
+      {
+        p_user_id: user.id,
+        p_amount: creditsSpent,
+        p_scan_type: 'ELEVATOR',
+        p_token_address: address,
+      }
+    );
+
+    if (rpcError) {
+      console.error('[Elevator Scan API] Credit deduction error:', rpcError);
+      
+      // Handle insufficient credits explicitly
+      if (rpcError.message?.includes('Insufficient credit balance')) {
+        return NextResponse.json(
+          { error: 'Insufficient credits. Please purchase more credits.', code: 'INSUFFICIENT_CREDITS' },
+          { status: 402 } // 402 Payment Required
+        );
+      }
+      
+      return NextResponse.json(
+        { error: 'Failed to process credit deduction. Please ensure database functions are set up.' },
+        { status: 500 }
       );
     }
     
@@ -124,6 +174,7 @@ export async function POST(request: NextRequest) {
     // Return data in format expected by UI
     return NextResponse.json({
       success: true,
+      remainingCredits: newBalance,
       rawData: {
         transactions: rawData.transactions,
         holders: rawData.holders,
