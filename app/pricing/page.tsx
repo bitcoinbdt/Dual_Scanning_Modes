@@ -9,7 +9,13 @@ import { useCredits } from '@/contexts/CreditContext';
 
 export default function PricingPage() {
   const [showCreditStore, setShowCreditStore] = useState(false);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | undefined>(undefined);
   const { packages } = useCredits();
+
+  const handleBuyNow = (packageId?: string) => {
+    setSelectedPackageId(packageId);
+    setShowCreditStore(true);
+  };
 
   const features = [
     { icon: Shield, text: 'Advanced Security Analysis', color: 'text-red-400' },
@@ -115,7 +121,7 @@ export default function PricingPage() {
                   </div>
 
                   <button
-                    onClick={() => setShowCreditStore(true)}
+                    onClick={() => handleBuyNow(pkg.id)}
                     className={`w-full py-3 rounded-xl font-bold transition-all ${
                       pkg.isHot
                         ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white'
@@ -197,7 +203,7 @@ export default function PricingPage() {
             className="text-center mt-16"
           >
             <button
-              onClick={() => setShowCreditStore(true)}
+              onClick={() => handleBuyNow()}
               className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-lg rounded-xl transition-all inline-flex items-center gap-2"
             >
               <Zap className="w-5 h-5" />
@@ -210,7 +216,11 @@ export default function PricingPage() {
       {/* Credit Store Modal */}
       <CreditStoreModal
         isOpen={showCreditStore}
-        onClose={() => setShowCreditStore(false)}
+        onClose={() => {
+          setShowCreditStore(false);
+          setSelectedPackageId(undefined);
+        }}
+        initialPackageId={selectedPackageId}
       />
     </div>
   );

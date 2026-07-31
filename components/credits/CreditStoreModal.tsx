@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 interface CreditStoreModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPackageId?: string;
 }
 
 // Logo Renderer Component for Brands
@@ -75,7 +76,7 @@ function PaymentMethodLogo({ name, className = "w-10 h-10" }: { name: string; cl
 
 type PurchaseState = 'selecting' | 'payment-method' | 'payment-details' | 'submitting' | 'success' | 'error';
 
-export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
+export function CreditStoreModal({ isOpen, onClose, initialPackageId }: CreditStoreModalProps) {
   const { packages, refreshBalance } = useCredits();
   const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseState>('selecting');
@@ -92,6 +93,25 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
     }
   }, [isOpen]);
 
+  // Handle initial package or default selections when opened
+  useEffect(() => {
+    if (isOpen && packages.length > 0) {
+      if (initialPackageId) {
+        const found = packages.find(pkg => pkg.id === initialPackageId);
+        if (found) {
+          setSelectedPackage(found);
+          setPurchaseState('payment-method'); // Skip the select package step
+          return;
+        }
+      }
+      
+      // Fallback/Default package auto-selection
+      const proPackage = packages.find(pkg => pkg.isHot) || packages[2];
+      setSelectedPackage(proPackage);
+      setPurchaseState('selecting');
+    }
+  }, [isOpen, packages, initialPackageId]);
+
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -102,14 +122,6 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
       setErrorMessage('');
     }
   }, [isOpen]);
-
-  // Auto-select Pro package as default
-  useEffect(() => {
-    if (packages.length > 0 && !selectedPackage) {
-      const proPackage = packages.find(pkg => pkg.isHot) || packages[2];
-      setSelectedPackage(proPackage);
-    }
-  }, [packages, selectedPackage]);
 
   const loadPaymentMethods = async () => {
     try {
