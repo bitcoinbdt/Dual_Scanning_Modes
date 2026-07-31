@@ -8,6 +8,9 @@ import axios from 'axios';
 const DELAY_MS = 200; // BscScan free tier: 5 req/sec
 const MAX_RETRIES = 3;
 
+/** BscScan API base URL — override via BSCSCAN_API_URL env var */
+const BSCSCAN_API_URL = process.env.BSCSCAN_API_URL || 'https://api.bscscan.com/api';
+
 /**
  * Sleep utility for rate limiting
  */
@@ -47,7 +50,7 @@ export async function fetchBscTransactions(
   apiKey: string,
   maxTransactions: number = 1000
 ): Promise<any[]> {
-  const url = 'https://api.bscscan.com/api';
+  const url = BSCSCAN_API_URL;
   
   console.log(`[BscScan] Fetching transactions for ${contractAddress}...`);
   console.log(`[BscScan] Max transactions: ${maxTransactions}`);
@@ -102,7 +105,7 @@ export async function getTokenInfo(
   apiKey: string
 ): Promise<{ name?: string; symbol?: string; decimals?: number }> {
   try {
-    const url = 'https://api.bscscan.com/api';
+    const url = BSCSCAN_API_URL;
     
     const params = {
       module: 'token',

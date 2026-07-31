@@ -35,6 +35,7 @@ function HomePageContent() {
   const [address, setAddress] = useState('');
   const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR'>('BASIC');
   const [selectedChain, setSelectedChain] = useState<'auto' | 'solana' | 'bsc' | 'eth'>('auto');
+  const [elevatorCredits, setElevatorCredits] = useState<5 | 10 | 20 | 30>(10);
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
   const [showCreditStore, setShowCreditStore] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
@@ -86,7 +87,7 @@ function HomePageContent() {
     }
 
     // Check if user has enough credits
-    const required = SCAN_COSTS[type];
+    const required = type === 'ELEVATOR' ? elevatorCredits : SCAN_COSTS[type];
     if (!hasEnoughCredits(required)) {
       setShowInsufficientCredits(true);
       return;
@@ -165,27 +166,55 @@ function HomePageContent() {
                   </div>
                 </div>
 
-                {/* Chain Selector - Only for Elevator Mode */}
+                {/* Chain & Credit Selector - Only for Elevator Mode */}
                 {scanType === 'ELEVATOR' && (
-                  <div className="flex flex-col items-center gap-3">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Select Blockchain
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedChain}
-                        onChange={(e) => setSelectedChain(e.target.value as 'auto' | 'solana' | 'bsc' | 'eth')}
-                        className="appearance-none bg-slate-900 border border-slate-700 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
-                      >
-                        <option value="auto">🔍 Auto-Detect</option>
-                        <option value="solana">🟢 Solana</option>
-                        <option value="bsc">🟡 BSC (Binance Smart Chain)</option>
-                        <option value="eth">🔵 Ethereum</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                  <div className="flex flex-col gap-4 items-center">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+                      {/* Chain Select */}
+                      <div className="flex flex-col items-center gap-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          Select Blockchain
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedChain}
+                            onChange={(e) => setSelectedChain(e.target.value as 'auto' | 'solana' | 'bsc' | 'eth')}
+                            className="appearance-none bg-slate-900 border border-slate-700 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
+                          >
+                            <option value="auto">🔍 Auto-Detect</option>
+                            <option value="solana">🟢 Solana</option>
+                            <option value="bsc">🟡 BSC (Binance Smart Chain)</option>
+                            <option value="eth">🔵 Ethereum</option>
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <ChevronDown className="w-4 h-4 text-slate-400" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Credit Cost Select */}
+                      <div className="flex flex-col items-center gap-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          Scan Depth (Credits)
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={elevatorCredits}
+                            onChange={(e) => setElevatorCredits(Number(e.target.value) as any)}
+                            className="appearance-none bg-slate-900 border border-slate-700 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
+                          >
+                            <option value="5">⚡ 5 Credits (50 Tx)</option>
+                            <option value="10">⚡ 10 Credits (100 Tx)</option>
+                            <option value="20">⚡ 20 Credits (200 Tx)</option>
+                            <option value="30">⚡ 30 Credits (500 Tx)</option>
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <ChevronDown className="w-4 h-4 text-slate-400" />
+                          </div>
+                        </div>
                       </div>
                     </div>
+
                     {selectedChain === 'auto' && (
                       <p className="text-xs text-slate-500 text-center max-w-md">
                         Chain will be automatically detected from address format. 
@@ -258,10 +287,12 @@ function HomePageContent() {
                 {isAuthenticated && (
                   <div className="text-center text-sm">
                     <span className="text-slate-400">Cost: </span>
-                    <span className="text-primary-400 font-bold">{SCAN_COSTS[scanType]} credits ⚡</span>
+                    <span className="text-primary-400 font-bold">
+                      {scanType === 'ELEVATOR' ? elevatorCredits : SCAN_COSTS[scanType]} credits ⚡
+                    </span>
                     <span className="text-slate-500 mx-2">|</span>
                     <span className="text-slate-400">Your Balance: </span>
-                    <span className={`font-bold ${balance.balance >= SCAN_COSTS[scanType] ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`font-bold ${balance.balance >= (scanType === 'ELEVATOR' ? elevatorCredits : SCAN_COSTS[scanType]) ? 'text-green-400' : 'text-red-400'}`}>
                       {balance.balance} credits
                     </span>
                   </div>

@@ -8,6 +8,9 @@ import axios from 'axios';
 const DELAY_MS = 200; // Etherscan free tier: 5 req/sec
 const MAX_RETRIES = 3;
 
+/** Etherscan API base URL — override via ETHERSCAN_API_URL env var */
+const ETHERSCAN_API_URL = process.env.ETHERSCAN_API_URL || 'https://api.etherscan.io/api';
+
 /**
  * Sleep utility for rate limiting
  */
@@ -47,7 +50,7 @@ export async function fetchEthTransactions(
   apiKey: string,
   maxTransactions: number = 1000
 ): Promise<any[]> {
-  const url = 'https://api.etherscan.io/api';
+  const url = ETHERSCAN_API_URL;
   
   console.log(`[Etherscan] Fetching transactions for ${contractAddress}...`);
   console.log(`[Etherscan] Max transactions: ${maxTransactions}`);
@@ -102,7 +105,7 @@ export async function getTokenInfo(
   apiKey: string
 ): Promise<{ name?: string; symbol?: string; decimals?: number }> {
   try {
-    const url = 'https://api.etherscan.io/api';
+    const url = ETHERSCAN_API_URL;
     
     const params = {
       module: 'token',

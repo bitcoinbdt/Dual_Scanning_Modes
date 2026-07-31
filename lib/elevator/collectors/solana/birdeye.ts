@@ -6,6 +6,9 @@
 import axios from 'axios';
 import { OHLCVCandle } from '../types';
 
+/** Birdeye API base URL — override via BIRDEYE_API_URL env var */
+const BIRDEYE_API_URL = process.env.BIRDEYE_API_URL || 'https://public-api.birdeye.so';
+
 /**
  * Normalize OHLCV data from Birdeye API response
  */
@@ -28,7 +31,7 @@ export async function fetchOHLCV(
   address: string,
   apiKey: string
 ): Promise<OHLCVCandle[]> {
-  const url = 'https://public-api.birdeye.so/defi/ohlcv';
+  const url = `${BIRDEYE_API_URL}/defi/ohlcv`;
   
   const response = await axios.get(url, {
     headers: {

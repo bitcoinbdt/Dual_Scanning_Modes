@@ -74,9 +74,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate credit amount
-    if (creditsSpent < 5 || creditsSpent > 100) {
+    if (![5, 10, 20, 30].includes(creditsSpent)) {
       return NextResponse.json(
-        { error: 'Credits must be between 5 and 100' },
+        { error: 'Credits must be 5, 10, 20, or 30' },
         { status: 400 }
       );
     }

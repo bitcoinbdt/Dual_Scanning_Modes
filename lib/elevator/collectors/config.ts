@@ -7,31 +7,26 @@ export interface CollectorConfig {
   tier: 'quick_peek' | 'standard' | 'professional' | 'institutional';
 }
 
-/**
- * Get collector configuration based on credits spent
- * @param creditsSpent - Number of credits user wants to spend (5-100)
- * @returns Configuration with transaction limit and tier name
- */
 export function getCollectorConfig(creditsSpent: number): CollectorConfig {
-  if (creditsSpent <= 10) {
+  if (creditsSpent <= 5) {
     return {
       maxTransactions: 50,
       tier: 'quick_peek'
     };
-  } else if (creditsSpent <= 25) {
+  } else if (creditsSpent <= 10) {
     return {
-      maxTransactions: 200,
+      maxTransactions: 100,
       tier: 'standard'
     };
-  } else if (creditsSpent <= 50) {
+  } else if (creditsSpent <= 20) {
     return {
-      maxTransactions: 1000,
+      maxTransactions: 200,
       tier: 'professional'
     };
   } else {
-    // 100 credits
+    // 30 credits or more
     return {
-      maxTransactions: 5000,
+      maxTransactions: 500,
       tier: 'institutional'
     };
   }

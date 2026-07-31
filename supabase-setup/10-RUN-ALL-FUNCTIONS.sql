@@ -51,12 +51,13 @@ DECLARE
   attempts INTEGER := 0;
   max_attempts INTEGER := 10;
 BEGIN
-  -- Create user profile
-  INSERT INTO public.user_profiles (id, email, display_name)
+  -- Create user profile with 20 starting credits
+  INSERT INTO public.user_profiles (id, email, display_name, credits_balance)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1))
+    COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
+    20
   );
   
   -- Generate unique referral code
