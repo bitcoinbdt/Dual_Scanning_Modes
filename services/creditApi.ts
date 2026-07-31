@@ -8,11 +8,10 @@ import type {
   CreditHistoryResponse,
 } from '@/types/credits';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-
-// Create axios instance with default config
+// Use the Next.js proxy rewrite (/proxy/api/*) so the browser never makes a
+// cross-origin request. Next.js forwards it server-side to the real backend.
 const creditApiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -51,7 +50,7 @@ creditApiClient.interceptors.response.use(
  */
 export async function getCreditBalance(): Promise<CreditBalance> {
   try {
-    const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
+    const response = await creditApiClient.get<CreditBalance>('/proxy/api/credits/balance');
     return response.data;
   } catch (error: any) {
     // Silently fall back to mock balance - no need to spam console
@@ -68,7 +67,7 @@ export async function getCreditBalance(): Promise<CreditBalance> {
  */
 export async function getCreditPackages(): Promise<CreditPackage[]> {
   try {
-    const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/api/credits/packages');
+    const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/proxy/api/credits/packages');
     return response.data.packages;
   } catch (error: any) {
     // Silently fall back to mock packages
@@ -81,7 +80,7 @@ export async function getCreditPackages(): Promise<CreditPackage[]> {
  */
 export async function purchaseCredits(data: PurchaseCreditRequest): Promise<PurchaseCreditResponse> {
   try {
-    const response = await creditApiClient.post<PurchaseCreditResponse>('/api/credits/purchase', data);
+    const response = await creditApiClient.post<PurchaseCreditResponse>('/proxy/api/credits/purchase', data);
     return response.data;
   } catch (error: any) {
     console.error('Error purchasing credits:', error);
@@ -94,7 +93,7 @@ export async function purchaseCredits(data: PurchaseCreditRequest): Promise<Purc
  */
 export async function getCreditHistory(query?: CreditHistoryQuery): Promise<CreditHistoryResponse> {
   try {
-    const response = await creditApiClient.get<CreditHistoryResponse>('/api/credits/history', {
+    const response = await creditApiClient.get<CreditHistoryResponse>('/proxy/api/credits/history', {
       params: query,
     });
     return response.data;

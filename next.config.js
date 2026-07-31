@@ -6,10 +6,18 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
-  // Handle external API calls gracefully
+  // Proxy backend API calls through Next.js to avoid CORS issues.
+  // The browser hits /proxy/api/*, Next.js forwards server-side to the
+  // Render backend. No cross-origin preflight is ever triggered.
   async rewrites() {
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      'http://localhost:3001';
     return [
-      // Add any API rewrites here if needed
+      {
+        source: '/proxy/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
     ];
   },
   // Suppress specific console warnings during build
