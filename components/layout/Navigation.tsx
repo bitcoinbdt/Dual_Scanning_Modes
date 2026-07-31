@@ -144,17 +144,6 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
               <CreditBadge onClick={handleOpenCredits} />
             )}
 
-            {/* Buy Credits Button - Show when not authenticated */}
-            {!isAuthenticated && (
-              <button
-                onClick={handleOpenCredits}
-                className="px-3 py-1.5 text-xs font-bold bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-all flex items-center gap-1"
-              >
-                <span className="text-yellow-400">⚡</span>
-                Buy Credits
-              </button>
-            )}
-
             {isAuthenticated ? (
               <div className="relative ml-1 md:ml-2 pl-1 md:pl-2 border-l border-white/10" ref={profileMenuRef}>
                 <button
