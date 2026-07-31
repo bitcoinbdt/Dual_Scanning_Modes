@@ -1,46 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * POST /api/credits/submit-request
  * Submit a credit purchase request.
  *
- * Fixes applied:
- *  - Use @supabase/ssr createServerClient so session cookies are read server-side
- *    (no need for the client to manually send an Authorization header)
- *  - Insert uses "package_id" matching actual DB column name
- *  - Removed "price_usd" which does not exist in the DB schema
+ * Auth: reads Bearer token from Authorization header.
+ * The global fetch interceptor in AuthContext.tsx automatically attaches
+ * the Supabase JWT to every /api/ request, so no manual token handling
+ * is needed on the client side.
+ *
+ * Column fixes:
+ *  - Uses "package_id" (actual DB column, not "credit_package_id")
+ *  - Does NOT insert "price_usd" (column does not exist in DB)
  */
 export async function POST(request: NextRequest) {
   try {
-    // Build a Supabase client that reads auth from cookies (set by Supabase Auth)
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
+    // Read Bearer token from Authorization header
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Use anon key client — getUser(token) validates the JWT server-side
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              );
-            } catch {
-              // Cookies cannot be set from a Server Component — safe to ignore here
-            }
-          },
-        },
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // Verify the user is authenticated
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
+      console.error('[submit-request] Auth error:', userError?.message);
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 }
@@ -49,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      credit_package_id, // accepted from UI but stored as package_id
+      credit_package_id,  // sent from UI, stored as package_id in DB
       credits_amount,
       payment_method_id,
       transaction_hash,
@@ -70,7 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for duplicate transaction hash
+    // Check for duplicate transaction hash (use maybeSingle to avoid error when no row found)
     const { data: existingRequest } = await supabase
       .from('credit_purchase_requests')
       .select('id')
@@ -105,22 +101,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert — columns match the actual DB schema exactly
+    // Insert — column names match actual DB schema exactly
     const { data: creditRequest, error: insertError } = await supabase
       .from('credit_purchase_requests')
       .insert({
         user_id: user.id,
-        package_id: credit_package_id ?? null,  // correct column name
+        package_id: credit_package_id ?? null,   // correct DB column: package_id
         credits_amount,
         payment_method_id,
         transaction_hash: transaction_hash.trim(),
         status: 'pending',
+        // NOTE: price_usd does NOT exist in the DB schema — do not insert it
       })
       .select()
       .single();
 
     if (insertError) {
-      console.error('Error creating credit request:', insertError);
+      console.error('[submit-request] Insert error:', insertError);
 
       if (insertError.code === '23505') {
         return NextResponse.json(
@@ -142,7 +139,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error: any) {
-    console.error('Submit credit request error:', error);
+    console.error('[submit-request] Unexpected error:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
