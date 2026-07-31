@@ -29,7 +29,7 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const handleOpenCredits = () => {
-    router.push('/credits');
+    router.push('/pricing');
   };
 
   const truncateEmail = (email: string) => {

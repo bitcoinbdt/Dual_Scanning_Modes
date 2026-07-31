@@ -18,7 +18,6 @@ import { MarketIntelligenceCard } from '@/components/MarketIntelligenceCard';
 import { RecentTransactionsCard } from '@/components/RecentTransactionsCard';
 import { ElevatorResultCard } from '@/components/ElevatorResultCard';
 import { RawTransactionTable } from '@/components/elevator/RawTransactionTable';
-import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
 import toast from 'react-hot-toast';
 
@@ -412,19 +411,13 @@ function HomePageContent() {
         </section>
       </main>
 
-      {/* Credit Store Modal */}
-      <CreditStoreModal
-        isOpen={showCreditStore}
-        onClose={() => setShowCreditStore(false)}
-      />
-
       {/* Insufficient Credits Modal */}
       <InsufficientCreditsModal
         isOpen={showInsufficientCredits}
         onClose={() => setShowInsufficientCredits(false)}
         onBuyCredits={() => {
           setShowInsufficientCredits(false);
-          setShowCreditStore(true);
+          router.push('/pricing');
         }}
         scanType={scanType}
         currentBalance={balance.balance}
