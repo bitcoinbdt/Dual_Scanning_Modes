@@ -105,11 +105,12 @@ export function RawTransactionTable({
   // Flatten transactions into individual rows
   const flatTransactions = useMemo<FlatTransaction[]>(() => {
     const flat: FlatTransaction[] = [];
+    const txList = rawData?.transactions ?? [];
     
-    rawData.transactions.forEach(tx => {
-      tx.transfers.forEach(transfer => {
+    txList.forEach(tx => {
+      const transfers = tx?.transfers ?? [];
+      transfers.forEach(transfer => {
         // Determine action based on transfer direction
-        // This is simplified - for BUY, the wallet receives tokens
         const action: 'BUY' | 'SELL' | 'TRANSFER' = 
           transfer.from && transfer.to ? 'TRANSFER' : 'TRANSFER';
         
@@ -142,16 +143,16 @@ export function RawTransactionTable({
     });
     
     return flat;
-  }, [rawData.transactions]);
+  }, [rawData?.transactions]);
   
   // Calculate P&L for all wallets
   const walletPnL = useMemo<Map<string, WalletPnL>>(() => {
     if (currentPrice === 0) return new Map();
     
     return calculateAllWalletPnL(
-      rawData.transactions,
-      rawData.holders,
-      rawData.ohlcv,
+      rawData?.transactions ?? [],
+      rawData?.holders ?? [],
+      rawData?.ohlcv ?? [],
       currentPrice
     );
   }, [rawData, currentPrice]);

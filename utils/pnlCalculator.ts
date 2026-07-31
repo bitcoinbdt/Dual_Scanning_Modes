@@ -93,8 +93,10 @@ export function extractWalletActivity(
   const buys: Array<{ amount: number; timestamp: number }> = [];
   const sells: Array<{ amount: number; timestamp: number }> = [];
   
-  transactions.forEach(tx => {
-    tx.transfers.forEach(transfer => {
+  const txList = transactions ?? [];
+  txList.forEach(tx => {
+    const transfers = tx?.transfers ?? [];
+    transfers.forEach(transfer => {
       // Wallet received tokens (buy)
       if (transfer.to === wallet) {
         buys.push({ 
@@ -264,8 +266,10 @@ export function calculateAllWalletPnL(
   
   // Get unique wallets from all transactions
   const uniqueWallets = new Set<string>();
-  transactions.forEach(tx => {
-    tx.transfers.forEach(transfer => {
+  const txList = transactions ?? [];
+  txList.forEach(tx => {
+    const transfers = tx?.transfers ?? [];
+    transfers.forEach(transfer => {
       if (transfer.from) uniqueWallets.add(transfer.from);
       if (transfer.to) uniqueWallets.add(transfer.to);
     });
