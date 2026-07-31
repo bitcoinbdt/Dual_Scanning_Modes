@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     await requireAdmin();
 
     // Fetch all payment methods
-    const { data: paymentMethods, error } = await supabase
+    let { data: paymentMethods, error } = await supabase
       .from('payment_methods')
       .select('*')
       .order('display_order', { ascending: true });
@@ -23,6 +23,40 @@ export async function GET(request: NextRequest) {
         { error: 'Failed to fetch payment methods' },
         { status: 500 }
       );
+    }
+
+    // Default 5 payment methods
+    const DEFAULT_METHODS = [
+      { name: 'Binance Pay', network: 'Binance', address: 'Configure Binance Pay ID', instructions: 'Send payment via Binance Pay to this ID', display_order: 1, is_active: false },
+      { name: 'KuCoin', network: 'KuCoin', address: 'Configure KuCoin ID/Email', instructions: 'Send payment via KuCoin Pay to this ID/email', display_order: 2, is_active: false },
+      { name: 'USDT (BEP-20)', network: 'BEP-20', address: 'Configure BSC Wallet Address', instructions: 'Send USDT on BNB Smart Chain (BEP-20)', display_order: 3, is_active: false },
+      { name: 'USDC (SOL)', network: 'Solana', address: 'Configure Solana Wallet Address', instructions: 'Send USDC on Solana network (SOL)', display_order: 4, is_active: false },
+      { name: 'TRX (TRC-20)', network: 'TRC-20', address: 'Configure Tron Wallet Address', instructions: 'Send TRX on TRON network (TRC-20)', display_order: 5, is_active: false }
+    ];
+
+    let needsReload = false;
+    for (const def of DEFAULT_METHODS) {
+      const exists = paymentMethods?.some(m => m.name === def.name && m.network === def.network);
+      if (!exists) {
+        const { error: insertError } = await supabase
+          .from('payment_methods')
+          .insert(def);
+        if (!insertError) {
+          needsReload = true;
+        } else {
+          console.error(`Failed to seed payment method ${def.name}:`, insertError);
+        }
+      }
+    }
+
+    if (needsReload) {
+      const { data: reloaded, error: reloadError } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (!reloadError && reloaded) {
+        paymentMethods = reloaded;
+      }
     }
 
     return NextResponse.json({ paymentMethods });

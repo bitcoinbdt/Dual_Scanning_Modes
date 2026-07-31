@@ -14,11 +14,68 @@ export default function AdminPaymentMethodsPage() {
   );
 }
 
+// Logo Renderer Component for Brands
+function PaymentMethodLogo({ name, className = "w-10 h-10" }: { name: string; className?: string }) {
+  const normalized = name.toLowerCase();
+  
+  if (normalized.includes('binance')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0L17.2 5.2L12 10.4L6.8 5.2L12 0Z" fill="#F0B90B" />
+        <path d="M5.2 6.8L10.4 12L5.2 17.2L0 12L5.2 6.8Z" fill="#F0B90B" />
+        <path d="M18.8 6.8L24 12L18.8 17.2L13.6 12L18.8 6.8Z" fill="#F0B90B" />
+        <path d="M12 13.6L17.2 18.8L12 24L6.8 18.8L12 13.6Z" fill="#F0B90B" />
+        <path d="M12 7.6L16.4 12L12 16.4L7.6 12L12 7.6Z" fill="#F0B90B" fillOpacity="0.4" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('kucoin')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="6" fill="#0093DD"/>
+        <path d="M7 6H10V18H7V6ZM14 6H17V10H14V6ZM14 14H17V18H14V14ZM11 10H14V14H11V10Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('usdt')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#26A17B" />
+        <path d="M12.75 6.75V8.5H16.5V11H12.75V17.5H11.25V11H7.5V8.5H11.25V6.75H12.75Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('usdc')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#2775CA" />
+        <path d="M12 4.5C7.86 4.5 4.5 7.86 4.5 12C4.5 16.14 7.86 19.5 12 19.5C16.14 19.5 19.5 16.14 19.5 12C19.5 7.86 16.14 4.5 12 4.5ZM12.75 16.5H11.25V15H12.75V16.5ZM14.25 12.5C13.5 12.88 13.5 13.5 13.5 13.5H10.5V12C10.5 10.5 12 10.5 12 9.75C12 9 11.25 9 10.5 9.75V7.5C11.25 6.75 13.5 6.75 13.5 8.25C13.5 9.75 12 10.5 12 11.25C12 12 14.25 12 14.25 12.5Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('trx')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="12,2 22,12 12,22 2,12" fill="#EC0623" />
+        <polygon points="12,6 18,12 12,18 6,12" fill="white" />
+      </svg>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500 flex items-center justify-center text-lg font-black text-purple-400">
+      💳
+    </div>
+  );
+}
+
 function PaymentMethodsContent() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
 
   useEffect(() => {
     loadPaymentMethods();
@@ -38,42 +95,6 @@ function PaymentMethodsContent() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this payment method?')) return;
-
-    try {
-      const response = await fetch(`/api/admin/payment-methods/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) throw new Error('Failed to delete');
-
-      toast.success('Payment method deleted');
-      loadPaymentMethods();
-    } catch (error) {
-      toast.error('Failed to delete payment method');
-      console.error(error);
-    }
-  };
-
-  const handleToggleActive = async (method: PaymentMethod) => {
-    try {
-      const response = await fetch(`/api/admin/payment-methods/${method.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !method.is_active }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update');
-
-      toast.success(method.is_active ? 'Payment method disabled' : 'Payment method enabled');
-      loadPaymentMethods();
-    } catch (error) {
-      toast.error('Failed to update payment method');
-      console.error(error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0118] flex items-center justify-center">
@@ -88,313 +109,204 @@ function PaymentMethodsContent() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Payment Methods</h1>
-            <p className="text-gray-400">Manage payment addresses for credit purchases</p>
+            <h1 className="text-3xl font-bold text-white mb-2">Configure Gateways</h1>
+            <p className="text-gray-400">Set addresses for the 5 default payment methods below</p>
           </div>
-          <div className="flex gap-3">
-            <Link
-              href="/admin"
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              ← Back to Admin
-            </Link>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-            >
-              + Add Payment Method
-            </button>
-          </div>
+          <Link
+            href="/admin"
+            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors border border-white/10"
+          >
+            ← Back to Admin
+          </Link>
         </div>
 
-        {/* Payment Methods List */}
-        {paymentMethods.length === 0 ? (
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 p-12 text-center">
-            <div className="text-6xl mb-4">💳</div>
-            <h3 className="text-xl font-semibold text-white mb-2">No Payment Methods</h3>
-            <p className="text-gray-400 mb-6">Add your first payment method to start accepting credit purchases</p>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-            >
-              Add Payment Method
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {paymentMethods
-              .sort((a, b) => a.display_order - b.display_order)
-              .map((method) => (
-                <div
-                  key={method.id}
-                  className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 p-6"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-semibold text-white">{method.name}</h3>
-                        {method.network && (
-                          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
-                            {method.network}
-                          </span>
-                        )}
-                        <span
-                          className={`px-2 py-1 text-xs rounded ${
-                            method.is_active
-                              ? 'bg-green-500/20 text-green-400'
-                              : 'bg-gray-500/20 text-gray-400'
-                          }`}
-                        >
-                          {method.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-sm text-gray-400">Address:</p>
-                          <p className="text-white font-mono text-sm break-all bg-gray-900/50 px-3 py-2 rounded mt-1">
-                            {method.address}
-                          </p>
-                        </div>
-
-                        {method.instructions && (
-                          <div>
-                            <p className="text-sm text-gray-400">Instructions:</p>
-                            <p className="text-gray-300 text-sm mt-1">{method.instructions}</p>
-                          </div>
-                        )}
-
-                        {method.qr_code_url && (
-                          <div>
-                            <p className="text-sm text-gray-400">QR Code URL:</p>
-                            <a
-                              href={method.qr_code_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 text-sm"
-                            >
-                              {method.qr_code_url}
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 ml-4">
-                      <button
-                        onClick={() => handleToggleActive(method)}
-                        className={`px-3 py-1 rounded text-sm transition-colors ${
-                          method.is_active
-                            ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                            : 'bg-green-600 hover:bg-green-700 text-white'
-                        }`}
-                      >
-                        {method.is_active ? 'Disable' : 'Enable'}
-                      </button>
-                      <button
-                        onClick={() => setEditingMethod(method)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(method.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
+        {/* Predefined Grid Layout of Default Methods */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {paymentMethods
+            .sort((a, b) => a.display_order - b.display_order)
+            .map((method) => (
+              <PaymentMethodCard
+                key={method.id}
+                method={method}
+                onSaveSuccess={loadPaymentMethods}
+              />
+            ))}
+        </div>
       </div>
-
-      {/* Add/Edit Modal */}
-      {(isAddModalOpen || editingMethod) && (
-        <PaymentMethodModal
-          method={editingMethod}
-          onClose={() => {
-            setIsAddModalOpen(false);
-            setEditingMethod(null);
-          }}
-          onSave={() => {
-            setIsAddModalOpen(false);
-            setEditingMethod(null);
-            loadPaymentMethods();
-          }}
-        />
-      )}
     </div>
   );
 }
 
-interface PaymentMethodModalProps {
-  method: PaymentMethod | null;
-  onClose: () => void;
-  onSave: () => void;
+interface PaymentMethodCardProps {
+  method: PaymentMethod;
+  onSaveSuccess: () => void;
 }
 
-function PaymentMethodModal({ method, onClose, onSave }: PaymentMethodModalProps) {
-  const [formData, setFormData] = useState({
-    name: method?.name || '',
-    network: method?.network || '',
-    address: method?.address || '',
-    qr_code_url: method?.qr_code_url || '',
-    instructions: method?.instructions || '',
-    display_order: method?.display_order || 0,
-    is_active: method?.is_active ?? true,
-  });
+function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
+  const [address, setAddress] = useState(method.address);
+  const [instructions, setInstructions] = useState(method.instructions || '');
+  const [qrCodeUrl, setQrCodeUrl] = useState(method.qr_code_url || '');
+  const [isActive, setIsActive] = useState(method.is_active);
   const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setSaving(true);
-
     try {
-      const url = method
-        ? `/api/admin/payment-methods/${method.id}`
-        : '/api/admin/payment-methods';
-      
-      const response = await fetch(url, {
-        method: method ? 'PUT' : 'POST',
+      const response = await fetch(`/api/admin/payment-methods/${method.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          address: address.trim(),
+          instructions: instructions.trim() || null,
+          qr_code_url: qrCodeUrl.trim() || null,
+          is_active: isActive
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to save');
-
-      toast.success(method ? 'Payment method updated' : 'Payment method added');
-      onSave();
+      if (!response.ok) throw new Error('Failed to update');
+      toast.success(`${method.name} updated successfully!`);
+      onSaveSuccess();
     } catch (error) {
-      toast.error('Failed to save payment method');
       console.error(error);
+      toast.error(`Failed to update ${method.name}`);
     } finally {
       setSaving(false);
     }
   };
 
+  const getBrandDetails = (name: string) => {
+    const normalized = name.toLowerCase();
+    if (normalized.includes('binance')) {
+      return {
+        border: 'border-yellow-500/20 focus-within:border-yellow-500',
+        glow: 'hover:shadow-yellow-500/5',
+        bg: 'bg-yellow-500/10',
+        text: 'text-yellow-400'
+      };
+    }
+    if (normalized.includes('kucoin')) {
+      return {
+        border: 'border-sky-500/20 focus-within:border-sky-500',
+        glow: 'hover:shadow-sky-500/5',
+        bg: 'bg-sky-500/10',
+        text: 'text-sky-400'
+      };
+    }
+    if (normalized.includes('usdt')) {
+      return {
+        border: 'border-emerald-500/20 focus-within:border-emerald-500',
+        glow: 'hover:shadow-emerald-500/5',
+        bg: 'bg-emerald-500/10',
+        text: 'text-emerald-400'
+      };
+    }
+    if (normalized.includes('usdc')) {
+      return {
+        border: 'border-blue-500/20 focus-within:border-blue-500',
+        glow: 'hover:shadow-blue-500/5',
+        bg: 'bg-blue-500/10',
+        text: 'text-blue-400'
+      };
+    }
+    if (normalized.includes('trx')) {
+      return {
+        border: 'border-red-500/20 focus-within:border-red-500',
+        glow: 'hover:shadow-red-500/5',
+        bg: 'bg-red-500/10',
+        text: 'text-red-400'
+      };
+    }
+    return {
+      border: 'border-purple-500/20 focus-within:border-purple-500',
+      glow: 'hover:shadow-purple-500/5',
+      bg: 'bg-purple-500/10',
+      text: 'text-purple-400'
+    };
+  };
+
+  const brand = getBrandDetails(method.name);
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold text-white mb-6">
-          {method ? 'Edit Payment Method' : 'Add Payment Method'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className={`glass-card rounded-2xl border ${brand.border} p-6 transition-all duration-300 shadow-xl ${isActive ? `shadow-2xl ${brand.glow}` : 'opacity-70 hover:opacity-100'}`}>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <PaymentMethodLogo name={method.name} className="w-10 h-10" />
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-              placeholder="e.g., Binance Pay, USDT (BEP-20)"
-              required
-            />
+            <h3 className="text-xl font-bold text-white">{method.name}</h3>
+            {method.network && (
+              <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${brand.bg} ${brand.text}`}>
+                {method.network} Network
+              </span>
+            )}
           </div>
+        </div>
+        
+        {/* Toggle Switch */}
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input 
+            type="checkbox" 
+            checked={isActive} 
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="sr-only peer" 
+          />
+          <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
+          <span className="ml-2.5 text-sm font-semibold text-slate-400">
+            {isActive ? 'Active' : 'Inactive'}
+          </span>
+        </label>
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Network
-            </label>
-            <input
-              type="text"
-              value={formData.network}
-              onChange={(e) => setFormData({ ...formData, network: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-              placeholder="e.g., BEP-20, TRC-20, Binance"
-            />
-          </div>
+      <div className="space-y-4">
+        {/* Address Input */}
+        <div>
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+            Wallet Address / Pay ID
+          </label>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+            placeholder={`Enter ${method.name} identifier`}
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Payment Address/ID *
-            </label>
-            <textarea
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500 font-mono text-sm"
-              placeholder="Wallet address or payment ID"
-              rows={3}
-              required
-            />
-          </div>
+        {/* QR Code Input */}
+        <div>
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+            QR Code Image URL (optional)
+          </label>
+          <input
+            type="text"
+            value={qrCodeUrl}
+            onChange={(e) => setQrCodeUrl(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
+            placeholder="https://example.com/qr.png"
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              QR Code URL (optional)
-            </label>
-            <input
-              type="url"
-              value={formData.qr_code_url}
-              onChange={(e) => setFormData({ ...formData, qr_code_url: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-              placeholder="https://..."
-            />
-          </div>
+        {/* Instructions Input */}
+        <div>
+          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
+            Payment Instructions
+          </label>
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+            placeholder="Step by step instructions for the buyer..."
+            rows={2}
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Instructions (optional)
-            </label>
-            <textarea
-              value={formData.instructions}
-              onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-              placeholder="Payment instructions for users..."
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Display Order
-            </label>
-            <input
-              type="number"
-              value={formData.display_order}
-              onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
-              className="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-500"
-              min="0"
-            />
-            <p className="text-xs text-gray-500 mt-1">Lower numbers appear first</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="is_active"
-              checked={formData.is_active}
-              onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-              className="w-4 h-4 text-purple-600 bg-gray-900 border-gray-700 rounded focus:ring-purple-500"
-            />
-            <label htmlFor="is_active" className="text-sm text-gray-300">
-              Active (visible to users)
-            </label>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-              disabled={saving}
-            >
-              {saving ? 'Saving...' : method ? 'Update' : 'Add'}
-            </button>
-          </div>
-        </form>
+        {/* Save Button */}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full mt-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+        >
+          {saving ? 'Saving changes...' : 'Save Configuration'}
+        </button>
       </div>
     </div>
   );

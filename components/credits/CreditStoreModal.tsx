@@ -14,6 +14,65 @@ interface CreditStoreModalProps {
   onClose: () => void;
 }
 
+// Logo Renderer Component for Brands
+function PaymentMethodLogo({ name, className = "w-10 h-10" }: { name: string; className?: string }) {
+  const normalized = name.toLowerCase();
+  
+  if (normalized.includes('binance')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0L17.2 5.2L12 10.4L6.8 5.2L12 0Z" fill="#F0B90B" />
+        <path d="M5.2 6.8L10.4 12L5.2 17.2L0 12L5.2 6.8Z" fill="#F0B90B" />
+        <path d="M18.8 6.8L24 12L18.8 17.2L13.6 12L18.8 6.8Z" fill="#F0B90B" />
+        <path d="M12 13.6L17.2 18.8L12 24L6.8 18.8L12 13.6Z" fill="#F0B90B" />
+        <path d="M12 7.6L16.4 12L12 16.4L7.6 12L12 7.6Z" fill="#F0B90B" fillOpacity="0.4" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('kucoin')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="6" fill="#0093DD"/>
+        <path d="M7 6H10V18H7V6ZM14 6H17V10H14V6ZM14 14H17V18H14V14ZM11 10H14V14H11V10Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('usdt')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#26A17B" />
+        <path d="M12.75 6.75V8.5H16.5V11H12.75V17.5H11.25V11H7.5V8.5H11.25V6.75H12.75Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('usdc')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="12" fill="#2775CA" />
+        <path d="M12 4.5C7.86 4.5 4.5 7.86 4.5 12C4.5 16.14 7.86 19.5 12 19.5C16.14 19.5 19.5 16.14 19.5 12C19.5 7.86 16.14 4.5 12 4.5ZM12.75 16.5H11.25V15H12.75V16.5ZM14.25 12.5C13.5 12.88 13.5 13.5 13.5 13.5H10.5V12C10.5 10.5 12 10.5 12 9.75C12 9 11.25 9 10.5 9.75V7.5C11.25 6.75 13.5 6.75 13.5 8.25C13.5 9.75 12 10.5 12 11.25C12 12 14.25 12 14.25 12.5Z" fill="white" />
+      </svg>
+    );
+  }
+  
+  if (normalized.includes('trx')) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="12,2 22,12 12,22 2,12" fill="#EC0623" />
+        <polygon points="12,6 18,12 12,18 6,12" fill="white" />
+      </svg>
+    );
+  }
+
+  return (
+    <div className="w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500 flex items-center justify-center text-lg font-black text-purple-400">
+      💳
+    </div>
+  );
+}
+
 type PurchaseState = 'selecting' | 'payment-method' | 'payment-details' | 'submitting' | 'success' | 'error';
 
 export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
@@ -235,41 +294,52 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
               <div>
                 <button
                   onClick={() => setPurchaseState('selecting')}
-                  className="text-slate-400 hover:text-white mb-6 text-sm flex items-center gap-1"
+                  className="text-slate-400 hover:text-white mb-6 text-sm flex items-center gap-1 transition-colors"
                 >
                   ← Back to packages
                 </button>
 
-                <h3 className="text-xl font-bold mb-4">Select Payment Method</h3>
+                <h3 className="text-2xl font-bold mb-6 text-white">Select Payment Method</h3>
                 
                 {paymentMethods.length === 0 ? (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6 text-center">
-                    <p className="text-yellow-400">No payment methods available at the moment.</p>
-                    <p className="text-slate-400 text-sm mt-2">Please contact support.</p>
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-6 text-center">
+                    <p className="text-yellow-400 font-bold">No payment methods configured by admin yet.</p>
+                    <p className="text-slate-400 text-sm mt-2">Please try again later or contact support.</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 mb-6">
-                    {paymentMethods.map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => handleSelectPaymentMethod(method)}
-                        className="bg-slate-900/50 hover:bg-slate-900 border border-slate-700 hover:border-purple-500 rounded-xl p-4 text-left transition-all group"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors">
-                            {method.name}
-                          </h4>
-                          {method.network && (
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
-                              {method.network}
-                            </span>
-                          )}
-                        </div>
-                        {method.instructions && (
-                          <p className="text-sm text-slate-400">{method.instructions}</p>
-                        )}
-                      </button>
-                    ))}
+                  <div className="grid sm:grid-cols-2 gap-4 mb-6">
+                    {paymentMethods.map((method) => {
+                      const getBrandColors = (name: string) => {
+                        const normalized = name.toLowerCase();
+                        if (normalized.includes('binance')) return { border: 'hover:border-yellow-500/50', hoverBg: 'hover:bg-yellow-500/5', bg: 'bg-yellow-500/10', text: 'text-yellow-400' };
+                        if (normalized.includes('kucoin')) return { border: 'hover:border-sky-500/50', hoverBg: 'hover:bg-sky-500/5', bg: 'bg-sky-500/10', text: 'text-sky-400' };
+                        if (normalized.includes('usdt')) return { border: 'hover:border-emerald-500/50', hoverBg: 'hover:bg-emerald-500/5', bg: 'bg-emerald-500/10', text: 'text-emerald-400' };
+                        if (normalized.includes('usdc')) return { border: 'hover:border-blue-500/50', hoverBg: 'hover:bg-blue-500/5', bg: 'bg-blue-500/10', text: 'text-blue-400' };
+                        if (normalized.includes('trx')) return { border: 'hover:border-red-500/50', hoverBg: 'hover:bg-red-500/5', bg: 'bg-red-500/10', text: 'text-red-400' };
+                        return { border: 'hover:border-purple-500/50', hoverBg: 'hover:bg-purple-500/5', bg: 'bg-purple-500/10', text: 'text-purple-400' };
+                      };
+                      const brand = getBrandColors(method.name);
+
+                      return (
+                        <button
+                          key={method.id}
+                          onClick={() => handleSelectPaymentMethod(method)}
+                          className={`bg-slate-900/40 hover:bg-slate-950 border border-slate-800 ${brand.border} ${brand.hoverBg} rounded-2xl p-5 text-left transition-all duration-300 flex items-center gap-4 group`}
+                        >
+                          <PaymentMethodLogo name={method.name} className="w-12 h-12 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-lg font-bold text-white group-hover:text-purple-400 transition-colors truncate">
+                              {method.name}
+                            </h4>
+                            {method.network && (
+                              <span className={`inline-block mt-1 px-2.5 py-0.5 rounded text-xs font-bold ${brand.bg} ${brand.text}`}>
+                                {method.network} Network
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -280,49 +350,53 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
               <div>
                 <button
                   onClick={() => setPurchaseState('payment-method')}
-                  className="text-slate-400 hover:text-white mb-6 text-sm flex items-center gap-1"
+                  className="text-slate-400 hover:text-white mb-6 text-sm flex items-center gap-1 transition-colors"
                 >
                   ← Back to payment methods
                 </button>
 
-                <h3 className="text-xl font-bold mb-6">Complete Payment</h3>
+                <h3 className="text-2xl font-bold mb-6 text-white">Complete Payment</h3>
 
                 {/* Payment Instructions */}
-                <div className="bg-slate-900/50 rounded-xl p-6 mb-6">
-                  <h4 className="font-bold text-white mb-3">Step 1: Send Payment</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-slate-400 mb-1">Payment Method:</p>
-                      <p className="text-white font-bold">{selectedPaymentMethod.name}</p>
-                      {selectedPaymentMethod.network && (
-                        <span className="text-sm text-slate-400">({selectedPaymentMethod.network})</span>
-                      )}
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 mb-6">
+                  <h4 className="font-bold text-white mb-4">Step 1: Send Payment</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 bg-slate-950/40 p-4 rounded-xl border border-white/5">
+                      <PaymentMethodLogo name={selectedPaymentMethod.name} className="w-14 h-14 flex-shrink-0" />
+                      <div>
+                        <h5 className="font-bold text-white text-lg">{selectedPaymentMethod.name}</h5>
+                        {selectedPaymentMethod.network && (
+                          <span className="inline-block mt-1 px-2.5 py-0.5 bg-purple-500/10 text-purple-400 text-xs font-bold rounded">
+                            {selectedPaymentMethod.network} Network
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div>
                       <p className="text-sm text-slate-400 mb-1">Amount to Send:</p>
-                      <p className="text-primary-400 font-bold text-lg">${selectedPackage.priceUsd} USD</p>
+                      <p className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 font-black text-2xl">${selectedPackage.priceUsd} USD</p>
                     </div>
 
                     <div>
                       <p className="text-sm text-slate-400 mb-2">Send to this address:</p>
-                      <div className="flex items-center gap-2 bg-gray-900 p-3 rounded-lg">
-                        <code className="text-white font-mono text-sm flex-1 break-all">
+                      <div className="flex items-center gap-2 bg-slate-950 p-4 rounded-xl border border-white/5">
+                        <code className="text-white font-mono text-sm flex-1 break-all select-all">
                           {selectedPaymentMethod.address}
                         </code>
                         <button
                           onClick={() => copyToClipboard(selectedPaymentMethod.address)}
-                          className="p-2 hover:bg-gray-800 rounded transition-colors flex-shrink-0"
+                          className="p-2 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0"
                           title="Copy address"
                         >
-                          <Copy className="w-4 h-4 text-slate-400" />
+                          <Copy className="w-5 h-5 text-slate-400 hover:text-white" />
                         </button>
                       </div>
                     </div>
 
                     {selectedPaymentMethod.instructions && (
-                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                        <p className="text-sm text-blue-400">{selectedPaymentMethod.instructions}</p>
+                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+                        <p className="text-sm text-purple-300 font-semibold">{selectedPaymentMethod.instructions}</p>
                       </div>
                     )}
 
@@ -333,9 +407,9 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
                           href={selectedPaymentMethod.qr_code_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+                          className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-semibold transition-colors"
                         >
-                          View QR Code <ExternalLink className="w-3 h-3" />
+                          View QR Code <ExternalLink className="w-4 h-4" />
                         </a>
                       </div>
                     )}
