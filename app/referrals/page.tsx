@@ -18,15 +18,6 @@ export default function ReferralsPage() {
       <Navigation onOpenCreditStore={() => {}} />
       
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-24 pb-24">
-        {/* Back Button */}
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span>Back to Scanner</span>
-        </button>
-
         {/* Page Header */}
         <div className="text-center mb-12">
           <motion.h1

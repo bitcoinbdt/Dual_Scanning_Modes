@@ -2,13 +2,12 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Lock, CheckCircle2, Loader2, Copy, Gift } from 'lucide-react';
+import { Zap, Lock, CheckCircle2, Loader2, Copy } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navigation from '@/components/layout/Navigation';
 import { useCredits } from '@/contexts/CreditContext';
 import type { CreditPackage } from '@/types/credits';
 import type { PaymentMethod } from '@/types/creditPurchase';
-import { applyReferralCode } from '@/services/referralApi';
 import toast from 'react-hot-toast';
 
 // Logo Renderer Component for Brands
@@ -80,9 +79,6 @@ function CreditsContent() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [transactionHash, setTransactionHash] = useState<string>('');
   
-  const [referralCode, setReferralCode] = useState<string>('');
-  const [referralApplied, setReferralApplied] = useState<boolean>(false);
-  const [isApplyingReferral, setIsApplyingReferral] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [purchaseState, setPurchaseState] = useState<'payment' | 'submitting' | 'success'>('payment');
@@ -114,28 +110,7 @@ function CreditsContent() {
     fetchPaymentMethods();
   }, []);
 
-  // 3. Check for referral
-  useEffect(() => {
-    const pendingCode = localStorage.getItem('pendingReferralCode');
-    if (pendingCode) {
-      setReferralCode(pendingCode);
-    }
-  }, []);
 
-  const handleApplyReferral = async () => {
-    if (!referralCode.trim()) return;
-    setIsApplyingReferral(true);
-    try {
-      const response = await applyReferralCode(referralCode.trim().toUpperCase());
-      setReferralApplied(true);
-      toast.success(`Referral code applied! ${response.referrerUsername ? `Referred by ${response.referrerUsername}` : ''}`);
-      localStorage.removeItem('pendingReferralCode');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to apply referral code');
-    } finally {
-      setIsApplyingReferral(false);
-    }
-  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -238,37 +213,6 @@ function CreditsContent() {
           )}
         </div>
 
-        {/* Referral */}
-        {!referralApplied ? (
-          <div className="mt-8 pt-6 border-t border-white/5">
-            <div className="flex items-center gap-1.5 mb-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              <Gift className="w-3.5 h-3.5" />
-              <span>Referral Discount</span>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Referral Code"
-                className="flex-1 bg-slate-950 border border-white/5 rounded-lg px-3 py-2 text-xs text-white uppercase focus:outline-none"
-                value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                disabled={isApplyingReferral}
-              />
-              <button
-                onClick={handleApplyReferral}
-                disabled={isApplyingReferral || !referralCode.trim()}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 rounded-lg text-xs font-bold transition-all"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-8 pt-6 border-t border-white/5 text-xs text-green-400 font-bold flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Referral Applied!</span>
-          </div>
-        )}
       </div>
 
       {/* Column 2 & 3: Payment Process */}

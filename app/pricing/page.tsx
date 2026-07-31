@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Zap, Shield, Clock, TrendingUp } from 'lucide-react';
+import { Check, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Navigation from '@/components/layout/Navigation';
 import { useCredits } from '@/contexts/CreditContext';
@@ -19,12 +19,6 @@ export default function PricingPage() {
     }
   };
 
-  const features = [
-    { icon: Shield, text: 'Advanced Security Analysis', color: 'text-red-400' },
-    { icon: TrendingUp, text: 'Market Intelligence Data', color: 'text-green-400' },
-    { icon: Clock, text: 'Real-time Monitoring', color: 'text-blue-400' },
-    { icon: Zap, text: 'Instant Results', color: 'text-yellow-400' },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
@@ -38,13 +32,6 @@ export default function PricingPage() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center mb-16"
           >
-            <div className="inline-flex items-center gap-2 mb-4 px-4 py-2 bg-primary-500/10 border border-primary-500/20 rounded-full">
-              <Zap className="w-4 h-4 text-primary-400" />
-              <span className="text-sm font-bold text-primary-400 uppercase tracking-wider">
-                Simple Pricing
-              </span>
-            </div>
-            
             <h1 className="text-4xl md:text-6xl font-black mb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
               Buy Credits, Scan Tokens
             </h1>
@@ -54,23 +41,6 @@ export default function PricingPage() {
             </p>
           </motion.div>
 
-          {/* Features Grid */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-16"
-          >
-            {features.map((feature, index) => (
-              <div
-                key={index}
-                className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-primary-500/50 transition-all"
-              >
-                <feature.icon className={`w-8 h-8 ${feature.color} mb-3`} />
-                <p className="text-sm font-bold text-white">{feature.text}</p>
-              </div>
-            ))}
-          </motion.div>
 
           {/* Credit Packages */}
           <motion.div
@@ -154,15 +124,39 @@ export default function PricingPage() {
                   <h3 className="font-bold text-white">Basic Scan</h3>
                   <p className="text-sm text-slate-400">Security analysis + market data</p>
                 </div>
-                <div className="text-2xl font-black text-primary-400">5 ⚡</div>
+                <div className="text-2xl font-black text-primary-400">2 ⚡</div>
               </div>
               
               <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
                 <div>
-                  <h3 className="font-bold text-white">Elevator Scan</h3>
-                  <p className="text-sm text-slate-400">Deep wallet analysis + insights</p>
+                  <h3 className="font-bold text-white">Elevator Deep Scan (50 Tx)</h3>
+                  <p className="text-sm text-slate-400">Deep wallet analysis up to 50 transactions</p>
+                </div>
+                <div className="text-2xl font-black text-primary-400">5 ⚡</div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                <div>
+                  <h3 className="font-bold text-white">Elevator Deep Scan (100 Tx)</h3>
+                  <p className="text-sm text-slate-400">Deep wallet analysis up to 100 transactions</p>
                 </div>
                 <div className="text-2xl font-black text-primary-400">10 ⚡</div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                <div>
+                  <h3 className="font-bold text-white">Elevator Deep Scan (200 Tx)</h3>
+                  <p className="text-sm text-slate-400">Deep wallet analysis up to 200 transactions</p>
+                </div>
+                <div className="text-2xl font-black text-primary-400">20 ⚡</div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl">
+                <div>
+                  <h3 className="font-bold text-white">Elevator Deep Scan (500 Tx)</h3>
+                  <p className="text-sm text-slate-400">Deep wallet analysis up to 500 transactions</p>
+                </div>
+                <div className="text-2xl font-black text-primary-400">30 ⚡</div>
               </div>
             </div>
           </motion.div>
