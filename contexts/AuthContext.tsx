@@ -40,6 +40,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [followedWhales, setFollowedWhales] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // Intercept global fetch to inject Authorization header for all local /api/ and /proxy/ requests
+    const originalFetch = window.fetch;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      
+      if (url.startsWith('/api/') || url.startsWith('/proxy/')) {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          const headers = new Headers(init?.headers);
+          if (!headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`);
+          }
+          return originalFetch(input, { ...init, headers });
+        }
+      }
+      return originalFetch(input, init);
+    };
+
     // Get initial session — keep sessionLoading=true until this resolves
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -88,7 +106,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      window.fetch = originalFetch;
+    };
   }, []);
 
   const login = async (email: string, password: string) => {

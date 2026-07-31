@@ -5,6 +5,8 @@
 
 import { supabase } from '@/lib/supabase';
 
+import { headers } from 'next/headers';
+
 const ADMIN_EMAIL = 'admin@anamul.com';
 
 /**
@@ -12,13 +14,8 @@ const ADMIN_EMAIL = 'admin@anamul.com';
  */
 export async function isAdmin(): Promise<boolean> {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    if (error || !user) {
-      return false;
-    }
-    
-    return user.email === ADMIN_EMAIL;
+    const adminUser = await getAdminUser();
+    return adminUser !== null;
   } catch (error) {
     console.error('Error checking admin status:', error);
     return false;
@@ -30,7 +27,15 @@ export async function isAdmin(): Promise<boolean> {
  */
 export async function getAdminUser() {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+    if (!token) {
+      return null;
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
     
     if (error || !user) {
       return null;
