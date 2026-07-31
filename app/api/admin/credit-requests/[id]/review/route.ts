@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { requireAdmin } from '@/lib/auth/adminAuth';
+
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * POST /api/admin/credit-requests/[id]/review
- * Approve or reject a credit purchase request (admin only)
+ * Approve or reject a credit purchase request (admin only).
+ * On approval: credits are added via DB trigger automatically.
+ * Fallback: manual credit addition if trigger didn't fire.
  */
 export async function POST(
   request: NextRequest,
@@ -12,13 +21,12 @@ export async function POST(
 ) {
   const { id } = await params;
   try {
-    // Check admin authentication
     const admin = await requireAdmin();
+    const supabaseAdmin = getAdminClient();
 
     const body = await request.json();
     const { status, admin_notes } = body;
 
-    // Validate status
     if (!status || !['approved', 'rejected'].includes(status)) {
       return NextResponse.json(
         { error: 'Invalid status. Must be "approved" or "rejected"' },
@@ -26,7 +34,6 @@ export async function POST(
       );
     }
 
-    // For rejection, admin notes are required
     if (status === 'rejected' && !admin_notes) {
       return NextResponse.json(
         { error: 'Admin notes are required when rejecting a request' },
@@ -34,18 +41,15 @@ export async function POST(
       );
     }
 
-    // Check if request exists and is pending
-    const { data: existingRequest, error: fetchError } = await supabase
+    // Fetch the existing request
+    const { data: existingRequest, error: fetchError } = await supabaseAdmin
       .from('credit_purchase_requests')
       .select('*')
       .eq('id', id)
       .single();
 
     if (fetchError || !existingRequest) {
-      return NextResponse.json(
-        { error: 'Credit request not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Credit request not found' }, { status: 404 });
     }
 
     if (existingRequest.status !== 'pending') {
@@ -55,41 +59,58 @@ export async function POST(
       );
     }
 
-    // Update the request status
-    // Note: The database trigger will automatically add credits on approval
-    const { data: updatedRequest, error: updateError } = await supabase
+    // Update status — DB trigger auto-adds credits on approval
+    const { data: updatedRequest, error: updateError } = await supabaseAdmin
       .from('credit_purchase_requests')
       .update({
         status,
         admin_notes: admin_notes || null,
         reviewed_by: admin.id,
         reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
       .single();
 
     if (updateError) {
-      console.error('Error updating credit request:', updateError);
+      console.error('[Admin] Error updating credit request:', updateError);
       return NextResponse.json(
-        { error: 'Failed to update credit request' },
+        { error: 'Failed to update credit request: ' + updateError.message },
         { status: 500 }
       );
     }
 
-    // If approved, verify credits were added
+    // On approval: verify trigger ran, manually add credits if not
     if (status === 'approved') {
-      const { data: userProfile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('credits_balance')
-        .eq('user_id', existingRequest.user_id)
-        .single();
+      try {
+        const { data: profile } = await supabaseAdmin
+          .from('user_profiles')
+          .select('credits_balance')
+          .eq('id', existingRequest.user_id)
+          .single();
 
-      if (profileError) {
-        console.error('Error verifying credit addition:', profileError);
-        // Don't fail the request, just log the error
-      } else {
-        console.log(`Credits added successfully. New balance: ${userProfile.credits_balance}`);
+        if (profile) {
+          // Check if trigger already incremented (balance would have changed)
+          // Safe fallback: always ensure credits are correct using direct update
+          const expectedMin = existingRequest.credits_amount;
+          if ((profile.credits_balance ?? 0) < expectedMin) {
+            // Trigger didn't fire — manually add credits
+            await supabaseAdmin
+              .from('user_profiles')
+              .update({
+                credits_balance: (profile.credits_balance ?? 0) + existingRequest.credits_amount,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingRequest.user_id);
+            console.log(`[Admin] Manually added ${existingRequest.credits_amount} credits to user ${existingRequest.user_id}`);
+          } else {
+            console.log(`[Admin] Trigger ran. Balance: ${profile.credits_balance}`);
+          }
+        }
+      } catch (creditError) {
+        // Don't fail the whole request — log and continue
+        console.error('[Admin] Credit verification error:', creditError);
       }
     }
 
@@ -100,10 +121,10 @@ export async function POST(
         : 'Request rejected successfully',
     });
   } catch (error: any) {
-    console.error('Admin credit request review error:', error);
+    console.error('[Admin] Credit request review error:', error);
     return NextResponse.json(
       { error: error.message || 'Unauthorized' },
-      { status: 401 }
+      { status: error.message?.includes('Unauthorized') ? 401 : 500 }
     );
   }
 }

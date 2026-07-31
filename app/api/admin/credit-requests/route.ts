@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { requireAdmin } from '@/lib/auth/adminAuth';
+
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * GET /api/admin/credit-requests
@@ -9,23 +16,20 @@ import { requireAdmin } from '@/lib/auth/adminAuth';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Check admin authentication
     await requireAdmin();
+    const supabaseAdmin = getAdminClient();
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'pending';
 
-    // Build query
-    let query = supabase
+    let query = supabaseAdmin
       .from('credit_purchase_requests')
       .select(`
         *,
-        user_email:user_id(email),
         payment_method:payment_methods(name, network)
       `)
       .order('created_at', { ascending: false });
 
-    // Apply status filter
     if (status !== 'all') {
       query = query.eq('status', status);
     }
@@ -33,28 +37,38 @@ export async function GET(request: NextRequest) {
     const { data: requests, error } = await query;
 
     if (error) {
-      console.error('Error fetching credit requests:', error);
+      console.error('[Admin] Error fetching credit requests:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch credit requests' },
+        { error: 'Failed to fetch credit requests: ' + error.message },
         { status: 500 }
       );
     }
 
-    // Transform data to flatten nested objects
-    const transformedRequests = requests?.map((request: any) => ({
-      ...request,
-      user_email: request.user_email?.email || null,
-      payment_method_name: request.payment_method?.name || null,
-      payment_network: request.payment_method?.network || null,
-      payment_method: undefined, // Remove nested object
-    }));
+    // Enrich with user emails via auth.users (service role only)
+    const enriched = await Promise.all(
+      (requests || []).map(async (req: any) => {
+        let user_email = null;
+        try {
+          const { data: userData } = await supabaseAdmin.auth.admin.getUserById(req.user_id);
+          user_email = userData?.user?.email ?? null;
+        } catch {}
 
-    return NextResponse.json({ requests: transformedRequests || [] });
+        return {
+          ...req,
+          user_email,
+          payment_method_name: req.payment_method?.name ?? null,
+          payment_network: req.payment_method?.network ?? null,
+          payment_method: undefined,
+        };
+      })
+    );
+
+    return NextResponse.json({ requests: enriched });
   } catch (error: any) {
-    console.error('Admin credit requests GET error:', error);
+    console.error('[Admin] Credit requests GET error:', error);
     return NextResponse.json(
       { error: error.message || 'Unauthorized' },
-      { status: 401 }
+      { status: error.message?.includes('Unauthorized') ? 401 : 500 }
     );
   }
 }
