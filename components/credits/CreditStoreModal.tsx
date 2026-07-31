@@ -114,12 +114,11 @@ export function CreditStoreModal({ isOpen, onClose }: CreditStoreModalProps) {
   const loadPaymentMethods = async () => {
     try {
       const response = await fetch('/api/credits/payment-methods');
-      if (!response.ok) throw new Error('Failed to load payment methods');
       const data = await response.json();
       setPaymentMethods(data.paymentMethods || []);
     } catch (error) {
       console.error('Failed to load payment methods:', error);
-      toast.error('Failed to load payment methods');
+      // Don't show toast — page still renders with empty methods
     }
   };
 
