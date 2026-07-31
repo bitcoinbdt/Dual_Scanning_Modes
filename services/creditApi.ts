@@ -50,13 +50,13 @@ creditApiClient.interceptors.response.use(
  */
 export async function getCreditBalance(): Promise<CreditBalance> {
   try {
-    const response = await creditApiClient.get<CreditBalance>('/proxy/api/credits/balance');
+    const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
     return response.data;
   } catch (error: any) {
     // Silently fall back to mock balance - no need to spam console
     return {
-      balance: 100,
-      totalPurchased: 100,
+      balance: 0,
+      totalPurchased: 0,
       totalSpent: 0,
     };
   }
@@ -67,7 +67,7 @@ export async function getCreditBalance(): Promise<CreditBalance> {
  */
 export async function getCreditPackages(): Promise<CreditPackage[]> {
   try {
-    const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/proxy/api/credits/packages');
+    const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/api/credits/packages');
     return response.data.packages;
   } catch (error: any) {
     // Silently fall back to mock packages
@@ -93,7 +93,7 @@ export async function purchaseCredits(data: PurchaseCreditRequest): Promise<Purc
  */
 export async function getCreditHistory(query?: CreditHistoryQuery): Promise<CreditHistoryResponse> {
   try {
-    const response = await creditApiClient.get<CreditHistoryResponse>('/proxy/api/credits/history', {
+    const response = await creditApiClient.get<CreditHistoryResponse>('/api/credits/history', {
       params: query,
     });
     return response.data;
