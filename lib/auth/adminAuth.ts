@@ -31,21 +31,27 @@ export async function getAdminUser() {
     const authHeader = headersList.get('authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
-    if (!token) {
+    // Try bearer token first (sent by client fetch interceptor)
+    if (token) {
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        if (user.email !== ADMIN_EMAIL) return null;
+        return user;
+      }
+    }
+
+    // Fallback: use the auto-refreshed internal session
+    // This handles cases where the stored token is stale/expired
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.user) {
       return null;
     }
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
+    if (session.user.email !== ADMIN_EMAIL) {
       return null;
     }
-    
-    if (user.email !== ADMIN_EMAIL) {
-      return null;
-    }
-    
-    return user;
+
+    return session.user;
   } catch (error) {
     console.error('Error getting admin user:', error);
     return null;

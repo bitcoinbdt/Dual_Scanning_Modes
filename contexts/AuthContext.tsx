@@ -46,7 +46,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       
       if (url.startsWith('/api/') || url.startsWith('/proxy/')) {
-        const token = localStorage.getItem('authToken');
+        // Always get the freshest token from the Supabase session (auto-refreshes)
+        // Fall back to localStorage only as a secondary option
+        let token: string | null = null;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          token = session?.access_token ?? null;
+          // Keep localStorage in sync with latest token
+          if (token) {
+            localStorage.setItem('authToken', token);
+          }
+        } catch {
+          token = localStorage.getItem('authToken');
+        }
+
         if (token) {
           const headers = new Headers(init?.headers);
           if (!headers.has('Authorization')) {
