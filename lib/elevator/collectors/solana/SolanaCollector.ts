@@ -20,6 +20,10 @@ import { fetchOHLCV } from './birdeye';
 import { fetchTransactions as fetchSolanaTransactions } from './helius';
 import { buildWalletData as buildSolanaWalletData } from './walletEngine';
 import { calculateMetrics as calculateSolanaMetrics } from './metrics';
+import { detectHolderSpike } from '../../utils/holderSpike';
+import { filterSystemAddresses } from '../../utils/addressFilter';
+import { fetchGeckoTerminalTrades } from '../shared/geckoTerminal';
+import { aggregateTrades } from '../../utils/aggregateTrades';
 
 export class SolanaCollector implements IBlockchainCollector {
   private birdeyeApiKey: string;
@@ -73,22 +77,24 @@ export class SolanaCollector implements IBlockchainCollector {
     const universalTxs: UniversalTransaction[] = [];
 
     for (const solanaTx of solanaTransactions) {
+      const isTrade = solanaTx.isTrade !== false;
       // Process each transfer in the transaction
       for (const transfer of solanaTx.transfers) {
         universalTxs.push({
-          hash: `${solanaTx.timestamp}-${transfer.from}-${transfer.to}`, // Synthetic hash
+          hash: solanaTx.signature || `${solanaTx.timestamp}-${transfer.from}-${transfer.to}`,
           timestamp: solanaTx.timestamp,
           from: transfer.from,
           to: transfer.to,
           amount: transfer.amount,
-          type: this.detectTransactionType(transfer, solanaTx.wallets),
+          type: isTrade ? this.detectTransactionType(transfer, solanaTx.wallets) : 'transfer',
           token: {
             address: tokenAddress,
             symbol: undefined, // Could be fetched from token metadata
             decimals: undefined
           },
           blockchain: 'solana',
-          raw: solanaTx
+          raw: solanaTx,
+          isTrade: isTrade
         });
       }
     }
@@ -187,8 +193,66 @@ export class SolanaCollector implements IBlockchainCollector {
 
       // Step 2: Fetch transactions
       console.log('[STEP 2/4] Fetching transactions from Helius...');
-      const transactions = await this.fetchTransactions(address, maxTransactions);
-      console.log(`✅ Fetched ${transactions.length} transactions`);
+      const heliusTxs = await this.fetchTransactions(address, maxTransactions);
+      console.log(`✅ Fetched ${heliusTxs.length} Helius transactions`);
+
+      // Fetch DEX trades from GeckoTerminal Solana pools (Feature 5/6)
+      console.log('[STEP 2b/4] Fetching DEX trades from GeckoTerminal...');
+      let dexTrades: UniversalTransaction[] = [];
+      try {
+        dexTrades = await fetchGeckoTerminalTrades('solana', address, maxTransactions) || [];
+        console.log(`✅ Fetched ${dexTrades.length} DEX trades from GeckoTerminal`);
+      } catch (err: any) {
+        console.warn(`[SolanaCollector] GeckoTerminal fetch failed: ${err.message}`);
+      }
+
+      // Merge Helius transfers with GeckoTerminal trades (Feature 5/6)
+      const mergedTransactions: UniversalTransaction[] = [];
+      
+      if (dexTrades.length > 0) {
+        const dexTradesMap = new Map<string, UniversalTransaction>();
+        for (const trade of dexTrades) {
+          dexTradesMap.set(trade.hash, trade);
+        }
+
+        for (const tx of heliusTxs) {
+          const signature = tx.hash;
+          const matchingDexTrade = dexTradesMap.get(signature);
+
+          if (matchingDexTrade) {
+            tx.isTrade = true;
+            tx.priceUsd = matchingDexTrade.priceUsd;
+            tx.type = matchingDexTrade.type; // 'buy' or 'sell'
+            dexTradesMap.delete(signature);
+          } else {
+            tx.isTrade = false;
+            tx.type = 'transfer';
+          }
+          mergedTransactions.push(tx);
+        }
+
+        // Append any unmatched DEX trades from GeckoTerminal
+        for (const [_, dexTx] of dexTradesMap) {
+          mergedTransactions.push(dexTx);
+        }
+      } else {
+        // Fallback: If no DEX trades from GeckoTerminal, keep Helius's original trade indicators
+        mergedTransactions.push(...heliusTxs);
+      }
+
+      // Filter transactions into trades and transfers
+      const trades = mergedTransactions.filter(tx => tx.isTrade);
+      const transfers = mergedTransactions.filter(tx => !tx.isTrade);
+
+      // Aggregate trades (Feature 7)
+      const aggregatedTrades = aggregateTrades(trades);
+
+      // Combine back
+      const finalTransactions = [...aggregatedTrades, ...transfers];
+
+      // Sort final list chronologically descending
+      finalTransactions.sort((a, b) => b.timestamp - a.timestamp);
+      const transactions = finalTransactions.slice(0, maxTransactions);
 
       if (transactions.length === 0) {
         throw new Error('No transactions found for this token');
@@ -216,6 +280,14 @@ export class SolanaCollector implements IBlockchainCollector {
         blockchain: 'solana',
         collectionTime
       };
+
+      // Apply Holder Spike Detection (Feature 1)
+      detectHolderSpike(result);
+
+      // Apply System Address Filtering (Feature 2)
+      const filtered = await filterSystemAddresses(walletData.holders, 'solana', this.heliusApiKey);
+      result.wallet_metrics.top_holders_filtered = filtered.slice(0, 10);
+      result.wallet_metrics.top_10_wallets = filtered.slice(0, 10);
 
       console.log(`\n${'='.repeat(60)}`);
       console.log(`[SolanaCollector] Collection complete in ${collectionTime}ms`);

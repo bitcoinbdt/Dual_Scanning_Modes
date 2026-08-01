@@ -1,0 +1,32 @@
+{
+  "ethereum": [
+    { "address": "0x28c6c06298d514db089934071355e5743bf21d60", "label": "Binance" },
+    { "address": "0x21a31ee1afc81d99c2edbcc46a1077326d7cbe83", "label": "Binance" },
+    { "address": "0xdfd5293d8e347dfe59e90efd55b2956a1343963d", "label": "Binance" },
+    { "address": "0x56eddb7aa872d3d3d7a647868888bdfb975af111", "label": "Binance" },
+    { "address": "0x71660c4db913393d05b54242381ab0fb999adc43c", "label": "Coinbase" },
+    { "address": "0x503828f738f7c87897b982941334d65429f9e664", "label": "Coinbase" },
+    { "address": "0xddfabcdc6e60ce066bfb173b3cab514b86a4763f7", "label": "Coinbase" },
+    { "address": "0x0a2d3705abbb65bc1e52111bc4ce374b1975b315", "label": "Kraken" },
+    { "address": "0xe853b691b4edf49196ea0e99a0c96bcf4dca01d24", "label": "Kraken" },
+    { "address": "0x208c6c06298d514db089934071355e5743bf21d60", "label": "OKX" }
+  ],
+  "bsc": [
+    { "address": "0x8894e0a0c962cb176c19266f48a5cda36573c718", "label": "Binance" },
+    { "address": "0x6f9efc8a38b6bbc7bad2b36c4699c3f52fa59667ab", "label": "Binance" },
+    { "address": "0x0ec12db33551afba853b691b4edf49196ea0e99a", "label": "Binance" },
+    { "address": "0x71660c4db913393d05b54242381ab0fb999adc43c", "label": "Coinbase" },
+    { "address": "0x9efc8a38b6bbc7bad2b36c4699c3f52fa59667ab", "label": "Binance" },
+    { "address": "0x66679aa1d93393d05b54242381ab0fb999adc43c", "label": "Coinbase" },
+    { "address": "0xbd31eabce90b7a829a9a85c00dd71449cbedab4f", "label": "OKX" }
+  ],
+  "solana": [
+    { "address": "5zpyutJu9ee6jFymDGoK7F6S5Kczqtc9FomP3ueKuyA9", "label": "Binance" },
+    { "address": "2PFvRYt5h88ePdQXBrH3dyFmQqJHTNZYLztE847dHWYz", "label": "Coinbase" },
+    { "address": "9sWQUJmRoRUKecsnMu8yFKRCGmgjv5mzd5xyxqKoj8sc", "label": "Kraken" },
+    { "address": "3ne4mWqdYuNiYrYZC9TrA3FcfuFdErghH97vNPbjicr1", "label": "OKX" },
+    { "address": "8buCYNJyLUppfXu7fxkTyP4MjvKG5nVvPPUUTFPSCV5b", "label": "Bybit" },
+    { "address": "EEbxC3sYKKRmEUMGSFcAUz543bN6bXq7yX7GjbDuYzfs", "label": "Gate.io" },
+    { "address": "J9K67PxqqvCRW9tiDHB9bAisgNQSMLU1bvExtexyd7Ve", "label": "KuCoin" }
+  ]
+}

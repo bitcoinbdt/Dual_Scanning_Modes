@@ -34,6 +34,15 @@ export interface UniversalTransaction {
   gasUsed?: number;             // Gas/fee used (optional)
   gasFee?: number;              // Gas fee in native token (optional)
   raw?: any;                    // Original transaction data (for debugging)
+  isTrade?: boolean;            // Flag indicating if this transaction is a DEX trade
+  priceUsd?: number;            // Exact trade price in USD
+  wallet?: string;              // Address of the user executing the transaction
+  aggregated?: boolean;         // Flag indicating if this trade was aggregated from multiple hops
+  toExchange?: boolean;         // Flag indicating if tokens were sent to a CEX
+  fromExchange?: boolean;       // Flag indicating if tokens were received from a CEX
+  exchangeName?: string;        // Name of the centralized exchange
+  gasCostUsd?: number;          // Estimated gas cost of transaction in USD
+  dexFeeUsd?: number;           // Estimated liquidity provider fee in USD
 }
 
 // Wallet balance and activity summary
@@ -55,6 +64,7 @@ export interface WalletMetrics {
   total_wallets: number;
   total_holders: number;
   top_10_wallets: HolderInfo[];
+  top_holders_filtered?: HolderInfo[];
 }
 
 // Calculated risk metrics
@@ -73,6 +83,10 @@ export interface CollectorResult {
   metrics: CalculatedMetrics;
   blockchain: 'solana' | 'bsc' | 'eth';
   collectionTime: number;  // Time taken to collect (ms)
+  holder_spike?: boolean;
+  spike_percentage?: number;
+  new_holders_24h?: number;
+  total_holders_before_24h?: number;
 }
 
 // ============================================================================
@@ -94,9 +108,11 @@ export interface TokenTransfer {
 
 // Normalized Solana Transaction
 export interface NormalizedTransaction {
+  signature?: string;           // Transaction signature/hash
   timestamp: number;
   wallets: string[];
   transfers: TokenTransfer[];
+  isTrade?: boolean;            // Flag indicating if this transaction is a DEX trade
 }
 
 // Legacy Solana collector result (for backward compatibility)

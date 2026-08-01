@@ -9,6 +9,21 @@ import { NormalizedTransaction, TokenTransfer } from '../types';
 const DELAY_MS = 300;
 const MAX_RETRIES = 3;
 
+// Known Solana DEX program IDs
+const SOLANA_DEX_PROGRAMS = new Set([
+  '675k1q2c2T6m779aoxxX48BudGXWv97Qr4BDG87paL18', // Raydium V4 AMM
+  'CAMMC7Jbi2gTYccZ4t1gnhsihjh29yb2y2wqShH6A1E3', // Raydium CLMM
+  'JUP6LkbZbjS1jKKbbRB67cjSsCc49GVvpjC285137LM', // Jupiter v6
+  'whirSpFb6fc49YrevjZgx7Ko6sD4iPr2Sm8DTrG7dVY', // Orca Whirlpool
+  '24Uqj9J6jxYiGLNsgeW9msiw1xN24sa58CcG9w8AK3mG', // Meteora
+  'LBRaCz9coTvCR6yURJfKTY2yJE461Pk6ziw21XRs59r', // Meteora DLMM
+  '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', // Serum V3
+  'EewJydroVMLEnd8cJeLY2dBXQXkpcB6sok996g3jJifg', // Lifinity
+  'AMM55xQq7bVrrw67kE54ywHE695jmW1mP5K4px7ZC7tA', // Aldrin
+  'Dooar9JkhdND4o1Y5K15cxX4x8t8as51D76R1K4tFdQG', // Step Finance
+  'CTMAaa74M55EjnwAhd6FZEhxS4E1mF4Kdf1GfB87CD5D', // Crema
+]);
+
 /**
  * Sleep utility for rate limiting
  */
@@ -81,10 +96,35 @@ function normalizeTransaction(tx: any, targetMint: string): NormalizedTransactio
     return null;
   }
   
+  // Differentiate swaps (trades) from simple transfers
+  let isTrade = false;
+  const source = String(tx.source || '').toUpperCase();
+  const type = String(tx.type || '').toUpperCase();
+  
+  const knownDexSources = [
+    'JUPITER', 'RAYDIUM', 'ORCA', 'SERUM', 'METEORA', 
+    'LIFINITY', 'ALDRIN', 'STEP_FINANCE', 'CREMA', 'PUMP'
+  ];
+  
+  if (knownDexSources.includes(source) || type.includes('SWAP')) {
+    isTrade = true;
+  }
+  
+  if (!isTrade && tx.instructions && Array.isArray(tx.instructions)) {
+    for (const inst of tx.instructions) {
+      if (inst.programId && SOLANA_DEX_PROGRAMS.has(inst.programId)) {
+        isTrade = true;
+        break;
+      }
+    }
+  }
+  
   return {
+    signature: tx.signature || tx.transactionID,
     timestamp: tx.timestamp,
     wallets: Array.from(wallets),
-    transfers
+    transfers,
+    isTrade
   };
 }
 

@@ -8,6 +8,8 @@ export interface RawTransaction {
   timestamp: number;
   signature?: string;
   wallets: string[];
+  isTrade?: boolean;
+  priceUsd?: number;
   transfers: Array<{
     from: string;
     to: string;
@@ -44,6 +46,13 @@ export interface WalletPnL {
   totalPnL: number;
   pnlPercentage: number;
   status: 'profit' | 'loss' | 'breakeven';
+  hasIncompleteHistory?: boolean;
+  gasFeesPaid?: number;
+  dexFeesPaid?: number;
+  netRealizedPnL?: number;
+  netUnrealizedPnL?: number;
+  netTotalPnL?: number;
+  netPnLPercentage?: number;
 }
 
 /**
@@ -87,30 +96,41 @@ export function extractWalletActivity(
   wallet: string,
   transactions: RawTransaction[]
 ): {
-  buys: Array<{ amount: number; timestamp: number }>;
-  sells: Array<{ amount: number; timestamp: number }>;
+  buys: Array<{ amount: number; timestamp: number; priceUsd?: number; gasCostUsd?: number; dexFeeUsd?: number }>;
+  sells: Array<{ amount: number; timestamp: number; priceUsd?: number; gasCostUsd?: number; dexFeeUsd?: number }>;
 } {
-  const buys: Array<{ amount: number; timestamp: number }> = [];
-  const sells: Array<{ amount: number; timestamp: number }> = [];
+  const buys: Array<{ amount: number; timestamp: number; priceUsd?: number; gasCostUsd?: number; dexFeeUsd?: number }> = [];
+  const sells: Array<{ amount: number; timestamp: number; priceUsd?: number; gasCostUsd?: number; dexFeeUsd?: number }> = [];
   
   const txList = transactions ?? [];
   txList.forEach(tx => {
+    // Feature 3: Skip transfers/non-trades
+    if (tx.isTrade === false) {
+      return;
+    }
+    
     const transfers = tx?.transfers ?? [];
     transfers.forEach(transfer => {
       // Wallet received tokens (buy)
       if (transfer.to === wallet) {
         buys.push({ 
           amount: transfer.amount, 
-          timestamp: tx.timestamp 
-        });
+          timestamp: tx.timestamp,
+          priceUsd: tx.priceUsd,
+          gasCostUsd: (tx as any).gasCostUsd,
+          dexFeeUsd: (tx as any).dexFeeUsd
+        } as any);
       }
       
       // Wallet sent tokens (sell)
       if (transfer.from === wallet) {
         sells.push({ 
           amount: transfer.amount, 
-          timestamp: tx.timestamp 
-        });
+          timestamp: tx.timestamp,
+          priceUsd: tx.priceUsd,
+          gasCostUsd: (tx as any).gasCostUsd,
+          dexFeeUsd: (tx as any).dexFeeUsd
+        } as any);
       }
     });
   });
@@ -138,10 +158,10 @@ function findClosestCandle(
  * Estimate average buy price from OHLCV data
  */
 export function estimateAvgBuyPrice(
-  buys: Array<{ amount: number; timestamp: number }>,
+  buys: Array<{ amount: number; timestamp: number; priceUsd?: number }>,
   ohlcv: OHLCVCandle[]
 ): number {
-  if (buys.length === 0 || ohlcv.length === 0) {
+  if (buys.length === 0) {
     return 0;
   }
   
@@ -149,11 +169,13 @@ export function estimateAvgBuyPrice(
   let totalTokens = 0;
   
   buys.forEach(buy => {
-    // Find closest OHLCV candle to transaction timestamp
-    const closestCandle = findClosestCandle(buy.timestamp, ohlcv);
+    let priceAtTime = buy.priceUsd || 0;
     
-    // Use close price as the transaction price estimate
-    const priceAtTime = closestCandle ? closestCandle.close : 0;
+    // Fallback to OHLCV close if exact price is missing
+    if (priceAtTime <= 0 && ohlcv.length > 0) {
+      const closestCandle = findClosestCandle(buy.timestamp, ohlcv);
+      priceAtTime = closestCandle ? closestCandle.close : 0;
+    }
     
     totalValue += buy.amount * priceAtTime;
     totalTokens += buy.amount;
@@ -166,10 +188,10 @@ export function estimateAvgBuyPrice(
  * Estimate average sell price from OHLCV data
  */
 export function estimateAvgSellPrice(
-  sells: Array<{ amount: number; timestamp: number }>,
+  sells: Array<{ amount: number; timestamp: number; priceUsd?: number }>,
   ohlcv: OHLCVCandle[]
 ): number {
-  if (sells.length === 0 || ohlcv.length === 0) {
+  if (sells.length === 0) {
     return 0;
   }
   
@@ -177,8 +199,13 @@ export function estimateAvgSellPrice(
   let totalTokens = 0;
   
   sells.forEach(sell => {
-    const closestCandle = findClosestCandle(sell.timestamp, ohlcv);
-    const priceAtTime = closestCandle ? closestCandle.close : 0;
+    let priceAtTime = sell.priceUsd || 0;
+    
+    // Fallback to OHLCV close if exact price is missing
+    if (priceAtTime <= 0 && ohlcv.length > 0) {
+      const closestCandle = findClosestCandle(sell.timestamp, ohlcv);
+      priceAtTime = closestCandle ? closestCandle.close : 0;
+    }
     
     totalValue += sell.amount * priceAtTime;
     totalTokens += sell.amount;
@@ -235,6 +262,53 @@ export function calculateWalletPnL(
   } else {
     status = 'breakeven';
   }
+
+  // Calculate fees and net P&L
+  const gasFeesPaid = buys.reduce((sum, b) => sum + ((b as any).gasCostUsd || 0), 0) + sells.reduce((sum, s) => sum + ((s as any).gasCostUsd || 0), 0);
+  const dexFeesPaid = buys.reduce((sum, b) => sum + ((b as any).dexFeeUsd || 0), 0) + sells.reduce((sum, s) => sum + ((s as any).dexFeeUsd || 0), 0);
+  
+  const totalBuyFees = buys.reduce((sum, b) => sum + ((b as any).gasCostUsd || 0) + ((b as any).dexFeeUsd || 0), 0);
+  const totalSellFees = sells.reduce((sum, s) => sum + ((s as any).gasCostUsd || 0) + ((s as any).dexFeeUsd || 0), 0);
+
+  const fractionOfBuysSold = tokensBought > 0 ? (tokensSold / tokensBought) : 0;
+  const fractionOfBuysHeld = tokensBought > 0 ? (currentHoldings / tokensBought) : 0;
+
+  const realizedFees = totalSellFees + (fractionOfBuysSold * totalBuyFees);
+  const unrealizedFees = fractionOfBuysHeld * totalBuyFees;
+
+  const netRealizedPnL = realizedPnL - realizedFees;
+  const netUnrealizedPnL = unrealizedPnL - unrealizedFees;
+  const netTotalPnL = netRealizedPnL + netUnrealizedPnL;
+  const netPnLPercentage = totalInvested > 0 ? (netTotalPnL / totalInvested) * 100 : 0;
+  
+  // Feature 4: Detect Incomplete History
+  // Gather all transactions (trades and transfers) for this wallet and sort chronologically
+  const walletTxs: Array<{ timestamp: number; from: string; to: string; isTrade: boolean }> = [];
+  const txList = transactions ?? [];
+  for (const tx of txList) {
+    const transfers = tx?.transfers ?? [];
+    for (const transfer of transfers) {
+      if (transfer.from === wallet || transfer.to === wallet) {
+        walletTxs.push({
+          timestamp: tx.timestamp,
+          from: transfer.from,
+          to: transfer.to,
+          isTrade: tx.isTrade !== false
+        });
+      }
+    }
+  }
+  
+  walletTxs.sort((a, b) => a.timestamp - b.timestamp);
+  
+  let hasIncompleteHistory = false;
+  if (walletTxs.length > 0) {
+    const firstTx = walletTxs[0];
+    // If first transaction is an outflow (sell/transfer out) from this wallet
+    if (firstTx.from === wallet) {
+      hasIncompleteHistory = true;
+    }
+  }
   
   return {
     wallet,
@@ -249,7 +323,14 @@ export function calculateWalletPnL(
     unrealizedPnL,
     totalPnL,
     pnlPercentage,
-    status
+    status,
+    gasFeesPaid,
+    dexFeesPaid,
+    netRealizedPnL,
+    netUnrealizedPnL,
+    netTotalPnL,
+    netPnLPercentage,
+    hasIncompleteHistory
   };
 }
 

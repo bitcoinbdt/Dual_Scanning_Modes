@@ -1,10 +1,10 @@
 /**
  * GeckoTerminal API Client
- * Primary source for DEX swap/trade data on BSC and Ethereum.
+ * Primary source for DEX swap/trade data on BSC, Ethereum, and Solana.
  * Free tier, no API key required.
  *
  * Endpoints used:
- *   - GET /networks/{network}/tokens/{address}/pools  → find the top liquidity pool
+ *   - GET /networks/{network}/tokens/{address}/pools  → find token liquidity pools
  *   - GET /networks/{network}/pools/{pool}/trades     → get swap events
  */
 
@@ -13,9 +13,10 @@ import { UniversalTransaction } from '../types';
 const GECKO_API = 'https://api.geckoterminal.com/api/v2';
 
 // GeckoTerminal network slugs
-const NETWORK_SLUG: Record<'bsc' | 'eth', string> = {
+const NETWORK_SLUG: Record<'bsc' | 'eth' | 'solana', string> = {
   bsc: 'bsc',
   eth: 'eth',
+  solana: 'solana',
 };
 
 // Delay between requests to respect rate limits (~30 req/min free tier)
@@ -49,12 +50,12 @@ interface GeckoTrade {
 }
 
 /**
- * Fetch the top pool address (by liquidity) for a token on GeckoTerminal.
+ * Fetch top pools (by 24h volume) for a token on GeckoTerminal.
  */
-async function fetchTopPool(
-  network: 'bsc' | 'eth',
+async function fetchTokenPools(
+  network: 'bsc' | 'eth' | 'solana',
   tokenAddress: string
-): Promise<string | null> {
+): Promise<string[]> {
   const slug = NETWORK_SLUG[network];
   const url = `${GECKO_API}/networks/${slug}/tokens/${tokenAddress.toLowerCase()}/pools`;
 
@@ -64,8 +65,8 @@ async function fetchTopPool(
     });
 
     if (!res.ok) {
-      console.warn(`[GeckoTerminal] Pool lookup failed: HTTP ${res.status}`);
-      return null;
+      console.warn(`[GeckoTerminal] Pools lookup failed for ${tokenAddress} on ${network}: HTTP ${res.status}`);
+      return [];
     }
 
     const json = await res.json();
@@ -73,21 +74,22 @@ async function fetchTopPool(
 
     if (pools.length === 0) {
       console.warn(`[GeckoTerminal] No pools found for ${tokenAddress} on ${network}`);
-      return null;
+      return [];
     }
 
-    // Sort by 24h volume DESC and pick the top pool
+    // Sort by 24h volume DESC
     pools.sort((a, b) =>
       parseFloat(b.attributes.volume_usd?.h24 ?? '0') -
       parseFloat(a.attributes.volume_usd?.h24 ?? '0')
     );
 
-    const topPool = pools[0].attributes.address;
-    console.log(`[GeckoTerminal] Top pool for ${tokenAddress}: ${topPool}`);
-    return topPool;
+    // Limit to top 5 pools to avoid excessive API requests
+    const selectedPools = pools.slice(0, 5).map(p => p.attributes.address);
+    console.log(`[GeckoTerminal] Found ${pools.length} pools. Selected top ${selectedPools.length} for scanning.`);
+    return selectedPools;
   } catch (err: any) {
-    console.error('[GeckoTerminal] fetchTopPool error:', err.message);
-    return null;
+    console.error('[GeckoTerminal] fetchTokenPools error:', err.message);
+    return [];
   }
 }
 
@@ -96,7 +98,7 @@ async function fetchTopPool(
  * Returns up to `limit` trades (GeckoTerminal caps at 300 per request).
  */
 async function fetchPoolTrades(
-  network: 'bsc' | 'eth',
+  network: 'bsc' | 'eth' | 'solana',
   poolAddress: string,
   limit: number
 ): Promise<GeckoTrade[]> {
@@ -113,7 +115,7 @@ async function fetchPoolTrades(
       });
 
       if (!res.ok) {
-        console.warn(`[GeckoTerminal] Trades fetch failed: HTTP ${res.status}`);
+        console.warn(`[GeckoTerminal] Trades fetch failed for pool ${poolAddress}: HTTP ${res.status}`);
         break;
       }
 
@@ -145,7 +147,7 @@ function convertToUniversal(
   trades: GeckoTrade[],
   tokenAddress: string,
   tokenSymbol: string,
-  blockchain: 'bsc' | 'eth'
+  blockchain: 'bsc' | 'eth' | 'solana'
 ): UniversalTransaction[] {
   return trades.map(trade => {
     const attr = trade.attributes;
@@ -163,7 +165,7 @@ function convertToUniversal(
       kind === 'buy' ? attr.to_token_amount : attr.from_token_amount
     ) || 0;
 
-    // Exact price per token in USD at swap time
+    // Exact price per token in USD at swap time (Feature 5)
     const priceUsd = parseFloat(
       kind === 'buy' ? attr.price_to_in_usd : attr.price_from_in_usd
     ) || 0;
@@ -182,35 +184,60 @@ function convertToUniversal(
         symbol: tokenSymbol
       },
       blockchain,
-      raw: attr
-    } as UniversalTransaction & { priceUsd: number; wallet: string };
+      raw: attr,
+      isTrade: true       // ← Flagged as trade
+    } as UniversalTransaction;
   });
 }
 
 /**
- * Main entry point: fetch swap trades for a token via GeckoTerminal.
- * Returns null if the token/pool cannot be found or if the API fails.
+ * Main entry point: fetch swap trades for a token across multiple liquidity pools.
+ * Returns null if the token/pools cannot be found or if the API fails.
  */
 export async function fetchGeckoTerminalTrades(
-  network: 'bsc' | 'eth',
+  network: 'bsc' | 'eth' | 'solana',
   tokenAddress: string,
   maxTransactions: number,
   tokenSymbol: string = 'TOKEN'
 ): Promise<UniversalTransaction[] | null> {
-  console.log(`[GeckoTerminal] Starting trade fetch for ${tokenAddress} on ${network}`);
+  console.log(`[GeckoTerminal] Starting multi-pool trade fetch for ${tokenAddress} on ${network}`);
 
-  // Step 1: Identify the primary pool
-  const poolAddress = await fetchTopPool(network, tokenAddress);
-  if (!poolAddress) return null;
+  // Step 1: Identify all liquidity pools
+  const poolAddresses = await fetchTokenPools(network, tokenAddress);
+  if (poolAddresses.length === 0) return null;
 
-  await sleep(DELAY_MS);
+  const allTrades: GeckoTrade[] = [];
+  const processedHashes = new Set<string>();
 
-  // Step 2: Fetch swap events from the pool
-  const trades = await fetchPoolTrades(network, poolAddress, maxTransactions);
-  console.log(`[GeckoTerminal] Fetched ${trades.length} trades`);
+  // Step 2: Fetch trades from each pool and merge them (Feature 6)
+  for (const poolAddress of poolAddresses) {
+    await sleep(DELAY_MS);
+    console.log(`[GeckoTerminal] Fetching trades for pool: ${poolAddress}`);
+    const poolTrades = await fetchPoolTrades(network, poolAddress, maxTransactions);
+    
+    for (const trade of poolTrades) {
+      if (!processedHashes.has(trade.attributes.tx_hash)) {
+        processedHashes.add(trade.attributes.tx_hash);
+        allTrades.push(trade);
+      }
+    }
+  }
 
-  if (trades.length === 0) return null;
+  if (allTrades.length === 0) {
+    console.warn(`[GeckoTerminal] No trades found across all ${poolAddresses.length} pools`);
+    return null;
+  }
+
+  // Sort merged list chronologically descending
+  allTrades.sort(
+    (a, b) =>
+      new Date(b.attributes.block_timestamp).getTime() -
+      new Date(a.attributes.block_timestamp).getTime()
+  );
+
+  const truncatedTrades = allTrades.slice(0, maxTransactions);
+  console.log(`[GeckoTerminal] Merged & returned ${truncatedTrades.length} unique trades from ${poolAddresses.length} pools`);
 
   // Step 3: Convert to universal format
-  return convertToUniversal(trades, tokenAddress, tokenSymbol, network);
+  return convertToUniversal(truncatedTrades, tokenAddress, tokenSymbol, network);
 }

@@ -20,6 +20,9 @@ import {
 import { fetchOHLCV } from './birdeye';
 import { fetchGeckoTerminalTrades } from '../shared/geckoTerminal';
 import { fetchBirdeyeTrades } from '../shared/birdeyeTrades';
+import { detectHolderSpike } from '../../utils/holderSpike';
+import { filterSystemAddresses } from '../../utils/addressFilter';
+import { aggregateTrades } from '../../utils/aggregateTrades';
 
 export class BscCollector implements IBlockchainCollector {
   private birdeyeApiKey: string;
@@ -51,7 +54,8 @@ export class BscCollector implements IBlockchainCollector {
     const geckoTrades = await fetchGeckoTerminalTrades('bsc', address, maxTransactions);
     if (geckoTrades && geckoTrades.length > 0) {
       console.log(`[BscCollector] ✅ GeckoTerminal: ${geckoTrades.length} trades`);
-      return geckoTrades;
+      const trades = geckoTrades.map(tx => ({ ...tx, isTrade: true }));
+      return aggregateTrades(trades);
     }
 
     // --- Fallback: Birdeye trades ---
@@ -59,7 +63,8 @@ export class BscCollector implements IBlockchainCollector {
     const birdeyeTrades = await fetchBirdeyeTrades('bsc', address, this.birdeyeApiKey, maxTransactions);
     if (birdeyeTrades && birdeyeTrades.length > 0) {
       console.log(`[BscCollector] ✅ Birdeye fallback: ${birdeyeTrades.length} trades`);
-      return birdeyeTrades;
+      const trades = birdeyeTrades.map(tx => ({ ...tx, isTrade: true }));
+      return aggregateTrades(trades);
     }
 
     console.warn('[BscCollector] Both sources returned no data.');
@@ -164,6 +169,14 @@ export class BscCollector implements IBlockchainCollector {
         blockchain: 'bsc',
         collectionTime
       };
+
+      // Apply Holder Spike Detection (Feature 1)
+      detectHolderSpike(result);
+
+      // Apply System Address Filtering (Feature 2)
+      const filtered = await filterSystemAddresses(walletData.holders, 'bsc');
+      result.wallet_metrics.top_holders_filtered = filtered.slice(0, 10);
+      result.wallet_metrics.top_10_wallets = filtered.slice(0, 10);
 
       console.log(`\n${'='.repeat(60)}`);
       console.log(`[BscCollector] Done in ${collectionTime}ms`);

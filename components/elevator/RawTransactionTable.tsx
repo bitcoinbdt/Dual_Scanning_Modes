@@ -16,6 +16,10 @@ import { PnLIndicator } from './PnLIndicator';
 import { PnLTooltip } from './PnLTooltip';
 import { ActionBadge } from './ActionBadge';
 import { TxHashLink } from './TxHashLink';
+import { HolderGrowthChart } from './HolderGrowthChart';
+import { useWalletPnL, CostMethod } from '@/hooks/useWalletPnL';
+import { ExchangeFlowCard } from './ExchangeFlowCard';
+import { VerificationBadge } from './VerificationBadge';
 
 interface RawTransactionTableProps {
   rawData: {
@@ -23,6 +27,18 @@ interface RawTransactionTableProps {
     holders: HolderInfo[];
     ohlcv: OHLCVCandle[];
     blockchain?: 'solana' | 'bsc' | 'eth';
+    holder_spike?: boolean;
+    spike_percentage?: number;
+    new_holders_24h?: number;
+    total_holders_before_24h?: number;
+    top_holders_filtered?: HolderInfo[];
+    holder_growth?: Array<{ timestamp: number, holders: number }>;
+    exchange_flow?: {
+      totalTokensToExchanges: number;
+      totalTokensFromExchanges: number;
+      netExchangeFlow: number;
+    };
+    trust_score?: any;
   };
   tokenSymbol: string;
   tokenAddress: string;
@@ -38,6 +54,9 @@ interface FlatTransaction {
   amount: number;
   from: string;
   to: string;
+  toExchange?: boolean;
+  fromExchange?: boolean;
+  exchangeName?: string;
 }
 
 type FilterType = 'ALL' | 'BUY' | 'SELL' | 'PROFIT' | 'LOSS';
@@ -54,6 +73,9 @@ export function RawTransactionTable({
   tokenAddress,
   network = 'solana'
 }: RawTransactionTableProps) {
+  const [costMethod, setCostMethod] = useState<CostMethod>('average');
+  const [includeFees, setIncludeFees] = useState(true);
+  
   // Detect actual blockchain from data (prefer rawData.blockchain over network prop)
   const detectedChain = rawData.blockchain || network;
   
@@ -115,6 +137,11 @@ export function RawTransactionTable({
         timestamp: utx.timestamp,
         signature: utx.hash || utx.signature,
         wallets: [utx.from, utx.to].filter(Boolean),
+        isTrade: utx.isTrade,
+        priceUsd: utx.priceUsd,
+        toExchange: utx.toExchange,
+        fromExchange: utx.fromExchange,
+        exchangeName: utx.exchangeName,
         transfers: [
           {
             from: utx.from,
@@ -135,35 +162,73 @@ export function RawTransactionTable({
     
     txList.forEach(tx => {
       const transfers = tx?.transfers ?? [];
+      const isTrade = (tx as any).isTrade !== false;
+      const toExchange = (tx as any).toExchange;
+      const fromExchange = (tx as any).fromExchange;
+      const exchangeName = (tx as any).exchangeName;
+      
       transfers.forEach(transfer => {
-        // Determine action based on transfer direction
-        const action: 'BUY' | 'SELL' | 'TRANSFER' = 
-          transfer.from && transfer.to ? 'TRANSFER' : 'TRANSFER';
-        
-        // Add entry for receiver (BUY)
-        if (transfer.to) {
-          flat.push({
-            timestamp: tx.timestamp,
-            signature: tx.signature,
-            wallet: transfer.to,
-            action: 'BUY',
-            amount: transfer.amount,
-            from: transfer.from,
-            to: transfer.to
-          });
-        }
-        
-        // Add entry for sender (SELL) - only if different from receiver
-        if (transfer.from && transfer.from !== transfer.to) {
-          flat.push({
-            timestamp: tx.timestamp,
-            signature: tx.signature,
-            wallet: transfer.from,
-            action: 'SELL',
-            amount: transfer.amount,
-            from: transfer.from,
-            to: transfer.to
-          });
+        if (!isTrade) {
+          if (transfer.to) {
+            flat.push({
+              timestamp: tx.timestamp,
+              signature: tx.signature,
+              wallet: transfer.to,
+              action: 'TRANSFER',
+              amount: transfer.amount,
+              from: transfer.from,
+              to: transfer.to,
+              toExchange,
+              fromExchange,
+              exchangeName
+            });
+          }
+          if (transfer.from && transfer.from !== transfer.to) {
+            flat.push({
+              timestamp: tx.timestamp,
+              signature: tx.signature,
+              wallet: transfer.from,
+              action: 'TRANSFER',
+              amount: transfer.amount,
+              from: transfer.from,
+              to: transfer.to,
+              toExchange,
+              fromExchange,
+              exchangeName
+            });
+          }
+        } else {
+          // Add entry for receiver (BUY)
+          if (transfer.to) {
+            flat.push({
+              timestamp: tx.timestamp,
+              signature: tx.signature,
+              wallet: transfer.to,
+              action: 'BUY',
+              amount: transfer.amount,
+              from: transfer.from,
+              to: transfer.to,
+              toExchange,
+              fromExchange,
+              exchangeName
+            });
+          }
+          
+          // Add entry for sender (SELL) - only if different from receiver
+          if (transfer.from && transfer.from !== transfer.to) {
+            flat.push({
+              timestamp: tx.timestamp,
+              signature: tx.signature,
+              wallet: transfer.from,
+              action: 'SELL',
+              amount: transfer.amount,
+              from: transfer.from,
+              to: transfer.to,
+              toExchange,
+              fromExchange,
+              exchangeName
+            });
+          }
         }
       });
     });
@@ -171,17 +236,36 @@ export function RawTransactionTable({
     return flat;
   }, [normalizedTransactions]);
   
-  // Calculate P&L for all wallets
-  const walletPnL = useMemo<Map<string, WalletPnL>>(() => {
-    if (currentPrice === 0) return new Map();
+  // Calculate P&L for all wallets dynamically using hook (Feature 9)
+  const baseWalletPnL = useWalletPnL(
+    normalizedTransactions,
+    rawData?.holders ?? [],
+    rawData?.ohlcv ?? [],
+    currentPrice,
+    costMethod
+  );
+
+  // Fee-adjusted dynamic P&L mapping (Feature 11)
+  const walletPnL = useMemo(() => {
+    const adjusted = new Map<string, WalletPnL>();
     
-    return calculateAllWalletPnL(
-      normalizedTransactions,
-      rawData?.holders ?? [],
-      rawData?.ohlcv ?? [],
-      currentPrice
-    );
-  }, [normalizedTransactions, rawData?.holders, rawData?.ohlcv, currentPrice]);
+    for (const [wallet, pnl] of baseWalletPnL.entries()) {
+      if (includeFees) {
+        adjusted.set(wallet, {
+          ...pnl,
+          realizedPnL: pnl.netRealizedPnL !== undefined ? pnl.netRealizedPnL : pnl.realizedPnL,
+          unrealizedPnL: pnl.netUnrealizedPnL !== undefined ? pnl.netUnrealizedPnL : pnl.unrealizedPnL,
+          totalPnL: pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL,
+          pnlPercentage: pnl.netPnLPercentage !== undefined ? pnl.netPnLPercentage : pnl.pnlPercentage,
+          status: (pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) > 0.01 ? 'profit' : ((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) < -0.01 ? 'loss' : 'breakeven')
+        });
+      } else {
+        adjusted.set(wallet, pnl);
+      }
+    }
+    
+    return adjusted;
+  }, [baseWalletPnL, includeFees]);
   
   // Filter transactions
   const filteredTransactions = useMemo(() => {
@@ -277,7 +361,7 @@ export function RawTransactionTable({
           <div className="flex items-center gap-3">
             <Database className="w-6 h-6 text-primary-400" />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xl font-black italic uppercase text-slate-200">
                   Raw Transaction Data
                 </h3>
@@ -285,6 +369,19 @@ export function RawTransactionTable({
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${chainInfo.bgColor} ${chainInfo.color} border border-current/20`}>
                   {chainInfo.emoji} {chainInfo.name}
                 </span>
+
+                {/* Verification Trust Badge (Feature 12) */}
+                <VerificationBadge trustScore={rawData.trust_score} />
+                
+                {/* Holder Spike Badge (Feature 1) */}
+                {rawData.holder_spike && (
+                  <span 
+                    title={`New holders (24h): ${rawData.new_holders_24h}, Total before: ${rawData.total_holders_before_24h}`}
+                    className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 cursor-help flex items-center gap-1 animate-pulse"
+                  >
+                    🔥 Holder Spike: +{rawData.spike_percentage?.toFixed(1)}% in 24h
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400 mt-1">
                 Complete on-chain activity with real-time P&L
@@ -314,182 +411,299 @@ export function RawTransactionTable({
           </div>
         </div>
       </div>
+
+      {/* Exchange Flow Summary Card (Feature 10) */}
+      <ExchangeFlowCard metrics={rawData.exchange_flow} tokenSymbol={tokenSymbol} />
       
-      {/* Filters and Sorting */}
-      <div className="glass-card p-4 rounded-xl border border-white/10">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          {/* Filter Buttons */}
-          <div className="flex flex-wrap gap-2">
-            {(['ALL', 'BUY', 'SELL', 'PROFIT', 'LOSS'] as FilterType[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => {
-                  setFilter(f);
-                  setPage(1); // Reset to first page
-                }}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                  filter === f
-                    ? 'bg-primary-600 text-white shadow-lg'
-                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                {f === 'PROFIT' && <TrendingUp className="w-3 h-3 inline mr-1" />}
-                {f === 'LOSS' && <TrendingDown className="w-3 h-3 inline mr-1" />}
-                {f}
-              </button>
-            ))}
-          </div>
-          
-          {/* Sort Dropdown */}
-          <div className="flex gap-2 items-center">
-            <span className="text-xs text-slate-400">Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => handleSort(e.target.value as SortBy)}
-              className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-            >
-              <option value="time">Time</option>
-              <option value="amount">Amount</option>
-              <option value="pnl">P&L</option>
-            </select>
-            <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-2 bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              {sortOrder === 'asc' ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      {/* Table */}
-      <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10 bg-slate-950">
-                <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  Time
-                </th>
-                <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  Wallet
-                </th>
-                <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  Action
-                </th>
-                <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  Amount
-                </th>
-                <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  Tx Hash
-                </th>
-                <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                  P&L
-                </th>
-              </tr>
-            </thead>
-            
-            <tbody>
-              {paginatedTransactions.map((tx, idx) => {
-                const pnl = walletPnL.get(tx.wallet);
-                const isHovered = hoveredWallet === tx.wallet;
-                
-                return (
-                  <tr
-                    key={`${tx.signature}-${tx.wallet}-${idx}`}
-                    className="group border-b border-white/5 hover:bg-white/5 transition-colors"
-                    onMouseEnter={() => setHoveredWallet(tx.wallet)}
-                    onMouseLeave={() => setHoveredWallet(null)}
+      {/* Main layout grid (Feature 2) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Transaction list, filters, table, pagination (span 2) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Filters and Sorting */}
+          <div className="glass-card p-4 rounded-xl border border-white/10">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              {/* Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                {(['ALL', 'BUY', 'SELL', 'PROFIT', 'LOSS'] as FilterType[]).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => {
+                      setFilter(f);
+                      setPage(1); // Reset to first page
+                    }}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                      filter === f
+                        ? 'bg-primary-600 text-white shadow-lg'
+                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white'
+                    }`}
                   >
-                    {/* Time */}
-                    <td className="p-4">
-                      <span className="text-xs text-slate-400 font-mono">
-                        {formatTime(tx.timestamp)}
-                      </span>
-                    </td>
-                    
-                    {/* Wallet */}
-                    <td className="p-4">
-                      <WalletCell wallet={tx.wallet} />
-                    </td>
-                    
-                    {/* Action */}
-                    <td className="p-4 text-center">
-                      <ActionBadge action={tx.action} />
-                    </td>
-                    
-                    {/* Amount */}
-                    <td className="p-4 text-right">
-                      <div>
-                        <div className="text-sm font-bold text-white">
-                          {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {tokenSymbol}
-                        </div>
-                      </div>
-                    </td>
-                    
-                    {/* Tx Hash */}
-                    <td className="p-4">
-                      <TxHashLink hash={tx.signature} network={detectedChain as 'solana' | 'ethereum' | 'bsc'} />
-                    </td>
-                    
-                    {/* P&L */}
-                    <td className="p-4 text-right relative">
-                      <div className="relative">
-                        <PnLIndicator pnl={pnl} />
-                        
-                        {/* Tooltip on hover */}
-                        {isHovered && pnl && (
-                          <div className="absolute right-0 top-full mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                            <PnLTooltip pnl={pnl} />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
-          <div className="text-xs text-slate-400">
-            Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
+                    {f === 'PROFIT' && <TrendingUp className="w-3 h-3 inline mr-1" />}
+                    {f === 'LOSS' && <TrendingDown className="w-3 h-3 inline mr-1" />}
+                    {f}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Sort and Cost Basis controls */}
+              <div className="flex gap-4 items-center flex-wrap">
+                {/* Include Fees Toggle (Feature 11) */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeFees}
+                    onChange={(e) => setIncludeFees(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded bg-slate-900 border-white/10 text-primary-600 focus:ring-primary-500/50"
+                  />
+                  <span className="text-xs font-bold text-slate-300">Include Fees</span>
+                </label>
+
+                {/* Cost Basis Selector (Feature 9) */}
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs text-slate-400">Cost Basis:</span>
+                  <select
+                    value={costMethod}
+                    onChange={(e) => setCostMethod(e.target.value as CostMethod)}
+                    className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50 font-bold"
+                  >
+                    <option value="average">Weighted Avg</option>
+                    <option value="fifo">FIFO</option>
+                    <option value="lifo">LIFO</option>
+                  </select>
+                </div>
+
+                {/* Sort Dropdown */}
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs text-slate-400">Sort by:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => handleSort(e.target.value as SortBy)}
+                    className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  >
+                    <option value="time">Time</option>
+                    <option value="amount">Amount</option>
+                    <option value="pnl">P&L</option>
+                  </select>
+                </div>
+                
+                {/* Sort Order Toggle Button */}
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="p-2 bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  {sortOrder === 'asc' ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
           
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
-              <span className="text-xs text-slate-400">Page</span>
-              <span className="text-xs text-white font-bold">{page}</span>
-              <span className="text-xs text-slate-400">of {totalPages}</span>
+          {/* Table */}
+          <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/10 bg-slate-950">
+                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      Time
+                    </th>
+                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      Wallet
+                    </th>
+                    <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      Action
+                    </th>
+                    <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      Amount
+                    </th>
+                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      Tx Hash
+                    </th>
+                    <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                      P&L
+                    </th>
+                  </tr>
+                </thead>
+                
+                <tbody>
+                  {paginatedTransactions.map((tx, idx) => {
+                    const pnl = walletPnL.get(tx.wallet);
+                    const isHovered = hoveredWallet === tx.wallet;
+                    
+                    return (
+                      <tr
+                        key={`${tx.signature}-${tx.wallet}-${idx}`}
+                        className="group border-b border-white/5 hover:bg-white/5 transition-colors"
+                        onMouseEnter={() => setHoveredWallet(tx.wallet)}
+                        onMouseLeave={() => setHoveredWallet(null)}
+                      >
+                        {/* Time */}
+                        <td className="p-4">
+                          <span className="text-xs text-slate-400 font-mono">
+                            {formatTime(tx.timestamp)}
+                          </span>
+                        </td>
+                        
+                        {/* Wallet */}
+                        <td className="p-4">
+                          <WalletCell wallet={tx.wallet} />
+                        </td>
+                        
+                        {/* Action */}
+                        <td className="p-4 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <ActionBadge action={tx.action} />
+                            {tx.exchangeName && (
+                              <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider uppercase flex items-center gap-0.5 animate-pulse">
+                                🏦 {tx.exchangeName}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        
+                        {/* Amount */}
+                        <td className="p-4 text-right">
+                          <div>
+                            <div className="text-sm font-bold text-white">
+                              {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {tokenSymbol}
+                            </div>
+                          </div>
+                        </td>
+                        
+                        {/* Tx Hash */}
+                        <td className="p-4">
+                          <TxHashLink hash={tx.signature} network={detectedChain as 'solana' | 'ethereum' | 'bsc'} />
+                        </td>
+                        
+                        {/* P&L */}
+                        <td className="p-4 text-right relative font-mono text-xs text-slate-500">
+                           {tx.action === 'TRANSFER' ? (
+                             <span>N/A</span>
+                           ) : (
+                             <div className="relative">
+                               <div className="flex items-center justify-end gap-1.5">
+                                 {pnl?.hasIncompleteHistory && (
+                                   <span 
+                                     title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
+                                     className="cursor-help text-amber-500 font-bold select-none text-xs"
+                                   >
+                                     ⚠️
+                                   </span>
+                                 )}
+                                 <PnLIndicator pnl={pnl} />
+                               </div>
+                               
+                               {/* Tooltip on hover */}
+                               {isHovered && pnl && (
+                                 <div className="absolute right-0 top-full mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                   <PnLTooltip pnl={pnl} />
+                                 </div>
+                               )}
+                             </div>
+                           )}
+                         </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <button
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
+          </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
+              <div className="text-xs text-slate-400">
+                Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
+                  <span className="text-xs text-slate-400">Page</span>
+                  <span className="text-xs text-white font-bold">{page}</span>
+                  <span className="text-xs text-slate-400">of {totalPages}</span>
+                </div>
+                <button
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Holder Growth Chart Component */}
+          <HolderGrowthChart 
+            growthData={rawData.holder_growth} 
+            holderSpike={rawData.holder_spike} 
+          />
+        </div>
+
+        {/* Right Column: Top Holders (span 1) */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="glass-card p-6 rounded-xl border border-white/10 bg-slate-900/10 flex flex-col h-full">
+            <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+              <span className="text-sm font-black italic uppercase text-slate-200">
+                👥 Top 10 Wallets (Filtered)
+              </span>
+            </div>
+            
+            <div className="space-y-3 flex-grow overflow-y-auto max-h-[600px] pr-1">
+              {(!rawData.top_holders_filtered || rawData.top_holders_filtered.length === 0) ? (
+                <p className="text-xs text-slate-500 italic">No holders data available or all filtered.</p>
+              ) : (
+                rawData.top_holders_filtered.slice(0, 10).map((holder, idx) => (
+                  <div 
+                    key={holder.wallet} 
+                    className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-slate-950/40 hover:bg-white/5 transition-all"
+                  >
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold text-slate-500 font-mono">#{idx + 1}</span>
+                        <WalletCell wallet={holder.wallet} />
+                      </div>
+                      <span className="text-[9px] text-slate-500 font-mono">
+                        {holder.tx_count} transaction{holder.tx_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-bold text-white font-mono flex items-center justify-end gap-1">
+                        {walletPnL.get(holder.wallet)?.hasIncompleteHistory && (
+                          <span 
+                            title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
+                            className="cursor-help text-amber-500 font-bold select-none text-[10px]"
+                          >
+                            ⚠️
+                          </span>
+                        )}
+                        {holder.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-[9px] text-slate-500">
+                        {tokenSymbol}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </motion.div>
   );
 }
