@@ -154,7 +154,7 @@ export async function fetchTransactions(
   while (hasMore && allTransactions.length < maxTransactions) {
     const params: Record<string, any> = {
       'api-key': apiKey,
-      limit: 100
+      limit: Math.min(maxTransactions, 100)
     };
     
     if (before) {

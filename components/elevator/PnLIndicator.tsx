@@ -17,8 +17,8 @@ export function PnLIndicator({
   showPercentage = true,
   size = 'md'
 }: PnLIndicatorProps) {
-  // If no P&L data, show neutral state
-  if (!pnl) {
+  // If no P&L data or cost basis is unknown, show neutral state
+  if (!pnl || pnl.costBasisUnknown || pnl.totalPnL === null || pnl.totalPnL === undefined || pnl.pnlPercentage === null || pnl.pnlPercentage === undefined) {
     return (
       <div className="flex items-center gap-2">
         <span className="text-slate-500">—</span>

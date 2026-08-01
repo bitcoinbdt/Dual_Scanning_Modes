@@ -24,7 +24,23 @@ export function PnLTooltip({ pnl }: PnLTooltipProps) {
     }
     return value.toFixed(8);
   };
-  
+
+  if (!pnl || pnl.costBasisUnknown || pnl.totalPnL === null || pnl.totalPnL === undefined || pnl.pnlPercentage === null || pnl.pnlPercentage === undefined || pnl.realizedPnL === null || pnl.realizedPnL === undefined || pnl.unrealizedPnL === null || pnl.unrealizedPnL === undefined) {
+    return (
+      <div className="bg-slate-900 border border-slate-700 p-4 rounded-lg shadow-xl shadow-black/50 min-w-[280px]">
+        <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-700">
+          <h5 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+            P&L Breakdown
+          </h5>
+          <span className="text-lg">⚪</span>
+        </div>
+        <div className="text-xs text-slate-400 leading-relaxed">
+          This wallet's first purchase is outside the scanned transaction window. True cost basis is unknown, so profit and loss metrics cannot be calculated.
+        </div>
+      </div>
+    );
+  }
+
   const isProfit = pnl.totalPnL > 0;
   const isLoss = pnl.totalPnL < 0;
   

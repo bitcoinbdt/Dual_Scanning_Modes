@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { estimateTransactionFees } from '@/lib/fees/feeEstimator';
 import { verifyTransactions } from '@/lib/verification/verifyTransactions';
+import { detectWashTrading } from '@/lib/elevator/washTradingDetector';
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -162,6 +163,10 @@ export async function POST(request: NextRequest) {
       address,
       config.maxTransactions
     );
+
+    // NEW: Wash trading detection (batch-only, no external calls)
+    const washResult = detectWashTrading(rawData.transactions);
+    rawData.transactions = washResult.transactions;
     
         // Tag exchanges and calculate flow metrics (Feature 10)
         const exchangeResult = tagAndComputeExchangeFlow(rawData.transactions, rawData.blockchain);
@@ -233,6 +238,12 @@ export async function POST(request: NextRequest) {
               totalChecked: verificationResult.totalChecked,
               score: verificationResult.totalChecked > 0 ? Math.round((verificationResult.verifiedCount / verificationResult.totalChecked) * 100) : 100,
               discrepancies: verificationResult.discrepancies
+            },
+            wash_trading: {
+              detected: washResult.summary.totalWashWallets > 0,
+              total_wash_wallets: washResult.summary.totalWashWallets,
+              total_round_trips: washResult.summary.totalRoundTrips,
+              wash_wallets: washResult.summary.washWallets,
             }
           },
       metadata: {

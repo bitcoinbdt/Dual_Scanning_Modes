@@ -41,18 +41,20 @@ export interface WalletPnL {
   currentPrice: number;
   totalInvested: number;
   currentValue: number;
-  realizedPnL: number;
-  unrealizedPnL: number;
-  totalPnL: number;
-  pnlPercentage: number;
-  status: 'profit' | 'loss' | 'breakeven';
+  realizedPnL?: number | null;
+  unrealizedPnL?: number | null;
+  totalPnL?: number | null;
+  pnlPercentage?: number | null;
+  status: 'profit' | 'loss' | 'breakeven' | 'unknown';
   hasIncompleteHistory?: boolean;
   gasFeesPaid?: number;
   dexFeesPaid?: number;
-  netRealizedPnL?: number;
-  netUnrealizedPnL?: number;
-  netTotalPnL?: number;
-  netPnLPercentage?: number;
+  netRealizedPnL?: number | null;
+  netUnrealizedPnL?: number | null;
+  netTotalPnL?: number | null;
+  netPnLPercentage?: number | null;
+  costBasisUnknown?: boolean;
+  uncostedSellProceeds?: number;
 }
 
 /**
@@ -239,25 +241,29 @@ export function calculateWalletPnL(
   const avgBuyPrice = estimateAvgBuyPrice(buys, ohlcv);
   const avgSellPrice = estimateAvgSellPrice(sells, ohlcv);
   
+  const costBasisUnknown = (avgBuyPrice === 0 && sells.length > 0);
+
   // Calculate investment and current value
   const totalInvested = tokensBought * avgBuyPrice;
   const currentValue = currentHoldings * currentPrice;
   
   // Calculate realized P&L (from tokens sold)
-  const realizedPnL = (avgSellPrice - avgBuyPrice) * tokensSold;
+  const realizedPnL = costBasisUnknown ? null : (avgSellPrice - avgBuyPrice) * tokensSold;
   
   // Calculate unrealized P&L (from current holdings)
-  const unrealizedPnL = (currentPrice - avgBuyPrice) * currentHoldings;
+  const unrealizedPnL = costBasisUnknown ? null : (currentPrice - avgBuyPrice) * currentHoldings;
   
   // Total P&L
-  const totalPnL = realizedPnL + unrealizedPnL;
-  const pnlPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+  const totalPnL = costBasisUnknown ? null : (realizedPnL! + unrealizedPnL!);
+  const pnlPercentage = costBasisUnknown ? null : (totalInvested > 0 ? (totalPnL! / totalInvested) * 100 : 0);
   
   // Determine status
-  let status: 'profit' | 'loss' | 'breakeven';
-  if (totalPnL > 0.01) {
+  let status: 'profit' | 'loss' | 'breakeven' | 'unknown';
+  if (costBasisUnknown) {
+    status = 'unknown';
+  } else if (totalPnL! > 0.01) {
     status = 'profit';
-  } else if (totalPnL < -0.01) {
+  } else if (totalPnL! < -0.01) {
     status = 'loss';
   } else {
     status = 'breakeven';
@@ -276,10 +282,10 @@ export function calculateWalletPnL(
   const realizedFees = totalSellFees + (fractionOfBuysSold * totalBuyFees);
   const unrealizedFees = fractionOfBuysHeld * totalBuyFees;
 
-  const netRealizedPnL = realizedPnL - realizedFees;
-  const netUnrealizedPnL = unrealizedPnL - unrealizedFees;
-  const netTotalPnL = netRealizedPnL + netUnrealizedPnL;
-  const netPnLPercentage = totalInvested > 0 ? (netTotalPnL / totalInvested) * 100 : 0;
+  const netRealizedPnL = costBasisUnknown ? null : realizedPnL! - realizedFees;
+  const netUnrealizedPnL = costBasisUnknown ? null : unrealizedPnL! - unrealizedFees;
+  const netTotalPnL = costBasisUnknown ? null : netRealizedPnL! + netUnrealizedPnL!;
+  const netPnLPercentage = costBasisUnknown ? null : (totalInvested > 0 ? (netTotalPnL! / totalInvested) * 100 : 0);
   
   // Feature 4: Detect Incomplete History
   // Gather all transactions (trades and transfers) for this wallet and sort chronologically
@@ -330,7 +336,8 @@ export function calculateWalletPnL(
     netUnrealizedPnL,
     netTotalPnL,
     netPnLPercentage,
-    hasIncompleteHistory
+    hasIncompleteHistory: costBasisUnknown ? true : hasIncompleteHistory,
+    costBasisUnknown
   };
 }
 

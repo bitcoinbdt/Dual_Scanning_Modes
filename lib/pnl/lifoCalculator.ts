@@ -79,6 +79,7 @@ export function calculateLIFOPnL(
   let realizedPnL = 0;
   let realizedFees = 0;
   const activeLots = buyLots.map(l => ({ ...l }));
+  let uncostedSellProceeds = 0;
 
   for (const sell of sellLots) {
     let sellAmount = sell.amount;
@@ -105,7 +106,7 @@ export function calculateLIFOPnL(
     }
 
     if (sellAmount > 0) {
-      realizedPnL += sellAmount * sellPrice;
+      uncostedSellProceeds += sellAmount * sellPrice;
     }
   }
 
@@ -117,19 +118,24 @@ export function calculateLIFOPnL(
   }
 
   const costOfAllBuys = buyLots.reduce((sum, b) => sum + b.amount * b.price, 0);
-  const totalPnL = realizedPnL + unrealizedPnL;
-  const pnlPercentage = costOfAllBuys > 0 ? (totalPnL / costOfAllBuys) * 100 : 0;
   const avgBuyPrice = tokensBought > 0 ? costOfAllBuys / tokensBought : 0;
+  
+  const costBasisUnknown = (uncostedSellProceeds > 0) || (avgBuyPrice === 0 && tokensSold > 0);
 
-  const netRealizedPnL = realizedPnL - realizedFees;
-  const netUnrealizedPnL = unrealizedPnL - unrealizedFees;
-  const netTotalPnL = netRealizedPnL + netUnrealizedPnL;
-  const netPnLPercentage = costOfAllBuys > 0 ? (netTotalPnL / costOfAllBuys) * 100 : 0;
+  const totalPnL = costBasisUnknown ? null : realizedPnL + unrealizedPnL;
+  const pnlPercentage = costBasisUnknown ? null : (costOfAllBuys > 0 ? (totalPnL! / costOfAllBuys) * 100 : 0);
 
-  let status: 'profit' | 'loss' | 'breakeven';
-  if (totalPnL > 0.01) {
+  const netRealizedPnL = costBasisUnknown ? null : realizedPnL - realizedFees;
+  const netUnrealizedPnL = costBasisUnknown ? null : unrealizedPnL - unrealizedFees;
+  const netTotalPnL = costBasisUnknown ? null : netRealizedPnL! + netUnrealizedPnL!;
+  const netPnLPercentage = costBasisUnknown ? null : (costOfAllBuys > 0 ? (netTotalPnL! / costOfAllBuys) * 100 : 0);
+
+  let status: 'profit' | 'loss' | 'breakeven' | 'unknown';
+  if (costBasisUnknown) {
+    status = 'unknown';
+  } else if (totalPnL! > 0.01) {
     status = 'profit';
-  } else if (totalPnL < -0.01) {
+  } else if (totalPnL! < -0.01) {
     status = 'loss';
   } else {
     status = 'breakeven';
@@ -144,8 +150,8 @@ export function calculateLIFOPnL(
     currentPrice,
     totalInvested: costOfAllBuys,
     currentValue: currentHoldings * currentPrice,
-    realizedPnL,
-    unrealizedPnL,
+    realizedPnL: costBasisUnknown ? null : realizedPnL,
+    unrealizedPnL: costBasisUnknown ? null : unrealizedPnL,
     totalPnL,
     pnlPercentage,
     status,
@@ -155,6 +161,8 @@ export function calculateLIFOPnL(
     netUnrealizedPnL,
     netTotalPnL,
     netPnLPercentage,
-    hasIncompleteHistory: detectIncompleteHistory(wallet, transactions)
+    hasIncompleteHistory: costBasisUnknown ? true : detectIncompleteHistory(wallet, transactions),
+    costBasisUnknown,
+    uncostedSellProceeds
   };
 }

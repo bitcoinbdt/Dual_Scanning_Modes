@@ -41,6 +41,7 @@ export async function fetchBirdeyeTrades(
   console.log(`[BirdeyeTrades] Fetching trades for ${tokenAddress} on ${chain} (fallback)...`);
 
   try {
+    // Initial key validation check
     const response = await fetch(url, {
       headers: {
         'X-API-KEY': apiKey,
@@ -48,41 +49,62 @@ export async function fetchBirdeyeTrades(
       }
     });
 
-    if (!response.ok) {
-      console.warn(`[BirdeyeTrades] API returned HTTP ${response.status}`);
+    if (!response.ok && response.status !== 400) { // 400 is fine as it's missing params, but if it is 401/403/etc we fail early
+      console.warn(`[BirdeyeTrades] API check returned HTTP ${response.status}`);
       return null;
     }
 
-    // Build URL with params
-    const params = new URLSearchParams({
-      address: tokenAddress,
-      tx_type: 'swap',
-      limit: String(Math.min(maxTransactions, 100)) // Birdeye free tier cap
-    });
+    let allItems: any[] = [];
+    let offset = 0;
+    const limit = 100; // query 100 at a time
 
-    const res = await fetch(`${url}?${params.toString()}`, {
-      headers: {
-        'X-API-KEY': apiKey,
-        'x-chain': chainSlug
+    while (allItems.length < maxTransactions) {
+      const currentLimit = Math.min(limit, maxTransactions - allItems.length);
+      const params = new URLSearchParams({
+        address: tokenAddress,
+        tx_type: 'swap',
+        offset: String(offset),
+        limit: String(currentLimit)
+      });
+
+      const res = await fetch(`${url}?${params.toString()}`, {
+        headers: {
+          'X-API-KEY': apiKey,
+          'x-chain': chainSlug
+        }
+      });
+
+      if (!res.ok) {
+        console.warn(`[BirdeyeTrades] Trade fetch HTTP ${res.status}`);
+        break;
       }
-    });
 
-    if (!res.ok) {
-      console.warn(`[BirdeyeTrades] Trade fetch HTTP ${res.status}`);
-      return null;
+      const json = await res.json();
+      const items: any[] = json?.data?.items ?? [];
+
+      if (items.length === 0) {
+        break;
+      }
+
+      allItems.push(...items);
+      offset += items.length;
+
+      if (items.length < currentLimit) {
+        break; // no more data
+      }
+
+      // Add a small delay between requests to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    const json = await res.json();
-    const items: any[] = json?.data?.items ?? [];
-
-    if (items.length === 0) {
+    if (allItems.length === 0) {
       console.warn(`[BirdeyeTrades] No trades returned`);
       return null;
     }
 
-    console.log(`[BirdeyeTrades] Fetched ${items.length} trades`);
+    console.log(`[BirdeyeTrades] Fetched ${allItems.length} trades`);
 
-    return items.map((item: any): UniversalTransaction => {
+    return allItems.map((item: any): UniversalTransaction => {
       const isBuy = item.side === 'buy';
       const wallet = item.owner?.toLowerCase() ?? '';
 

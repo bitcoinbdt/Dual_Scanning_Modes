@@ -43,6 +43,8 @@ export interface UniversalTransaction {
   exchangeName?: string;        // Name of the centralized exchange
   gasCostUsd?: number;          // Estimated gas cost of transaction in USD
   dexFeeUsd?: number;           // Estimated liquidity provider fee in USD
+  isWashTrader?: boolean;       // Flag indicating if this transaction belongs to a wash trading wallet
+  roundTrips?: number;          // Number of buy-sell round-trips for the wash trader wallet
 }
 
 // Wallet balance and activity summary

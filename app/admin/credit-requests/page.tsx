@@ -203,7 +203,9 @@ function RequestCard({ request, onReview, onReload }: RequestCardProps) {
 
         <div>
           <p className="text-sm text-gray-400 mb-1">Amount (USD)</p>
-          <p className="text-white font-medium">${request.price_usd.toFixed(2)}</p>
+          <p className="text-white font-medium">
+            {request.price_usd != null ? `$${request.price_usd.toFixed(2)}` : 'N/A'}
+          </p>
         </div>
 
         <div className="md:col-span-2">
@@ -306,7 +308,9 @@ function ReviewModal({ request, onClose, onSuccess }: ReviewModalProps) {
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Amount:</span>
-            <span className="text-white font-medium">${request.price_usd.toFixed(2)}</span>
+            <span className="text-white font-medium">
+              {request.price_usd != null ? `$${request.price_usd.toFixed(2)}` : 'N/A'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-400">Payment Method:</span>

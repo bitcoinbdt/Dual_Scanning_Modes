@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp, Database, TrendingUp, TrendingDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, Database, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { 
   fetchCurrentPriceFromDexScreener,
   calculateAllWalletPnL,
@@ -39,6 +39,12 @@ interface RawTransactionTableProps {
       netExchangeFlow: number;
     };
     trust_score?: any;
+    wash_trading?: {
+      detected: boolean;
+      total_wash_wallets: number;
+      total_round_trips: number;
+      wash_wallets: string[];
+    };
   };
   tokenSymbol: string;
   tokenAddress: string;
@@ -57,6 +63,8 @@ interface FlatTransaction {
   toExchange?: boolean;
   fromExchange?: boolean;
   exchangeName?: string;
+  isWashTrader?: boolean;
+  roundTrips?: number;
 }
 
 type FilterType = 'ALL' | 'BUY' | 'SELL' | 'PROFIT' | 'LOSS';
@@ -166,6 +174,8 @@ export function RawTransactionTable({
       const toExchange = (tx as any).toExchange;
       const fromExchange = (tx as any).fromExchange;
       const exchangeName = (tx as any).exchangeName;
+      const isWashTrader = (tx as any).isWashTrader;
+      const roundTrips = (tx as any).roundTrips;
       
       transfers.forEach(transfer => {
         if (!isTrade) {
@@ -180,7 +190,9 @@ export function RawTransactionTable({
               to: transfer.to,
               toExchange,
               fromExchange,
-              exchangeName
+              exchangeName,
+              isWashTrader,
+              roundTrips
             });
           }
           if (transfer.from && transfer.from !== transfer.to) {
@@ -194,7 +206,9 @@ export function RawTransactionTable({
               to: transfer.to,
               toExchange,
               fromExchange,
-              exchangeName
+              exchangeName,
+              isWashTrader,
+              roundTrips
             });
           }
         } else {
@@ -210,7 +224,9 @@ export function RawTransactionTable({
               to: transfer.to,
               toExchange,
               fromExchange,
-              exchangeName
+              exchangeName,
+              isWashTrader,
+              roundTrips
             });
           }
           
@@ -226,7 +242,9 @@ export function RawTransactionTable({
               to: transfer.to,
               toExchange,
               fromExchange,
-              exchangeName
+              exchangeName,
+              isWashTrader,
+              roundTrips
             });
           }
         }
@@ -253,11 +271,11 @@ export function RawTransactionTable({
       if (includeFees) {
         adjusted.set(wallet, {
           ...pnl,
-          realizedPnL: pnl.netRealizedPnL !== undefined ? pnl.netRealizedPnL : pnl.realizedPnL,
-          unrealizedPnL: pnl.netUnrealizedPnL !== undefined ? pnl.netUnrealizedPnL : pnl.unrealizedPnL,
-          totalPnL: pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL,
-          pnlPercentage: pnl.netPnLPercentage !== undefined ? pnl.netPnLPercentage : pnl.pnlPercentage,
-          status: (pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) > 0.01 ? 'profit' : ((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) < -0.01 ? 'loss' : 'breakeven')
+          realizedPnL: pnl.costBasisUnknown ? null : (pnl.netRealizedPnL !== undefined ? pnl.netRealizedPnL : pnl.realizedPnL),
+          unrealizedPnL: pnl.costBasisUnknown ? null : (pnl.netUnrealizedPnL !== undefined ? pnl.netUnrealizedPnL : pnl.unrealizedPnL),
+          totalPnL: pnl.costBasisUnknown ? null : (pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL),
+          pnlPercentage: pnl.costBasisUnknown ? null : (pnl.netPnLPercentage !== undefined ? pnl.netPnLPercentage : pnl.pnlPercentage),
+          status: pnl.costBasisUnknown ? 'unknown' : (((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) || 0) > 0.01 ? 'profit' : (((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) || 0) < -0.01 ? 'loss' : 'breakeven'))
         });
       } else {
         adjusted.set(wallet, pnl);
@@ -414,6 +432,21 @@ export function RawTransactionTable({
 
       {/* Exchange Flow Summary Card (Feature 10) */}
       <ExchangeFlowCard metrics={rawData.exchange_flow} tokenSymbol={tokenSymbol} />
+
+      {/* Wash Trading Summary Card */}
+      {rawData.wash_trading?.detected && (
+        <div className="glass-card p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 flex items-center gap-4">
+          <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20">
+            <RefreshCw className="w-6 h-6 animate-spin" style={{ animationDuration: '6s' }} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-rose-400 uppercase tracking-wider">Wash Trading Behavior Flagged</h4>
+            <p className="text-xs text-slate-300 mt-1">
+              Elevator Scan flagged <span className="font-bold text-white font-mono bg-rose-500/20 px-1.5 py-0.5 rounded">{rawData.wash_trading.total_wash_wallets}</span> wash trading wallet{rawData.wash_trading.total_wash_wallets !== 1 ? 's' : ''} performing <span className="font-bold text-white font-mono bg-rose-500/20 px-1.5 py-0.5 rounded">{rawData.wash_trading.total_round_trips}</span> round-trips in this batch.
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Main layout grid (Feature 2) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -548,7 +581,17 @@ export function RawTransactionTable({
                         
                         {/* Wallet */}
                         <td className="p-4">
-                          <WalletCell wallet={tx.wallet} />
+                          <div className="flex items-center gap-2">
+                            <WalletCell wallet={tx.wallet} />
+                            {tx.isWashTrader && (
+                              <span 
+                                title={`Wash Trader: ${tx.roundTrips} buy-sell round-trips within this batch.`}
+                                className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20 flex items-center gap-1 cursor-help select-none"
+                              >
+                                Wash Trader 🔄
+                              </span>
+                            )}
+                          </div>
                         </td>
                         
                         {/* Action */}
@@ -587,19 +630,30 @@ export function RawTransactionTable({
                            ) : (
                              <div className="relative">
                                <div className="flex items-center justify-end gap-1.5">
-                                 {pnl?.hasIncompleteHistory && (
+                                 {pnl?.costBasisUnknown ? (
                                    <span 
-                                     title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
-                                     className="cursor-help text-amber-500 font-bold select-none text-xs"
+                                     title="First purchase outside scan window. True cost basis unknown. PnL cannot be calculated reliably."
+                                     className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold cursor-help select-none"
                                    >
-                                     ⚠️
+                                     Unknown Cost Basis
                                    </span>
+                                 ) : (
+                                   <>
+                                     {pnl?.hasIncompleteHistory && (
+                                       <span 
+                                         title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
+                                         className="cursor-help text-amber-500 font-bold select-none text-xs"
+                                       >
+                                         ⚠️
+                                       </span>
+                                     )}
+                                     <PnLIndicator pnl={pnl} />
+                                   </>
                                  )}
-                                 <PnLIndicator pnl={pnl} />
                                </div>
                                
                                {/* Tooltip on hover */}
-                               {isHovered && pnl && (
+                               {isHovered && pnl && !pnl.costBasisUnknown && (
                                  <div className="absolute right-0 top-full mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                    <PnLTooltip pnl={pnl} />
                                  </div>
@@ -675,6 +729,14 @@ export function RawTransactionTable({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-bold text-slate-500 font-mono">#{idx + 1}</span>
                         <WalletCell wallet={holder.wallet} />
+                        {rawData.wash_trading?.wash_wallets?.includes(holder.wallet) && (
+                          <span 
+                            title="Wash Trader: this wallet has both bought and sold within the scanned batch."
+                            className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20 flex items-center gap-1 cursor-help select-none"
+                          >
+                            Wash Trader 🔄
+                          </span>
+                        )}
                       </div>
                       <span className="text-[9px] text-slate-500 font-mono">
                         {holder.tx_count} transaction{holder.tx_count !== 1 ? 's' : ''}
@@ -683,14 +745,21 @@ export function RawTransactionTable({
                     
                     <div className="text-right flex-shrink-0">
                       <div className="text-xs font-bold text-white font-mono flex items-center justify-end gap-1">
-                        {walletPnL.get(holder.wallet)?.hasIncompleteHistory && (
+                        {walletPnL.get(holder.wallet)?.costBasisUnknown ? (
+                          <span 
+                            title="First purchase outside scan window. True cost basis unknown."
+                            className="cursor-help text-amber-500 font-bold select-none text-[10px]"
+                          >
+                            ⚠️
+                          </span>
+                        ) : walletPnL.get(holder.wallet)?.hasIncompleteHistory ? (
                           <span 
                             title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
                             className="cursor-help text-amber-500 font-bold select-none text-[10px]"
                           >
                             ⚠️
                           </span>
-                        )}
+                        ) : null}
                         {holder.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </div>
                       <div className="text-[9px] text-slate-500">

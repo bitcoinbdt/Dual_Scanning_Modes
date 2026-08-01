@@ -20,7 +20,7 @@ export interface CreditPurchaseRequest {
   user_id: string;
   credit_package_id: string;
   credits_amount: number;
-  price_usd: number;
+  price_usd?: number | null;  // Not stored in DB — kept for UI display only
   payment_method_id: string;
   transaction_hash: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -54,7 +54,7 @@ export interface UpdatePaymentMethodInput extends Partial<CreatePaymentMethodInp
 export interface CreateCreditRequestInput {
   credit_package_id: string;
   credits_amount: number;
-  price_usd: number;
+  price_usd?: number;  // Not stored in DB
   payment_method_id: string;
   transaction_hash: string;
 }
