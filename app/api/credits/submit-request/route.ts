@@ -13,6 +13,12 @@ import { createClient } from '@supabase/supabase-js';
  * Column fixes:
  *  - Uses "package_id" (actual DB column, not "credit_package_id")
  *  - Does NOT insert "price_usd" (column does not exist in DB)
+ *
+ * RLS fix:
+ *  - JWT is validated via the anon client (getUser).
+ *  - All DB writes use the service-role client so that auth.uid() inside
+ *    RLS policies is not needed — the user identity is already guaranteed
+ *    by the JWT validation above.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -27,13 +33,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use anon key client — getUser(token) validates the JWT server-side
-    const supabase = createClient(
+    // Step 1: Validate the JWT with the anon client (server-side check)
+    const anonClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await anonClient.auth.getUser(token);
+
+    // Step 2: Use the service-role client for all DB operations.
+    // This bypasses RLS so the INSERT is not rejected due to the server
+    // having no auth session (auth.uid() would be null otherwise).
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     if (userError || !user) {
       console.error('[submit-request] Auth error:', userError?.message);
