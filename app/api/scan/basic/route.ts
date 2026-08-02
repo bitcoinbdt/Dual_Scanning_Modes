@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
     
     // 3. Scan token
-    const result = await scanToken(address, chain || '1');
+    const result = await scanToken(validation.address, chain || '1');
     
     return NextResponse.json({
       success: true,

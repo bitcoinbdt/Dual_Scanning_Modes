@@ -82,18 +82,46 @@ function getProvider(chainId: string): ethers.JsonRpcProvider {
 }
 
 /**
+ * Auto-detect EVM chain ID by probing supported chains in parallel.
+ * Checks where the contract bytecode is deployed.
+ */
+export async function autoDetectChainId(address: string): Promise<string> {
+  const chains = Object.keys(PUBLIC_RPCS);
+  const results = await Promise.all(
+    chains.map(async (chainId) => {
+      try {
+        const provider = getProvider(chainId);
+        const code = await provider.getCode(address);
+        if (code && code !== '0x' && code !== '0x0') {
+          return chainId;
+        }
+      } catch (e) {
+        // ignore connection or RPC errors
+      }
+      return null;
+    })
+  );
+  
+  const detected = results.find(res => res !== null);
+  return detected || '1'; // Default to Ethereum (1) if not found
+}
+
+/**
  * Scan an EVM token
  */
 export async function scanEVMToken(
   address: string,
   requestedChainId: string = '1'
 ): Promise<OnChainData> {
-  console.log(`[EVM] 🔍 Scanning token ${address} via Public RPCs (Requested chain: ${requestedChainId})...`);
+  let chainId = requestedChainId;
   
-  const chainId = requestedChainId;
-  if (!PUBLIC_RPCS[chainId]) {
-    throw new Error(`Unsupported chain ID: ${chainId}`);
+  if (chainId === 'evm' || !PUBLIC_RPCS[chainId]) {
+    console.log(`[EVM] 🌐 Auto-detecting chain for ${address}...`);
+    chainId = await autoDetectChainId(address);
+    console.log(`[EVM] 🌐 Auto-detected chain: ${chainId} (${CHAIN_NAMES[chainId]})`);
   }
+
+  console.log(`[EVM] 🔍 Scanning token ${address} via Public RPCs (Resolved chain: ${chainId})...`);
   
   const provider = getProvider(chainId);
   const contract = new ethers.Contract(address, ERC20_ABI, provider);

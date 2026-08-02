@@ -65,6 +65,17 @@ export async function POST(request: NextRequest) {
     
     // Check if address format is valid
     if (!detection.isValid) {
+      // EVM address with no chain specified → prompt user to select ETH or BSC
+      if (detection.reason === 'ambiguous_evm') {
+        return NextResponse.json(
+          {
+            error: 'EVM address detected. Please select a chain (Ethereum or BSC) to continue.',
+            code: 'AMBIGUOUS_CHAIN',
+            detectedFormat: detection.format
+          },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { 
           error: 'Invalid token address',

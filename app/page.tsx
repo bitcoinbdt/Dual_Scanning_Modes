@@ -34,6 +34,7 @@ function HomePageContent() {
   const [address, setAddress] = useState('');
   const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR'>('BASIC');
   const [selectedChain, setSelectedChain] = useState<'auto' | 'solana' | 'bsc' | 'eth'>('auto');
+  const [chainAmbiguous, setChainAmbiguous] = useState(false);
   const [elevatorCredits, setElevatorCredits] = useState<5 | 10 | 20 | 30>(10);
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
   const [showCreditStore, setShowCreditStore] = useState(false);
@@ -124,8 +125,13 @@ function HomePageContent() {
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || 'Error scanning');
       setLoading(false);
+      if (err.code === 'AMBIGUOUS_CHAIN') {
+        // EVM address but no chain selected — show inline prompt instead of a generic toast
+        setChainAmbiguous(true);
+      } else {
+        toast.error(err.message || 'Error scanning');
+      }
     }
   };
 
@@ -177,8 +183,15 @@ function HomePageContent() {
                         <div className="relative">
                           <select
                             value={selectedChain}
-                            onChange={(e) => setSelectedChain(e.target.value as 'auto' | 'solana' | 'bsc' | 'eth')}
-                            className="appearance-none bg-slate-900 border border-slate-700 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all cursor-pointer"
+                            onChange={(e) => {
+                              setSelectedChain(e.target.value as 'auto' | 'solana' | 'bsc' | 'eth');
+                              setChainAmbiguous(false); // clear prompt when user makes a selection
+                            }}
+                            className={`appearance-none bg-slate-900 rounded-lg px-6 py-3 pr-12 text-sm font-medium text-slate-200 hover:border-slate-600 focus:outline-none focus:ring-2 transition-all cursor-pointer border ${
+                              chainAmbiguous
+                                ? 'border-amber-500 ring-2 ring-amber-500/40 animate-pulse'
+                                : 'border-slate-700 focus:ring-blue-500/50'
+                            }`}
                           >
                             <option value="auto">🔍 Auto-Detect</option>
                             <option value="solana">🟢 Solana</option>
@@ -214,13 +227,20 @@ function HomePageContent() {
                       </div>
                     </div>
 
-                    {selectedChain === 'auto' && (
+                    {/* Ambiguous EVM prompt — shown when user scans a 0x address without selecting a chain */}
+                    {chainAmbiguous && (
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-200">
+                        <span className="text-amber-400 text-base">⚠️</span>
+                        EVM address detected. Please select <strong>Ethereum</strong> or <strong>BSC</strong> above, then scan again.
+                      </div>
+                    )}
+                    {!chainAmbiguous && selectedChain === 'auto' && (
                       <p className="text-xs text-slate-500 text-center max-w-md">
-                        Chain will be automatically detected from address format. 
-                        <span className="text-slate-400"> Solana: base58, EVM: 0x...</span>
+                        Chain will be automatically detected from address format.
+                        <span className="text-slate-400"> Solana: base58, EVM: select ETH or BSC manually.</span>
                       </p>
                     )}
-                    {selectedChain !== 'auto' && (
+                    {!chainAmbiguous && selectedChain !== 'auto' && (
                       <p className="text-xs text-blue-400 text-center max-w-md flex items-center gap-2 justify-center">
                         <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
                         {selectedChain.toUpperCase()} chain selected manually
@@ -354,7 +374,6 @@ function HomePageContent() {
             <AdvancedRiskMetricsCard token={tokenData} />
             <TokenAuditCard token={tokenData} />
             <MarketIntelligenceCard token={tokenData} />
-            <RecentTransactionsCard token={tokenData} />
           </div>
         )}
 

@@ -1,18 +1,14 @@
-/**
- * Main Token Scanner - Orchestrates EVM and Solana scanners
- * 
- * This is the main entry point for scanning tokens.
- * It detects the network type and delegates to the appropriate scanner.
- */
-
-import { scanEVMToken } from './evmScanner';
-import { scanSolanaToken } from './solanaScanner';
-import { ScanResult, AddressValidation } from './types';
+const { scanEVMToken } = require('./evmScanner');
+const { scanSolanaToken } = require('./solanaScanner');
+const { generateAlphaSignal } = require('./api_heuristic');
 
 /**
  * Main token scanner - orchestrates EVM and Solana scanners
+ * @param {string} address - Token contract address
+ * @param {string} chainId - Optional chain ID for EVM tokens
+ * @returns {Promise<Object>} Complete scan result
  */
-export async function scanToken(address: string, chainId: string = '1'): Promise<ScanResult> {
+async function scanToken(address, chainId = '1') {
   console.log('='.repeat(60));
   console.log(`[SCANNER] 🚀 Starting scan for ${address}`);
   console.log(`[SCANNER] 📊 Chain: ${chainId}`);
@@ -33,15 +29,25 @@ export async function scanToken(address: string, chainId: string = '1'): Promise
       onChainData = await scanEVMToken(address, chainId);
     }
     
-    // Step 3: Combine results
-    const result: ScanResult = {
+    // Step 3: Generate heuristic signal
+    const algorithmicSignal = generateAlphaSignal(onChainData, 'Default');
+    onChainData.cachedSignals = {
+      'Default': {
+        signal: algorithmicSignal,
+        timestamp: new Date().toISOString()
+      }
+    };
+    
+    // Step 4: Combine results
+    const result = {
       success: true,
       data: {
         onChainData,
+        signal: algorithmicSignal, // Make it easily accessible
         metadata: {
           network: isSolana ? 'solana' : 'evm',
           chainId: isSolana ? null : chainId,
-          cacheStatus: onChainData.cacheStatus || 'miss',
+          cacheStatus: onChainData.cacheStatus,
           scanDuration: Date.now() - startTime
         }
       },
@@ -55,7 +61,7 @@ export async function scanToken(address: string, chainId: string = '1'): Promise
     console.log('='.repeat(60));
     
     return result;
-  } catch (error: any) {
+  } catch (error) {
     console.error('='.repeat(60));
     console.error(`[SCANNER] ❌ Scan failed: ${error.message}`);
     console.error(`[SCANNER] ❌ Error stack:`, error.stack);
@@ -66,15 +72,19 @@ export async function scanToken(address: string, chainId: string = '1'): Promise
   }
 }
 
-export function detectNetwork(address: string): boolean {
-  const cleaned = address.trim().toLowerCase();
+/**
+ * Detect network type from address format
+ * @param {string} address - Token address
+ * @returns {boolean} True if Solana, false if EVM
+ */
+function detectNetwork(address) {
   // EVM addresses start with 0x and are 42 characters
-  if (cleaned.startsWith('0x') && cleaned.length === 42) {
+  if (address.startsWith('0x') && address.length === 42) {
     return false; // EVM
   }
   
   // Solana addresses are base58 encoded, 32-44 characters, no 0x prefix
-  if (!cleaned.startsWith('0x') && cleaned.length >= 32 && cleaned.length <= 44) {
+  if (!address.startsWith('0x') && address.length >= 32 && address.length <= 44) {
     return true; // Solana
   }
   
@@ -83,8 +93,10 @@ export function detectNetwork(address: string): boolean {
 
 /**
  * Validate address format
+ * @param {string} address - Token address
+ * @returns {Object} Validation result
  */
-export function validateAddress(address: string): AddressValidation {
+function validateAddress(address) {
   if (!address || typeof address !== 'string') {
     return {
       valid: false,
@@ -119,3 +131,9 @@ export function validateAddress(address: string): AddressValidation {
     error: 'Invalid address format - must be EVM (0x...) or Solana address'
   };
 }
+
+module.exports = {
+  scanToken,
+  detectNetwork,
+  validateAddress
+};

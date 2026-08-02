@@ -5,6 +5,8 @@
  * All blockchain data collection happens server-side in the same app.
  */
 
+import { supabase } from '@/lib/supabase';
+
 export interface BasicScanResponse {
   address: string;
   tokenName: string;
@@ -22,15 +24,28 @@ export interface BasicScanResponse {
   liquidityInfo?: any;
 }
 
+/** Retrieve the current Supabase session token, throwing if not logged in */
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) {
+    throw { message: 'You must be logged in to scan. Please sign in and try again.', code: 'AUTH_REQUIRED' };
+  }
+  return token;
+}
+
 /**
  * Scan a token (EVM or Solana) using embedded blockchain services
  */
 export async function getBasicScan(address: string, chain: string = '1'): Promise<BasicScanResponse> {
   try {
+    const token = await getAuthToken();
+
     const res = await fetch('/api/scan/basic', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ address, chain })
     });
@@ -38,7 +53,7 @@ export async function getBasicScan(address: string, chain: string = '1'): Promis
     const data = await res.json();
     
     if (!res.ok) {
-      throw new Error(data.error || 'Scan failed');
+      throw { message: data.error || 'Scan failed', code: data.code };
     }
     
     return data.data;
@@ -58,10 +73,13 @@ export async function startElevatorScan(
   preferredChain?: 'eth' | 'bsc' | 'solana'
 ): Promise<{ jobId: string, status: string, rawData?: any, metadata?: any }> {
   try {
+    const token = await getAuthToken();
+
     const res = await fetch('/api/scan/elevator', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ address, creditsSpent, preferredChain })
     });
@@ -69,7 +87,8 @@ export async function startElevatorScan(
     const data = await res.json();
     
     if (!res.ok) {
-      throw new Error(data.error || 'Elevator scan failed');
+      // Throw an object with both message and code so the frontend can branch on specific errors
+      throw { message: data.error || 'Elevator scan failed', code: data.code };
     }
     
     return {

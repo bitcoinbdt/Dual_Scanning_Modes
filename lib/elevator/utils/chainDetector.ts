@@ -4,18 +4,20 @@
  */
 
 export type SupportedChain = 'solana' | 'bsc' | 'eth' | 'unknown';
+export type DetectionReason = 'ambiguous_evm' | 'unsupported_format' | undefined;
 
 export interface ChainDetectionResult {
   chain: SupportedChain;
   isValid: boolean;
   format: string;
   message?: string;
+  reason?: DetectionReason;
 }
 
 /**
  * Detect blockchain from address format
  * @param address - Token address to analyze
- * @param preferredChain - Optional hint for EVM addresses ('eth' or 'bsc')
+ * @param preferredChain - Explicit chain choice by the user ('eth' or 'bsc'). If absent, EVM addresses are treated as ambiguous.
  * @returns Detection result with chain type and validity
  */
 export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): ChainDetectionResult {
@@ -32,14 +34,30 @@ export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): Ch
 
   // Ethereum/BSC format (0x + 40 hexadecimal characters)
   if (/^0x[a-fA-F0-9]{40}$/.test(trimmedAddress)) {
-    // Use preferred chain if specified, otherwise default to BSC for backward compatibility
-    const detectedChain = preferredChain === 'eth' ? 'eth' : 'bsc';
-    
+    if (preferredChain === 'eth') {
+      return {
+        chain: 'eth',
+        isValid: true,
+        format: 'EVM (Ethereum)',
+        message: 'EVM address detected (ETH)'
+      };
+    }
+    if (preferredChain === 'bsc') {
+      return {
+        chain: 'bsc',
+        isValid: true,
+        format: 'EVM (BSC)',
+        message: 'EVM address detected (BSC)'
+      };
+    }
+    // No explicit chain selected — EVM addresses are ambiguous (could be ETH or BSC).
+    // Do NOT silently default; require the user to specify.
     return {
-      chain: detectedChain,
-      isValid: true,
+      chain: 'unknown',
+      isValid: false,
       format: 'EVM (BSC/Ethereum)',
-      message: `EVM address detected (${detectedChain.toUpperCase()})`
+      message: 'EVM address detected. Please select Ethereum or BSC to continue.',
+      reason: 'ambiguous_evm'
     };
   }
 
@@ -58,7 +76,8 @@ export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): Ch
     chain: 'unknown',
     isValid: false,
     format: 'Unknown',
-    message: 'Address does not match any known blockchain format'
+    message: 'Address does not match any known blockchain format',
+    reason: 'unsupported_format'
   };
 }
 
