@@ -132,20 +132,9 @@ export async function scanSolanaToken(address: string): Promise<OnChainData> {
     const block = await connection.getSlot();
     dynamicData.networkHealth.lastBlock = block.toString();
     
-    // Fetch signatures for transactions
-    const sigs = await connection.getSignaturesForAddress(pubkey, { limit: 10 });
-    dynamicData.recentTransactions = sigs.map(s => ({
-      hash: s.signature.slice(0, 10) + '...',
-      fullHash: s.signature,
-      from: "...",
-      to: "...",
-      amount: "N/A",
-      rawAmount: 0,
-      timestamp: s.blockTime ? new Date(s.blockTime * 1000).toLocaleTimeString() : "N/A",
-      type: "Transfer" as const
-    }));
-    
-    dynamicData.recentVolume = sigs.length > 5 ? 'Medium' : 'Low';
+    // Do not fetch recent transactions for basic scan
+    dynamicData.recentTransactions = [];
+    dynamicData.recentVolume = 'Low';
     completedSources.push('dynamic_data');
   } catch (e: any) {
     console.warn(`[SOLANA] ⚠️ Dynamic data fetch failed: ${e.message}`);

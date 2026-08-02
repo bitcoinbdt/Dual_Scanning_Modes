@@ -8,21 +8,11 @@ import type { OnChainData } from '@/types/scanner';
 export const RecentTransactionsCard = ({ token }: { token: OnChainData }) => {
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'TRANSFER'>('ALL');
 
-  // Generate mock transactions if none exist
-  const transactions = token.recentTransactions.length > 0 
-    ? token.recentTransactions 
-    : Array.from({ length: 15 }, () => ({
-        hash: `0x${Math.random().toString(16).substr(2, 8)}...`,
-        fullHash: `0x${Math.random().toString(16).substr(2, 64)}`,
-        from: `0x${Math.random().toString(16).substr(2, 8)}...`,
-        to: `0x${Math.random().toString(16).substr(2, 8)}...`,
-        amount: `${(Math.random() * 10000).toFixed(0)}`,
-        rawAmount: Math.random() * 10000,
-        rawTimestamp: Date.now() - Math.random() * 3600000,
-        tokenSymbol: token.symbol,
-        timestamp: new Date(Date.now() - Math.random() * 3600000).toLocaleTimeString(),
-        type: ['Buy', 'Sell', 'Transfer'][Math.floor(Math.random() * 3)] as 'Buy' | 'Sell' | 'Transfer'
-      }));
+  if (!token.recentTransactions || token.recentTransactions.length === 0) {
+    return null;
+  }
+
+  const transactions = token.recentTransactions;
 
   const filteredTransactions = selectedFilter === 'ALL' 
     ? transactions 

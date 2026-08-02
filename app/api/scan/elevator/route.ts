@@ -14,6 +14,7 @@ import path from 'path';
 import { estimateTransactionFees } from '@/lib/fees/feeEstimator';
 import { verifyTransactions } from '@/lib/verification/verifyTransactions';
 import { detectWashTrading } from '@/lib/elevator/washTradingDetector';
+import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -58,7 +59,24 @@ export async function POST(request: NextRequest) {
     }
     
     // Detect blockchain from address format
-    const detection = detectChain(address, preferredChain as 'eth' | 'bsc' | undefined);
+    let detection = detectChain(address, preferredChain as 'eth' | 'bsc' | undefined);
+    
+    // Auto-detect EVM chain if ambiguous
+    if (!detection.isValid && detection.reason === 'ambiguous_evm') {
+      console.log(`[API] EVM address is ambiguous. Probing network for ${address}...`);
+      try {
+        const chainId = await autoDetectChainId(address);
+        const resolvedChain = chainId === '56' ? 'bsc' : 'eth';
+        detection = {
+          chain: resolvedChain,
+          isValid: true,
+          format: resolvedChain === 'bsc' ? 'EVM (BSC)' : 'EVM (Ethereum)',
+          message: `EVM address automatically resolved to ${resolvedChain.toUpperCase()}`
+        };
+      } catch (err) {
+        console.error('[API] EVM chain auto-detection failed:', err);
+      }
+    }
     
     console.log(`[API] Chain detection:`, detection);
     console.log(`[API] Preferred chain:`, preferredChain || 'auto');

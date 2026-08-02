@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus, Search, DollarSign, Menu, X } from 'lucide-react';
+import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus, Search, DollarSign, Menu, X, Bot } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,6 +58,7 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
     { href: '/', label: 'Scanner', icon: Search },
     { href: '/pricing', label: 'Pricing', icon: DollarSign },
     { href: '/referrals', label: 'Referral', icon: Gift },
+    { href: '/agent', label: 'Agent', icon: Bot },
   ];
 
   const isActivePath = (path: string) => {
