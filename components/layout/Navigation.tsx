@@ -1,196 +1,209 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, User as UserIcon, Palette, ChevronDown, ChevronUp, Gift, UserPlus, Search, DollarSign, Menu, X, Bot } from 'lucide-react';
+import {
+  LogOut,
+  User as UserIcon,
+  Palette,
+  ChevronDown,
+  ChevronUp,
+  Gift,
+  Search,
+  DollarSign,
+  Menu,
+  X,
+  Bot,
+  Zap,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useReferralSession } from '@/hooks/useReferralSession';
-import { CreditBadge } from '@/components/credits/CreditBadge';
+import { useCredits } from '@/contexts/CreditContext';
+import { useAdmin } from '@/hooks/useAdmin';
 import AuthModal from '@/components/AuthModal';
 
 interface NavigationProps {
   onOpenCreditStore?: () => void;
 }
 
+const THEMES_META = {
+  default: { label: 'Dark Blue', primary: '#3b82f6' },
+  cyber: { label: 'Cyber Green', primary: '#22c55e' },
+  neon: { label: 'Neon Purple', primary: '#a855f7' },
+};
+
+type ThemeKey = 'default' | 'cyber' | 'neon';
+
 export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { hasReferralCode } = useReferralSession();
+  const { balance } = useCredits();
+  const { isAdmin } = useAdmin();
+
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showThemeDropdown, setShowThemeDropdown] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const profileRef = useRef<HTMLDivElement>(null);
+  const themeRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
-
-  const handleOpenCredits = () => {
-    router.push('/pricing');
-  };
-
-  const truncateEmail = (email: string) => {
-    if (!email) return '';
-    const [localPart, domain] = email.split('@');
-    if (!domain) return email;
-    const truncatedLocal = localPart.length > 4 ? localPart.slice(0, 4) + '...' : localPart;
-    return `${truncatedLocal}@${domain}`;
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
-        setShowProfileMenu(false);
-        setShowThemeDropdown(false);
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false);
+        setThemeOpen(false);
       }
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setShowMobileMenu(false);
+        setMobileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+    setProfileOpen(false);
+  }, [pathname]);
+
   const navLinks = [
     { href: '/', label: 'Scanner', icon: Search },
     { href: '/pricing', label: 'Pricing', icon: DollarSign },
-    { href: '/referrals', label: 'Referral', icon: Gift },
+    ...(isAuthenticated ? [{ href: '/referrals', label: 'Referral', icon: Gift }] : []),
     { href: '/agent', label: 'Agent', icon: Bot },
   ];
 
-  const isActivePath = (path: string) => {
+  const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
     return pathname?.startsWith(path);
   };
 
-  const themes = [
-    { id: 'default' as const, name: 'Dark Blue', color: 'bg-blue-500' },
-    { id: 'cyber' as const, name: 'Cyber Green', color: 'bg-green-500' },
-    { id: 'neon' as const, name: 'Neon Purple', color: 'bg-purple-500' }
-  ];
+  const handleOpenCredits = () => {
+    if (onOpenCreditStore) {
+      onOpenCreditStore();
+    } else {
+      router.push('/pricing');
+    }
+  };
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex justify-between items-center">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="relative w-10 h-10 flex-shrink-0">
-              <svg viewBox="0 0 100 100" className="w-full h-full">
-                <rect x="2" y="2" width="96" height="96" rx="12" fill="none" stroke="#ef4444" strokeWidth="4" />
-                <defs>
-                  <linearGradient id="rgbGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style={{ stopColor: '#3b82f6', stopOpacity: 1 }} />
-                    <stop offset="50%" style={{ stopColor: '#a855f7', stopOpacity: 1 }} />
-                    <stop offset="100%" style={{ stopColor: '#ec4899', stopOpacity: 1 }} />
-                  </linearGradient>
-                </defs>
-                <circle cx="50" cy="50" r="35" fill="none" stroke="url(#rgbGradient)" strokeWidth="3" />
-                <circle cx="50" cy="50" r="25" fill="none" stroke="url(#rgbGradient)" strokeWidth="3" />
-                <circle cx="50" cy="50" r="15" fill="none" stroke="url(#rgbGradient)" strokeWidth="3" />
-                <circle cx="50" cy="50" r="5" fill="url(#rgbGradient)" />
-              </svg>
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-sm font-black tracking-tight uppercase italic leading-none bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                OnChain Alpha
-              </h1>
-              <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold leading-none mt-1">
-                Token Scanner
-              </p>
-            </div>
-          </Link>
+      <header
+        className="fixed top-0 left-0 right-0 z-50 border-b border-white/5"
+        style={{ background: 'rgba(10,1,24,0.8)', backdropFilter: 'blur(16px)' }}
+      >
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center glow-sm group-hover:glow-primary transition">
+                <Zap className="w-5 h-5 text-white" fill="white" />
+              </div>
+              <span className="hidden sm:block font-bold text-themed text-lg">
+                OnChain<span className="gradient-text">Alpha</span>
+              </span>
+            </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = isActivePath(link.href);
-              
-              // Hide Referral link if not authenticated
-              if (link.href === '/referrals' && !isAuthenticated) return null;
-              
-              return (
+            <div className="hidden md:flex items-center gap-1">
+              {navLinks.map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      isActive(link.href)
+                        ? 'text-primary-themed bg-white/5'
+                        : 'text-muted-themed hover:text-themed hover:bg-white/5'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {link.label}
+                  </Link>
+                );
+              })}
+              {isAdmin && (
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    isActive
-                      ? 'bg-primary-600 text-white'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
+                  href="/admin"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    isActive('/admin')
+                      ? 'text-amber-400 bg-amber-400/10'
+                      : 'text-amber-400/70 hover:text-amber-400 hover:bg-amber-400/10'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  {link.label}
+                  Admin
                 </Link>
-              );
-            })}
-          </nav>
+              )}
+            </div>
+          </div>
 
-          {/* Right Side Actions */}
-          <div className="flex items-center gap-2 md:gap-3">
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            >
-              {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-
-            {/* Credit Badge - Only show when authenticated */}
+          <div className="flex items-center gap-3">
             {isAuthenticated && (
-              <CreditBadge onClick={handleOpenCredits} />
+              <button
+                onClick={handleOpenCredits}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass hover:glow-sm transition text-sm"
+              >
+                <Zap className="w-4 h-4 text-primary-themed" fill="currentColor" />
+                <span className="font-bold text-primary-themed">{balance.balance}</span>
+                <span className="text-muted-themed text-xs hidden sm:inline">credits</span>
+              </button>
             )}
 
             {isAuthenticated ? (
-              <div className="relative ml-1 md:ml-2 pl-1 md:pl-2 border-l border-white/10" ref={profileMenuRef}>
+              <div className="relative" ref={profileRef}>
                 <button
-                  onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg glass hover:glow-sm transition"
                 >
-                  <UserIcon className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-500" />
-                  <span className="text-xs md:text-sm font-bold text-white hidden md:inline truncate max-w-[120px]" title={user?.name}>
-                    {user?.name}
-                  </span>
+                  <div className="w-7 h-7 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold uppercase">
+                    {user?.name?.[0] || user?.email?.[0] || 'U'}
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-themed" />
                 </button>
 
-                {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-56 glass-card rounded-lg border border-white/10 shadow-xl overflow-hidden">
-                    <div className="p-3 border-b border-white/10">
-                      <p className="text-sm font-bold text-white truncate" title={user?.name}>{user?.name}</p>
-                      <p className="text-xs text-slate-400" title={user?.email}>{truncateEmail(user?.email || '')}</p>
+                {profileOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 glass-strong rounded-xl p-3 animate-scale-in border border-white/10 shadow-xl animate-fade-in">
+                    <div className="px-2 py-2 border-b border-white/10 mb-2">
+                      <div className="text-sm font-semibold text-themed truncate">
+                        {user?.name || 'User'}
+                      </div>
+                      <div className="text-xs text-muted-themed truncate">{user?.email}</div>
                     </div>
-                    
-                    <div className="border-b border-white/10">
+
+                    <div className="relative mb-1" ref={themeRef}>
                       <button
-                        onClick={() => setShowThemeDropdown(!showThemeDropdown)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                        onClick={() => setThemeOpen(!themeOpen)}
+                        className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-muted-themed hover:text-themed hover:bg-white/5 transition"
                       >
-                        <div className="flex items-center gap-2">
-                          <Palette className="w-4 h-4" />
-                          <span>THEME</span>
-                        </div>
-                        {showThemeDropdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <Palette className="w-4 h-4" />
+                        Theme: {THEMES_META[theme as ThemeKey]?.label || 'Dark Blue'}
+                        <ChevronDown className="w-3 h-3 ml-auto" />
                       </button>
-                      
-                      {showThemeDropdown && (
-                        <div className="px-3 pb-3 space-y-1">
-                          {themes.map((t) => (
+                      {themeOpen && (
+                        <div className="mb-1 mt-1 pl-2 space-y-1">
+                          {(Object.keys(THEMES_META) as ThemeKey[]).map((name) => (
                             <button
-                              key={t.id}
+                              key={name}
                               onClick={() => {
-                                setTheme(t.id);
-                                setShowThemeDropdown(false);
+                                setTheme(name);
+                                setThemeOpen(false);
                               }}
-                              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${
-                                theme === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition ${
+                                theme === name
+                                  ? 'text-primary-themed bg-white/5'
+                                  : 'text-muted-themed hover:text-themed hover:bg-white/5'
                               }`}
                             >
-                              <div className={`w-3 h-3 rounded-full ${t.color}`} />
-                              <span>{t.name}</span>
+                              <span
+                                className="w-3 h-3 rounded-full"
+                                style={{ background: THEMES_META[name].primary }}
+                              />
+                              {THEMES_META[name].label}
                             </button>
                           ))}
                         </div>
@@ -199,85 +212,87 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
 
                     <button
                       onClick={() => {
+                        setProfileOpen(false);
                         logout();
-                        setShowProfileMenu(false);
+                        router.push('/');
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                      className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition mt-1"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Logout</span>
+                      Logout
                     </button>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                {/* Sign Up Button */}
-                <button
-                  onClick={() => router.push('/signup')}
-                  className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-white transition-colors relative"
-                >
-                  <UserPlus className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  <span>Sign Up</span>
-                  {hasReferralCode && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Referral code detected" />
-                  )}
-                </button>
-                
-                {/* Login Button */}
+              <>
                 <button
                   onClick={() => {
                     setAuthModalMode('login');
                     setShowAuthModal(true);
                   }}
-                  className="ml-1 md:ml-2 pl-1 md:pl-2 border-l border-white/10 flex items-center gap-1.5 px-2 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold bg-primary-600 hover:bg-primary-500 text-white transition-colors"
+                  className="text-sm font-medium text-muted-themed hover:text-themed transition px-3 py-1.5"
                 >
-                  <UserIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  <span>Login</span>
+                  Login
                 </button>
-              </div>
+                <button
+                  onClick={() => router.push('/signup')}
+                  className="text-sm font-semibold gradient-primary text-white px-4 py-1.5 rounded-lg hover:opacity-90 transition"
+                >
+                  Sign Up
+                </button>
+              </>
             )}
-          </div>
-        </div>
 
-        {/* Mobile Slide-out Menu */}
-        {showMobileMenu && (
+            <button
+              className="md:hidden p-2 rounded-lg glass"
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </nav>
+
+        {mobileOpen && (
           <div
             ref={mobileMenuRef}
-            className="lg:hidden absolute top-full left-0 right-0 bg-slate-900/95 backdrop-blur-md border-b border-white/5 shadow-xl"
+            className="md:hidden absolute top-full left-0 right-0 border-b border-white/5 p-3 space-y-1 animate-fade-in animate-fade-in"
+            style={{ background: 'rgba(10,1,24,0.95)', backdropFilter: 'blur(16px)' }}
           >
-            <nav className="max-w-7xl mx-auto px-4 py-4 space-y-1">
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = isActivePath(link.href);
-                
-                // Hide Referral link if not authenticated
-                if (link.href === '/referrals' && !isAuthenticated) return null;
-                
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setShowMobileMenu(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-bold transition-all ${
-                      isActive
-                        ? 'bg-primary-600 text-white'
-                        : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                    isActive(link.href)
+                      ? 'text-primary-themed bg-white/5'
+                      : 'text-muted-themed hover:text-themed hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {link.label}
+                </Link>
+              );
+            })}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-amber-400 hover:bg-amber-400/10 transition"
+              >
+                Admin
+              </Link>
+            )}
           </div>
         )}
       </header>
 
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
         defaultMode={authModalMode}
       />
     </>
