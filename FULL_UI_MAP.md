@@ -96,10 +96,15 @@ The application is divided into three main sections:
   - Each package card shows:
     - Package name (Starter, Basic, Pro, Premium)
     - Credit amount
-    - Price in USD
+    - Price in USD (packages also have SOL equivalent prices)
     - Bonus percentage (if applicable)
     - "🔥 MOST POPULAR" badge for hot packages
     - "Buy Now" button
+  - **Actual Package Details:**
+    - Starter: 50 credits / $10 USD (0.5 SOL) / 0% bonus
+    - Basic: 100 credits / $18 USD (0.9 SOL) / 10% bonus
+    - Pro: 200 credits / $32 USD (1.6 SOL) / 20% bonus (HOT)
+    - Premium: 500 credits / $80 USD (3.5 SOL) / 30% bonus
   - Gradient styling for hot packages
   - Hover effects with scale animation
 
@@ -169,7 +174,7 @@ The application is divided into three main sections:
   - **Desktop Table** with columns:
     - Package name
     - Credits purchased
-    - Price (SOL)
+    - Price (SOL) - *Note: Display shows SOL but purchases are processed in USD*
     - Your bonus
     - Bonus percentage
   - **Mobile Cards** (responsive)
@@ -179,6 +184,7 @@ The application is divided into three main sections:
     - Pro: 200 credits / 1.6 SOL / 40 bonus / 20% (HOT badge)
     - Premium: 500 credits / 3.5 SOL / 125 bonus / 25% (BEST VALUE badge)
   - Lightning icons for bonus display
+  - **Important:** The referral bonus percentages shown here (10-25%) are different from the credit package bonuses on pricing page
 
 - **Terms & Conditions Section**
   - Expandable card with 6 key terms:
@@ -755,6 +761,24 @@ These are overlay components, not separate pages:
 | `/admin/payment-methods` | Admin Only | |
 | `/admin/credit-requests` | Admin Only | |
 | `/auth/callback` | System | OAuth callback |
+
+---
+
+## ⚠️ IMPORTANT NOTES
+
+### Payment Currency
+- **Display:** Some pages show prices in SOL (Solana) for historical reasons
+- **Actual Transactions:** All payments are processed in USD via manual payment methods (Binance, USDT, etc.)
+- **Package Pricing:**
+  - Starter: $10 USD (displayed as 0.5 SOL equivalent)
+  - Basic: $18 USD (displayed as 0.9 SOL equivalent)
+  - Pro: $32 USD (displayed as 1.6 SOL equivalent)
+  - Premium: $80 USD (displayed as 3.5 SOL equivalent)
+
+### Referral Bonus vs Package Bonus
+- **Package Bonus:** Bonus credits included when you buy a package (0%, 10%, 20%, 30%)
+- **Referral Bonus:** Bonus YOU receive when someone uses YOUR referral code (10%, 15%, 20%, 25% of their purchase)
+- These are separate bonus systems
 
 ---
 
