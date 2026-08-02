@@ -12,6 +12,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'OnChain Alpha Scanner - Token Analysis & Security Scanner',
   description: 'Advanced cryptocurrency token scanner with on-chain analysis, security audits, and real-time market intelligence.',
+  verification: {
+    google: 'ZsYbrbAdLRABTM8nTNaSKaSIUXal1wZKL6Y7DlJIqbM',
+  },
 };
 
 export default function RootLayout({
