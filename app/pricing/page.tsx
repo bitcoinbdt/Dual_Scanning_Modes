@@ -3,26 +3,24 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import Navigation from '@/components/layout/Navigation';
 import { useCredits } from '@/contexts/CreditContext';
+import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 
 export default function PricingPage() {
-  const router = useRouter();
   const { packages } = useCredits();
+  const [showCreditStore, setShowCreditStore] = useState(false);
+  const [initialPackageId, setInitialPackageId] = useState<string | undefined>(undefined);
 
   const handleBuyNow = (packageId?: string) => {
-    if (packageId) {
-      router.push(`/credits?package=${packageId}`);
-    } else {
-      router.push('/credits');
-    }
+    setInitialPackageId(packageId);
+    setShowCreditStore(true);
   };
 
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <Navigation onOpenCreditStore={() => router.push('/credits')} />
+      <Navigation onOpenCreditStore={() => setShowCreditStore(true)} />
       
       <div className="pt-24 pb-16 px-4">
         <div className="max-w-7xl mx-auto">
@@ -210,7 +208,13 @@ export default function PricingPage() {
       </div>
 
       {/* Navigation and other elements */}
-      <Navigation />
+
+      {/* Credit Store Modal */}
+      <CreditStoreModal
+        isOpen={showCreditStore}
+        onClose={() => setShowCreditStore(false)}
+        initialPackageId={initialPackageId}
+      />
     </div>
   );
 }

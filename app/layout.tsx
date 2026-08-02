@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { CreditProvider } from '@/contexts/CreditContext';
 import { Toaster } from 'react-hot-toast';
+import CookieConsent from '@/components/CookieConsent';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
             <CreditProvider>
               {children}
               <Toaster position="top-right" />
+              <CookieConsent />
             </CreditProvider>
           </AuthProvider>
         </ThemeProvider>
