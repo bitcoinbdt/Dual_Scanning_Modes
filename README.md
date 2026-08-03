@@ -134,8 +134,11 @@ Create a `.env.local` file with:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
+# Production Site URL
+NEXT_PUBLIC_APP_URL=https://scanner.coinxera.com
+
 # Backend API URL
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+NEXT_PUBLIC_BACKEND_URL=https://your-backend.onrender.com
 
 # Treasury Wallet for Solana payments
 NEXT_PUBLIC_TREASURY_WALLET=your_solana_wallet_address
@@ -144,10 +147,10 @@ NEXT_PUBLIC_TREASURY_WALLET=your_solana_wallet_address
 ### Development Server
 
 ```bash
-# Start the development server on port 5176
+# Start the development server
 npm run dev
 
-# Open http://localhost:5176 in your browser
+# Open in your browser (default port varies)
 ```
 
 ## 💳 Credit System

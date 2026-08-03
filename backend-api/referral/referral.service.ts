@@ -46,7 +46,7 @@ export class ReferralService {
         pendingReferrals: statsData?.filter(r => r.status === 'confirmed').length || 0,
       };
 
-      const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:5176'}/?ref=${codeData.code}`;
+      const shareUrl = `${process.env.FRONTEND_URL || 'https://scanner.coinxera.com'}/?ref=${codeData.code}`;
 
       return {
         code: codeData.code,

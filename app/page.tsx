@@ -23,6 +23,7 @@ import { getBasicScan, startElevatorScan, validateBackendConnection } from '@/se
 import type { OnChainData } from '@/types/scanner';
 import { SCAN_COSTS } from '@/types/credits';
 import Navigation from '@/components/layout/Navigation';
+import NewsTimeline from '@/components/NewsTimeline';
 import toast from 'react-hot-toast';
 
 // Dynamically import heavy components to reduce initial bundle size
@@ -160,6 +161,9 @@ function HomePageContent() {
       <Navigation onOpenCreditStore={() => setShowCreditStore(true)} />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-28 pb-16">
+        {/* News Timeline */}
+        <NewsTimeline />
+
         {/* Scan Terminal */}
         <section className="mb-6">
           <div className="glass-strong rounded-2xl p-6 sm:p-8 rgb-border">

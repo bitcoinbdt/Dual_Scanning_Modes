@@ -12,7 +12,7 @@ const nextConfig = {
   async rewrites() {
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
-      'http://localhost:3001';
+      'https://dual-scanning-modes.onrender.com';
     return [
       {
         source: '/proxy/api/:path*',

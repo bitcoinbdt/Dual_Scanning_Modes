@@ -3,7 +3,11 @@
 import { useState, useCallback } from 'react';
 import Navigation from '@/components/layout/Navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCredits } from '@/contexts/CreditContext';
 import AuthModal from '@/components/AuthModal';
+import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
+import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
+import toast from 'react-hot-toast';
 import {
   Rocket,
   Copy,
@@ -83,6 +87,7 @@ function isLiqLocked(token: AgentToken): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AgentClient() {
   const { isAuthenticated, sessionLoading } = useAuth();
+  const { deductCredits, refreshBalance, hasEnoughCredits } = useCredits();
   const [tokens, setTokens] = useState<AgentToken[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -90,8 +95,15 @@ export default function AgentClient() {
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
+  const [showCreditStore, setShowCreditStore] = useState(false);
 
   const runAgent = useCallback(async () => {
+    if (!hasEnoughCredits(5)) {
+      setShowInsufficientCredits(true);
+      return;
+    }
+
     setScanning(true);
     setError('');
     setProgress(0);
@@ -102,28 +114,43 @@ export default function AgentClient() {
     }, 120);
 
     try {
-      const fnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/crypto-hype-agent`;
-      const res = await fetch(fnUrl, {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch('/api/agent/run', {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
       });
+      
+      if (res.status === 402) {
+        setShowInsufficientCredits(true);
+        throw new Error('Insufficient credits');
+      }
+      
       if (!res.ok) throw new Error(`Agent failed (${res.status})`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      
+      // Deduct locally and refresh balance
+      deductCredits(5);
+      refreshBalance();
+      
       clearInterval(interval);
       setProgress(20);
       setTokens(data.tokens || []);
       setLastScan(new Date().toLocaleTimeString());
-    } catch (err) {
+      toast.success('Agent completed successfully! 5 credits deducted.');
+    } catch (err: any) {
       clearInterval(interval);
       const msg = err instanceof Error ? err.message : 'Agent failed';
-      setError(msg);
+      if (msg !== 'Insufficient credits') {
+        setError(msg);
+      }
     } finally {
       setScanning(false);
     }
-  }, []);
+  }, [hasEnoughCredits, deductCredits, refreshBalance]);
 
   const copy = (addr: string) => {
     navigator.clipboard.writeText(addr);
@@ -214,14 +241,20 @@ export default function AgentClient() {
             Pulls top 20 boosted profiles · enriches with live pair data
           </p>
 
-          <button
-            onClick={runAgent}
-            disabled={scanning}
-            className="gradient-primary text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2 glow-primary"
-          >
-            {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Rocket className="w-5 h-5" />}
-            {scanning ? 'Scanning...' : 'Run Agent'}
-          </button>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="glass rounded-lg p-3 text-center">
+              <div className="text-lg font-bold gradient-text">{tokens.length}</div>
+              <div className="text-[10px] text-muted-themed">Tokens Found</div>
+            </div>
+            <div className="glass rounded-lg p-3 text-center">
+              <div className="text-lg font-bold gradient-text">{scanning ? 'Active' : 'Idle'}</div>
+              <div className="text-[10px] text-muted-themed">Status</div>
+            </div>
+            <div className="glass rounded-lg p-3 text-center">
+              <div className="text-lg font-bold gradient-text">{lastScan ?? '—'}</div>
+              <div className="text-[10px] text-muted-themed">Last Scan</div>
+            </div>
+          </div>
 
           {scanning && (
             <div className="mt-4 animate-fade-in">
@@ -237,21 +270,6 @@ export default function AgentClient() {
               </div>
             </div>
           )}
-
-          <div className="grid grid-cols-3 gap-3 mt-4">
-            <div className="glass rounded-lg p-3 text-center">
-              <div className="text-lg font-bold gradient-text">{tokens.length}</div>
-              <div className="text-[10px] text-muted-themed">Tokens Found</div>
-            </div>
-            <div className="glass rounded-lg p-3 text-center">
-              <div className="text-lg font-bold gradient-text">{scanning ? 'Active' : 'Idle'}</div>
-              <div className="text-[10px] text-muted-themed">Status</div>
-            </div>
-            <div className="glass rounded-lg p-3 text-center">
-              <div className="text-lg font-bold gradient-text">{lastScan ?? '—'}</div>
-              <div className="text-[10px] text-muted-themed">Last Scan</div>
-            </div>
-          </div>
         </div>
 
         {/* Error */}
@@ -375,15 +393,57 @@ export default function AgentClient() {
 
         {/* Empty state */}
         {!scanning && tokens.length === 0 && !error && (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 mx-auto mb-4 rounded-full border-2 border-dashed border-primary-themed flex items-center justify-center animate-pulse-glow">
-              <span className="text-4xl">🤖</span>
+          <div className="text-center py-12">
+            {/* Interactive Robot Button */}
+            <div className="relative inline-block mb-6">
+              <button
+                onClick={runAgent}
+                disabled={scanning}
+                className="group relative w-32 h-32 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {/* Pulsing background rings */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-20 group-hover:opacity-40 transition-opacity duration-300 animate-pulse" />
+                <div className="absolute inset-2 rounded-full border-2 border-dashed border-primary-themed group-hover:border-solid group-hover:rotate-180 transition-all duration-700" />
+                
+                {/* Main robot circle */}
+                <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 border border-primary-themed/30 group-hover:border-primary-themed">
+                  {scanning ? (
+                    <Loader2 className="w-12 h-12 text-primary-themed animate-spin" />
+                  ) : (
+                    <span className="text-5xl group-hover:scale-110 transition-transform duration-300">🤖</span>
+                  )}
+                </div>
+
+                {/* Hover glow effect */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-0 group-hover:opacity-30 blur-xl transition-opacity duration-300" />
+                
+                {/* Cost badge */}
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full glass-strong border border-primary-themed/30 group-hover:border-primary-themed transition-all">
+                  <span className="text-xs font-bold gradient-text whitespace-nowrap">
+                    {scanning ? 'Running...' : '5 credits'}
+                  </span>
+                </div>
+              </button>
+
+              {/* Particle effects on hover */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary-themed opacity-0 group-hover:opacity-100 group-hover:-translate-y-8 transition-all duration-500" />
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-purple-500 opacity-0 group-hover:opacity-100 group-hover:translate-y-8 transition-all duration-500 delay-100" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-500 opacity-0 group-hover:opacity-100 group-hover:-translate-x-8 transition-all duration-500 delay-200" />
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-pink-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-8 transition-all duration-500 delay-300" />
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-themed mb-1">No results yet</h3>
-            <p className="text-sm text-muted-themed mb-6">
-              Click &quot;Run Agent&quot; to scan for trending tokens
+
+            <h3 className="text-xl font-bold text-themed mb-2">No results yet</h3>
+            <p className="text-sm text-muted-themed mb-2">
+              Click the robot to scan for trending tokens
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto opacity-30">
+            <p className="text-xs text-muted-themed/70">
+              Fetches top 20 boosted profiles from DexScreener
+            </p>
+
+            {/* Preview cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mt-8 opacity-20">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="glass rounded-2xl p-5 h-48" />
               ))}
@@ -391,6 +451,24 @@ export default function AgentClient() {
           </div>
         )}
       </div>
+
+      {showInsufficientCredits && (
+        <InsufficientCreditsModal
+          isOpen={showInsufficientCredits}
+          onClose={() => setShowInsufficientCredits(false)}
+          onBuyCredits={() => {
+            setShowInsufficientCredits(false);
+            setShowCreditStore(true);
+          }}
+          scanType="ELEVATOR"
+        />
+      )}
+      {showCreditStore && (
+        <CreditStoreModal
+          isOpen={showCreditStore}
+          onClose={() => setShowCreditStore(false)}
+        />
+      )}
     </div>
   );
 }
