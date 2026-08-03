@@ -210,9 +210,9 @@ export default function AgentClient() {
       <Navigation onOpenCreditStore={() => {}} />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 mt-2 text-xs">
+        {/* Control Panel */}
+        <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
+          <div className="flex items-center justify-center gap-2 mb-4 text-xs">
             <span
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
                 scanning ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'
@@ -226,10 +226,6 @@ export default function AgentClient() {
               {scanning ? 'Scanning...' : 'Agent ready'}
             </span>
           </div>
-        </div>
-
-        {/* Control Panel */}
-        <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
           <div className="grid grid-cols-3 gap-3">
             <div className="glass rounded-lg p-3 text-center">
               <div className="text-lg font-bold gradient-text">{tokens.length}</div>
