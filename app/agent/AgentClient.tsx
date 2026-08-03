@@ -236,8 +236,6 @@ export default function AgentClient() {
 
         {/* Control Panel */}
         <div className="glass-strong rounded-2xl p-6 mb-6 rgb-border">
-          <h2 className="text-lg font-bold text-themed mb-4">Scan Control</h2>
-
           <div className="grid grid-cols-3 gap-3">
             <div className="glass rounded-lg p-3 text-center">
               <div className="text-lg font-bold gradient-text">{tokens.length}</div>
