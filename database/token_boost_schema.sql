@@ -70,8 +70,9 @@ CREATE INDEX IF NOT EXISTS idx_boost_user_id ON public.token_boost_requests(user
 CREATE INDEX IF NOT EXISTS idx_boost_status ON public.token_boost_requests(status);
 CREATE INDEX IF NOT EXISTS idx_boost_blockchain ON public.token_boost_requests(blockchain);
 CREATE INDEX IF NOT EXISTS idx_boost_requested_at ON public.token_boost_requests(requested_at DESC);
+-- Active boosts index (without NOW() in WHERE clause)
 CREATE INDEX IF NOT EXISTS idx_boost_active ON public.token_boost_requests(status, expires_at) 
-  WHERE status = 'active' AND expires_at > NOW();
+  WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_boost_pending ON public.token_boost_requests(status, requested_at DESC) 
   WHERE status = 'pending';
 
