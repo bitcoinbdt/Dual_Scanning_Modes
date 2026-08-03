@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { CreditProvider } from '@/contexts/CreditContext';
 import { Toaster } from 'react-hot-toast';
 import CookieConsent from '@/components/CookieConsent';
+import { ChunkErrorBoundary } from '@/components/ChunkErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -75,15 +76,17 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        <ThemeProvider>
-          <AuthProvider>
-            <CreditProvider>
-              {children}
-              <Toaster position="top-right" />
-              <CookieConsent />
-            </CreditProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <ChunkErrorBoundary>
+          <ThemeProvider>
+            <AuthProvider>
+              <CreditProvider>
+                {children}
+                <Toaster position="top-right" />
+                <CookieConsent />
+              </CreditProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </ChunkErrorBoundary>
       </body>
     </html>
   );
