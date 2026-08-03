@@ -179,7 +179,7 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
                 </button>
 
                 {profileOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-56 glass-strong rounded-xl p-3 animate-scale-in border border-white/10 shadow-xl animate-fade-in">
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl p-3 animate-scale-in border border-white/10 shadow-xl animate-fade-in" style={{ background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(20px)' }}>
                     <div className="px-2 py-2 border-b border-white/10 mb-2">
                       <div className="text-sm font-semibold text-themed truncate">
                         {user?.name || 'User'}
