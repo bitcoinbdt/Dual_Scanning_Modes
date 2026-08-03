@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   keywords: ['token scanner', 'crypto security', 'solana scanner', 'BSC scanner', 'ethereum scanner', 'on-chain analysis', 'rug pull detector', 'P&L analysis'],
   authors: [{ name: 'OnChain Alpha' }],
   verification: {
-    google: 'ZsYbrbAdLRABTM8nTNaSKaSIUXal1wZKL6Y7DlJIqbM',
+    google: '5z5ZX_cY44RAb70VUQCtLvUdObxfJK9IFx_lqDIqvcE',
   },
   openGraph: {
     type: 'website',
