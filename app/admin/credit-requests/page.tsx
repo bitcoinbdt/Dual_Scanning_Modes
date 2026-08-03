@@ -27,12 +27,18 @@ function CreditRequestsContent() {
   const loadRequests = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/admin/credit-requests?status=${filter}`);
-      if (!response.ok) throw new Error('Failed to load requests');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      const response = await fetch(`/api/admin/credit-requests?status=${filter}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to load requests');
+      }
       const data = await response.json();
       setRequests(data.requests || []);
-    } catch (error) {
-      toast.error('Failed to load credit requests');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to load credit requests');
       console.error(error);
     } finally {
       setLoading(false);
@@ -266,16 +272,23 @@ function ReviewModal({ request, onClose, onSuccess }: ReviewModalProps) {
     setProcessing(true);
 
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       const response = await fetch(`/api/admin/credit-requests/${request.id}/review`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           status: action === 'approve' ? 'approved' : 'rejected',
           admin_notes: adminNotes || undefined,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to process request');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to process request');
+      }
 
       toast.success(
         action === 'approve'
@@ -283,8 +296,8 @@ function ReviewModal({ request, onClose, onSuccess }: ReviewModalProps) {
           : 'Request rejected'
       );
       onSuccess();
-    } catch (error) {
-      toast.error('Failed to process request');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to process request');
       console.error(error);
     } finally {
       setProcessing(false);
@@ -318,7 +331,21 @@ function ReviewModal({ request, onClose, onSuccess }: ReviewModalProps) {
           </div>
           <div className="pt-2 border-t border-gray-700">
             <p className="text-gray-400 text-sm mb-1">Transaction Hash:</p>
-            <p className="text-white font-mono text-xs break-all">{request.transaction_hash}</p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
+              <span className="text-white font-mono text-xs break-all bg-gray-900/50 px-3 py-2 rounded flex-1">
+                {request.transaction_hash}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(request.transaction_hash);
+                  toast.success('Copied!');
+                }}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs transition-colors whitespace-nowrap"
+              >
+                Copy
+              </button>
+            </div>
           </div>
         </div>
 
