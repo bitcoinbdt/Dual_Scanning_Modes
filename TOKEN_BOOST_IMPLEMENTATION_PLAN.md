@@ -51,10 +51,10 @@ CREATE TABLE public.token_boost_requests (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   
   -- Token Information
+  token_name TEXT NOT NULL, -- REQUIRED: User-provided token name
+  token_symbol TEXT NOT NULL, -- REQUIRED: User-provided token symbol
   token_logo_url TEXT NOT NULL,
   token_contract_address TEXT NOT NULL,
-  token_name TEXT,
-  token_symbol TEXT,
   blockchain VARCHAR(20) NOT NULL, -- 'solana', 'ethereum', 'bsc'
   coingecko_id TEXT, -- CoinGecko API token ID for live price fetching
   
@@ -139,26 +139,33 @@ const BOOST_PRICING = {
 
 ### Step 2: Submit Boost Request
 **Form Fields:**
-1. Token Logo URL (required)
+1. Token Name (required)
+   - Validation: 1-50 characters
+   - Example: "Giga Cat"
+   
+2. Token Symbol (required)
+   - Validation: 1-10 characters, uppercase recommended
+   - Example: "GICAT"
+   
+3. Token Logo URL (required)
    - Validation: Valid image URL (jpg, png, webp, gif)
    - Preview shown
    
-2. Token Contract Address (required)
+4. Token Contract Address (required)
    - Validation: Valid blockchain address format
    - Auto-detect blockchain if possible
    
-3. Blockchain Selection (required)
+5. Blockchain Selection (required)
    - Dropdown: Solana, Ethereum, BSC
    
-4. Duration (required)
+6. Duration (required)
    - Dropdown: 6 hrs, 12 hrs, 24 hrs, 36 hrs
    - Shows credit cost next to each option
    
-5. Additional Info (optional)
-   - Token name
-   - Token symbol
+7. Additional Info (optional)
    - Website
    - Description (max 200 chars)
+   - CoinGecko ID (for automatic price fetching)
 
 **Submission Process:**
 1. Check if user has enough credits
@@ -194,14 +201,15 @@ const BOOST_PRICING = {
 **Request:**
 ```json
 {
+  "tokenName": "Giga Cat",
+  "tokenSymbol": "GICAT",
   "tokenLogoUrl": "https://...",
   "tokenContractAddress": "0x...",
   "blockchain": "ethereum",
   "durationHours": 12,
-  "tokenName": "MyToken",
-  "tokenSymbol": "MTK",
   "website": "https://...",
-  "description": "..."
+  "description": "...",
+  "coingeckoId": "giga-cat" // optional
 }
 ```
 **Response:**
@@ -214,6 +222,14 @@ const BOOST_PRICING = {
   "message": "Boost request submitted for admin review"
 }
 ```
+
+**Validation Rules:**
+- `tokenName`: Required, 1-50 characters
+- `tokenSymbol`: Required, 1-10 characters
+- `tokenLogoUrl`: Required, valid image URL
+- `tokenContractAddress`: Required, valid blockchain address format
+- `blockchain`: Required, one of ['solana', 'ethereum', 'bsc']
+- `durationHours`: Required, one of [6, 12, 24, 36]
 
 #### `GET /api/boost/my-requests`
 **Response:**
@@ -339,10 +355,12 @@ const BOOST_PRICING = {
 
 #### `components/boost/BoostRequestForm.tsx`
 - Controlled form with validation
+- **Required fields:** Token Name, Token Symbol, Logo URL, Contract Address, Blockchain, Duration
 - Real-time credit cost calculation
 - Image URL preview
-- **Optional CoinGecko ID field** for automatic price fetching
-- Confirmation modal
+- Optional CoinGecko ID field for automatic price fetching
+- Form validation with error messages
+- Confirmation modal showing all submitted data before credit deduction
 
 #### `components/boost/BoostedTokenBanner.tsx`
 - Displays active boosted tokens with **live prices**
@@ -664,6 +682,48 @@ export function BoostedTokenCard({
 }
 ```
 
+### **IMPORTANT: Compact Card Design Note**
+
+⚠️ **Keep cards compact to maximize ad space!** 
+
+Based on user feedback, the boosted token cards should be **small and horizontal** to fit more ads in the carousel. Reference design:
+
+```
+┌─────────────────────────────────────┐
+│ [Logo] TOKEN_SYMBOL 🚀 100         │
+│        $0.002861                    │
+└─────────────────────────────────────┘
+```
+
+**Dimensions:**
+- Height: ~60-70px (compact)
+- Width: ~180-220px (narrow)
+- Layout: Horizontal (logo + text + price side-by-side)
+- No extra spacing or padding beyond essentials
+
+**Compact Design Benefits:**
+- More tokens visible in carousel without scrolling
+- Faster visual scanning for users
+- Cleaner, less cluttered interface
+- Mobile-friendly
+
+**Implementation:**
+```tsx
+// Compact version
+<div className="flex items-center gap-2 p-2 rounded-lg glass hover:glow-primary cursor-pointer">
+  <img src={logo} className="w-10 h-10 rounded-full" />
+  <div className="flex-1 min-w-0">
+    <div className="font-bold text-sm truncate flex items-center gap-1">
+      {symbol} 
+      {boost && <span className="text-xs">🚀 {boost}</span>}
+    </div>
+    <div className="text-xs text-themed">${price}</div>
+  </div>
+</div>
+```
+
+This compact design allows **5-7 tokens visible at once** in the horizontal carousel vs **2-3 with larger cards**.
+
 ### Scanner Input Field Update:
 ```typescript
 // Add ID for scroll targeting
@@ -838,26 +898,33 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
    - Prevent XSS via data URIs
    - Optional: Store images on own CDN
 
-2. **Rate Limiting**
+2. **Input Validation & Sanitization**
+   - **Token Name:** Required, sanitize HTML/scripts, 1-50 chars
+   - **Token Symbol:** Required, sanitize, 1-10 chars, alphanumeric only
+   - **Logo URL:** Required, validate image format, check for malicious URLs
+   - **Contract Address:** Required, validate format per blockchain
+   - Prevent SQL injection, XSS, and other attacks
+
+3. **Rate Limiting**
    - Max 5 boost submissions per user per day
    - Prevent spam
    - **CoinGecko API rate limiting (cache responses)**
 
-3. **Admin Authentication**
+4. **Admin Authentication**
    - Verify admin role before approval/rejection
    - Log all admin actions
 
-4. **Credit Transaction Integrity**
+5. **Credit Transaction Integrity**
    - Use database transactions
    - Prevent double-spending
    - Audit trail via credit_transactions table
 
-5. **Click Fraud Prevention**
+6. **Click Fraud Prevention**
    - Track IP addresses for click analytics
    - Rate limit clicks per user/IP
    - Detect bot patterns
 
-6. **Contract Address Validation**
+7. **Contract Address Validation**
    - Validate address format for each blockchain
    - Prevent injection attacks
    - Sanitize before database storage
@@ -903,7 +970,90 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ---
 
-## 11. Success Metrics
+## 12. UI/UX Design Specifications
+
+### Boosted Token Card Design (Compact Version)
+
+**Visual Reference:**
+```
+┌────────────────────────────────┐
+│ 🪙 GICAT 🚀 100                │
+│    $0.002861                   │
+└────────────────────────────────┘
+```
+
+**Specifications:**
+- **Card Dimensions:** 180-220px width × 60-70px height
+- **Layout:** Horizontal (not vertical stacked)
+- **Logo Size:** 40px × 40px (circular)
+- **Padding:** 8-12px all sides
+- **Gaps:** 8px between elements
+- **Font Sizes:**
+  - Token Symbol: 14px, bold
+  - Boost Indicator: 10px
+  - Price: 12px, medium weight
+  - 24h Change: 10px (optional, can be removed to save space)
+
+**Carousel Layout:**
+- **Container:** Horizontal scrolling carousel
+- **Visible Cards:** 5-7 tokens at once on desktop, 2-3 on mobile
+- **Spacing:** 12px gap between cards
+- **Scroll:** Smooth horizontal scroll, no vertical
+- **Arrows:** Optional left/right navigation arrows
+- **Auto-play:** Optional 5-second auto-advance
+
+**Why Compact Design:**
+1. **More Ad Inventory:** Fit 3x more tokens in same space
+2. **Better ROI:** More advertisers can be featured simultaneously
+3. **User Experience:** Less scrolling, faster browsing
+4. **Mobile-First:** Works better on small screens
+5. **Revenue:** More ad slots = more revenue potential
+
+**Components to Keep Minimal:**
+- ❌ No large token name/description
+- ❌ No chart/sparkline (Phase 2 feature)
+- ❌ No extra badges/labels beyond boost indicator
+- ✅ Logo + Symbol + Price only
+- ✅ Optional small boost count indicator (🚀 100)
+
+### Placement-Specific Layouts:
+
+#### Home Page (Above Scanner):
+```
+┌─────────────────────────────────────────────────────────┐
+│  ← [Token1] [Token2] [Token3] [Token4] [Token5] →      │
+│     Horizontal scrolling carousel, 5-7 visible          │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Agent Page (Below Control Panel):
+```
+┌─────────────────────────────────────────────────────────┐
+│  Featured Tokens: [T1] [T2] [T3] [T4]                   │
+│  Static row, no scrolling needed                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Pricing Page (Between Cards):
+```
+┌─────────────────────────────────────────────────────────┐
+│  Sponsored Tokens                                        │
+│  [T1] [T2] [T3] [T4] [T5] [T6]                          │
+│  Grid layout, 2 rows × 3 columns                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Navigation Bar:
+```
+┌─────────────────────────────────────────────────────────┐
+│  Logo | Scanner | Pricing | [🪙 TOKEN $0.001] | Credits │
+│  Single rotating token between nav items                │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 13. Success Metrics
 
 - Number of boost submissions per week
 - Approval/rejection rate
