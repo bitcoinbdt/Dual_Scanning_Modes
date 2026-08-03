@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Loader2,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditContext';
 import { useEventBus } from '@/hooks/useEventBus';
@@ -22,14 +23,16 @@ import { getBasicScan, startElevatorScan, validateBackendConnection } from '@/se
 import type { OnChainData } from '@/types/scanner';
 import { SCAN_COSTS } from '@/types/credits';
 import Navigation from '@/components/layout/Navigation';
-import { TokenOverviewCard } from '@/components/TokenOverviewCard';
-import { AdvancedRiskMetricsCard } from '@/components/AdvancedRiskMetricsCard';
-import { TokenAuditCard } from '@/components/TokenAuditCard';
-import { MarketIntelligenceCard } from '@/components/MarketIntelligenceCard';
-import { RawTransactionTable } from '@/components/elevator/RawTransactionTable';
-import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
-import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 import toast from 'react-hot-toast';
+
+// Dynamically import heavy components to reduce initial bundle size
+const TokenOverviewCard = dynamic(() => import('@/components/TokenOverviewCard').then(mod => mod.TokenOverviewCard));
+const AdvancedRiskMetricsCard = dynamic(() => import('@/components/AdvancedRiskMetricsCard').then(mod => mod.AdvancedRiskMetricsCard));
+const TokenAuditCard = dynamic(() => import('@/components/TokenAuditCard').then(mod => mod.TokenAuditCard));
+const MarketIntelligenceCard = dynamic(() => import('@/components/MarketIntelligenceCard').then(mod => mod.MarketIntelligenceCard));
+const RawTransactionTable = dynamic(() => import('@/components/elevator/RawTransactionTable').then(mod => mod.RawTransactionTable));
+const InsufficientCreditsModal = dynamic(() => import('@/components/credits/InsufficientCreditsModal').then(mod => mod.InsufficientCreditsModal));
+const CreditStoreModal = dynamic(() => import('@/components/credits/CreditStoreModal').then(mod => mod.CreditStoreModal));
 
 const CHAINS = [
   { id: 'auto', label: 'Auto-detect' },
@@ -179,7 +182,7 @@ function HomePageContent() {
                     : 'glass text-muted-themed hover:text-themed'
                 }`}
               >
-                Basic Scan ({SCAN_COSTS.BASIC} credits)
+                Basic Scan
               </button>
               <button
                 onClick={() => {
