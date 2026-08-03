@@ -2,6 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import Navigation from '@/components/layout/Navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import AuthModal from '@/components/AuthModal';
 import {
   Rocket,
   Copy,
@@ -11,6 +13,7 @@ import {
   AlertTriangle,
   Loader2,
   Search,
+  Lock,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,12 +82,14 @@ function isLiqLocked(token: AgentToken): boolean {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AgentClient() {
+  const { isAuthenticated, sessionLoading } = useAuth();
   const [tokens, setTokens] = useState<AgentToken[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const runAgent = useCallback(async () => {
     setScanning(true);
@@ -125,6 +130,53 @@ export default function AgentClient() {
     setCopied(addr);
     setTimeout(() => setCopied(null), 2000);
   };
+
+  // Show loading spinner while auth state resolves
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-grid flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-primary-themed animate-spin" />
+      </div>
+    );
+  }
+
+  // Auth gate — block access if not logged in
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-grid">
+        <Navigation onOpenCreditStore={() => {}} />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16 flex items-center justify-center min-h-[80vh]">
+          <div className="glass-strong rounded-2xl p-10 text-center max-w-md w-full rgb-border animate-fade-in">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-full gradient-primary flex items-center justify-center glow-primary">
+              <Lock className="w-9 h-9 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold gradient-text mb-2">Sign In Required</h2>
+            <p className="text-muted-themed text-sm mb-6">
+              The Crypto Hype Agent is available to registered users only. Sign in or create a free account to access real-time token discovery.
+            </p>
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="w-full gradient-primary text-white font-bold py-3 rounded-xl hover:opacity-90 transition glow-primary flex items-center justify-center gap-2"
+            >
+              <Rocket className="w-5 h-5" /> Sign In to Continue
+            </button>
+            <p className="text-xs text-muted-themed mt-4">
+              No account?{' '}
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="text-primary-themed hover:underline font-semibold"
+              >
+                Create one for free
+              </button>
+            </p>
+          </div>
+        </div>
+        {showAuthModal && (
+          <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} defaultMode="login" />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-grid">
