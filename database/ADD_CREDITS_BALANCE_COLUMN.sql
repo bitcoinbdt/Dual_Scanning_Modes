@@ -9,10 +9,19 @@
 ALTER TABLE public.user_profiles 
 ADD COLUMN IF NOT EXISTS credits_balance INTEGER NOT NULL DEFAULT 0;
 
--- Add constraint to ensure balance is never negative
-ALTER TABLE public.user_profiles
-ADD CONSTRAINT IF NOT EXISTS valid_credits_balance 
-CHECK (credits_balance >= 0);
+-- Add constraint to ensure balance is never negative (drop first if exists)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'valid_credits_balance' 
+    AND conrelid = 'public.user_profiles'::regclass
+  ) THEN
+    ALTER TABLE public.user_profiles
+    ADD CONSTRAINT valid_credits_balance 
+    CHECK (credits_balance >= 0);
+  END IF;
+END $$;
 
 -- Create index for quick balance lookups
 CREATE INDEX IF NOT EXISTS idx_user_profiles_credits 
