@@ -209,13 +209,13 @@ export default function AgentClient() {
     <div className="min-h-screen bg-grid">
       <Navigation onOpenCreditStore={() => {}} />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold gradient-text mb-1 flex items-center gap-2">
-            <Search className="w-7 h-7" /> Crypto Hype Agent
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1 flex items-center gap-2">
+            <Search className="w-6 h-6 sm:w-7 sm:h-7" /> Crypto Hype Agent
           </h1>
-          <p className="text-sm text-muted-themed">
+          <p className="text-xs sm:text-sm text-muted-themed">
             Fetches the top 20 boosted token profiles from DexScreener and enriches them with live pair data.
           </p>
           <div className="flex items-center gap-2 mt-2 text-xs">
@@ -235,7 +235,7 @@ export default function AgentClient() {
         </div>
 
         {/* Control Panel */}
-        <div className="glass-strong rounded-2xl p-6 mb-6 rgb-border">
+        <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
           <div className="grid grid-cols-3 gap-3">
             <div className="glass rounded-lg p-3 text-center">
               <div className="text-lg font-bold gradient-text">{tokens.length}</div>
@@ -388,13 +388,13 @@ export default function AgentClient() {
 
         {/* Empty state */}
         {!scanning && tokens.length === 0 && !error && (
-          <div className="text-center py-12">
+          <div className="text-center py-8 sm:py-12">
             {/* Interactive Robot Button */}
-            <div className="relative inline-block mb-6">
+            <div className="relative inline-block mb-4 sm:mb-6">
               <button
                 onClick={runAgent}
                 disabled={scanning}
-                className="group relative w-32 h-32 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group relative w-28 h-28 sm:w-32 sm:h-32 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {/* Pulsing background rings */}
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-20 group-hover:opacity-40 transition-opacity duration-300 animate-pulse" />
@@ -403,9 +403,9 @@ export default function AgentClient() {
                 {/* Main robot circle */}
                 <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 border border-primary-themed/30 group-hover:border-primary-themed">
                   {scanning ? (
-                    <Loader2 className="w-12 h-12 text-primary-themed animate-spin" />
+                    <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-primary-themed animate-spin" />
                   ) : (
-                    <span className="text-5xl group-hover:scale-110 transition-transform duration-300">🤖</span>
+                    <span className="text-4xl sm:text-5xl group-hover:scale-110 transition-transform duration-300">🤖</span>
                   )}
                 </div>
 
@@ -429,16 +429,16 @@ export default function AgentClient() {
               </div>
             </div>
 
-            <h3 className="text-xl font-bold text-themed mb-2">No results yet</h3>
-            <p className="text-sm text-muted-themed mb-2">
+            <h3 className="text-lg sm:text-xl font-bold text-themed mb-1 sm:mb-2">No results yet</h3>
+            <p className="text-xs sm:text-sm text-muted-themed mb-1 sm:mb-2">
               Click the robot to scan for trending tokens
             </p>
-            <p className="text-xs text-muted-themed/70">
+            <p className="text-[10px] sm:text-xs text-muted-themed/70">
               Fetches top 20 boosted profiles from DexScreener
             </p>
 
             {/* Preview cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mt-8 opacity-20">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mt-6 sm:mt-8 opacity-20">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="glass rounded-2xl p-5 h-48" />
               ))}
