@@ -23,6 +23,7 @@ function AdminDashboardContent() {
   });
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [systemStatusExpanded, setSystemStatusExpanded] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -259,24 +260,59 @@ function AdminDashboardContent() {
           background: 'rgba(255,255,255,0.02)',
           border: '1px solid rgba(255,255,255,0.06)',
           borderRadius: '16px',
-          padding: '28px',
+          overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-            <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, margin: 0 }}>System Status</h2>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
-            <span style={{
-              padding: '4px 12px', borderRadius: '20px',
-              background: 'rgba(34,197,94,0.1)',
-              border: '1px solid rgba(34,197,94,0.2)',
-              color: '#22c55e', fontSize: '12px', fontWeight: 600,
-            }}>All Systems Operational</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-            <StatusItem label="Admin Account" value={user?.email || '—'} status="active" mono />
-            <StatusItem label="Database" value="Connected (Supabase)" status="active" />
-            <StatusItem label="Credit System" value="Active & Operational" status="active" />
-            <StatusItem label="Payment Processing" value="Manual Review Mode" status="active" />
-          </div>
+          <button
+            onClick={() => setSystemStatusExpanded(!systemStatusExpanded)}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '20px 28px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <h2 style={{ color: 'white', fontSize: '18px', fontWeight: 700, margin: 0 }}>System Status</h2>
+              <span style={{
+                padding: '4px 12px', borderRadius: '20px',
+                background: 'rgba(34,197,94,0.1)',
+                border: '1px solid rgba(34,197,94,0.2)',
+                color: '#22c55e', fontSize: '12px', fontWeight: 600,
+              }}>All Systems Operational</span>
+            </div>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'rgba(255,255,255,0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#64748b',
+              transform: systemStatusExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </div>
+          </button>
+          
+          {systemStatusExpanded && (
+            <div style={{ padding: '0 28px 28px 28px' }}>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '24px' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <StatusItem label="Admin Account" value={user?.email || '—'} status="active" mono />
+                <StatusItem label="Database" value="Connected (Supabase)" status="active" />
+                <StatusItem label="Credit System" value="Active & Operational" status="active" />
+                <StatusItem label="Payment Processing" value="Manual Review Mode" status="active" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
