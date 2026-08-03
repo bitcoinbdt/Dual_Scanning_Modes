@@ -96,18 +96,26 @@ CREATE INDEX idx_boost_pending ON public.token_boost_requests(status, requested_
   WHERE status = 'pending';
 ```
 
-#### `token_boost_analytics` (Optional - Phase 2)
+#### `token_boost_analytics` (Simplified)
 ```sql
 CREATE TABLE public.token_boost_analytics (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   boost_request_id UUID REFERENCES public.token_boost_requests(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  impressions INTEGER DEFAULT 0,
-  clicks INTEGER DEFAULT 0,
-  scans_triggered INTEGER DEFAULT 0,
-  UNIQUE(boost_request_id, date)
+  
+  -- Analytics Data (Simplified - only scan count)
+  total_scans INTEGER DEFAULT 0, -- Total number of scans triggered from this boost
+  last_scan_at TIMESTAMP WITH TIME ZONE,
+  
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  UNIQUE(boost_request_id)
 );
+
+CREATE INDEX idx_boost_analytics_boost_id ON public.token_boost_analytics(boost_request_id);
 ```
+
+**Note:** We track only the **total scan count** without differentiating between Basic and Elevator scans. This keeps analytics simple and focused on advertiser ROI.
 
 ---
 
@@ -238,15 +246,27 @@ const BOOST_PRICING = {
   "requests": [
     {
       "id": "uuid",
-      "status": "pending",
+      "status": "active",
       "durationHours": 12,
       "creditsSpent": 90,
       "requestedAt": "2024-...",
-      "tokenInfo": {...}
+      "expiresAt": "2024-...",
+      "tokenInfo": {
+        "name": "Giga Cat",
+        "symbol": "GICAT",
+        "logoUrl": "...",
+        "contractAddress": "0x..."
+      },
+      "analytics": {
+        "totalScans": 47,
+        "lastScanAt": "2024-..."
+      }
     }
   ]
 }
 ```
+
+**Note:** Analytics only shows `totalScans` - no breakdown by scan type (Basic vs Elevator).
 
 #### `GET /api/boost/active`
 **Description:** Fetch all active boosted tokens with live price data
@@ -281,6 +301,26 @@ const BOOST_PRICING = {
   "updatedAt": "2024-..."
 }
 ```
+
+#### `POST /api/boost/track-scan`
+**Description:** Track when a boosted token is scanned (called after user clicks "Scan" button)
+**Request:**
+```json
+{
+  "boostId": "uuid",
+  "contractAddress": "0x...",
+  "scanType": "BASIC" // or "ELEVATOR" - logged but not differentiated in analytics
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "totalScans": 48
+}
+```
+
+**Note:** This endpoint increments the scan counter but does NOT differentiate between Basic and Elevator scans in the analytics display. The scan type is logged for potential future use but not shown to advertisers.
 
 ### Admin Endpoints:
 
@@ -380,9 +420,12 @@ const BOOST_PRICING = {
 
 #### `components/boost/MyBoostRequests.tsx`
 - User's boost history
-- Status badges
+- Status badges (pending, active, approved, rejected, expired)
 - Countdown timer for active boosts
-- **Shows current price and impressions** for active boosts
+- **Analytics section showing total scans** (no breakdown by scan type)
+- Current price for active boosts
+- Time remaining display
+- Quick action buttons (extend duration, etc. - Phase 2)
 
 #### `components/admin/BoostRequestCard.tsx`
 - Single boost request review card
@@ -885,13 +928,170 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 - [ ] Error handling for CoinGecko API failures
 - [ ] Loading states and skeleton screens
 - [ ] **Price staleness indicators**
+- [ ] **Scan tracking verification and testing**
+- [ ] **Analytics display in user dashboard**
 - [ ] Email notifications (optional)
-- [ ] **Click analytics tracking**
-- [ ] **A/B testing for click-through rates**
+- [ ] **Test scan tracking accuracy**
 
 ---
 
-## 9. Security Considerations
+## 9. Scan Tracking & Analytics
+
+### How Scan Tracking Works:
+
+#### When User Scans a Boosted Token:
+
+1. User clicks on boosted token card
+2. Contract address is populated in scanner input field
+3. User clicks "Scan" button (Basic or Elevator mode)
+4. **Before scan executes**, frontend calls `/api/boost/track-scan`
+5. Backend increments `total_scans` counter in `token_boost_analytics`
+6. Scan proceeds normally
+
+#### Implementation in Scanner:
+
+```typescript
+// app/page.tsx - Updated handleScan function
+
+const handleScan = async (addr: string, type: 'BASIC' | 'ELEVATOR') => {
+  if (!isAuthenticated) {
+    toast.error('Please login to scan tokens');
+    return;
+  }
+
+  // Check if this address came from a boosted token
+  const boostId = sessionStorage.getItem('lastClickedBoostId');
+  
+  if (boostId) {
+    // Track the scan for analytics
+    try {
+      await fetch('/api/boost/track-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boostId,
+          contractAddress: addr,
+          scanType: type // Logged but not shown in analytics
+        })
+      });
+      // Clear the boost tracking
+      sessionStorage.removeItem('lastClickedBoostId');
+    } catch (err) {
+      console.error('Failed to track boost scan:', err);
+      // Don't block the scan if tracking fails
+    }
+  }
+
+  // Continue with normal scan logic...
+  const required = type === 'ELEVATOR' ? elevatorCredits : SCAN_COSTS[type];
+  if (!hasEnoughCredits(required)) {
+    setShowInsufficientCredits(true);
+    return;
+  }
+  
+  // ... rest of scan logic
+};
+```
+
+#### Tracking Setup in BoostedTokenBanner:
+
+```typescript
+// components/boost/BoostedTokenBanner.tsx
+
+const handleClick = (boost: BoostedToken) => {
+  // Store boost ID for scan tracking
+  sessionStorage.setItem('lastClickedBoostId', boost.id);
+  
+  if (placement === 'home' && onTokenClick) {
+    onTokenClick(boost.tokenContractAddress);
+  } else {
+    router.push(`/?address=${boost.tokenContractAddress}`);
+  }
+};
+```
+
+### Analytics Display (Simplified):
+
+#### For Advertisers (in MyBoostRequests component):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Your Boost: GICAT                                   │
+│  Status: Active (8 hours remaining)                  │
+│  ──────────────────────────────────────────────────  │
+│  📊 Performance                                       │
+│  Total Scans: 47                                     │
+│  Last Scan: 2 minutes ago                            │
+└──────────────────────────────────────────────────────┘
+```
+
+**Key Points:**
+- ✅ Shows total scan count only
+- ❌ No breakdown by Basic vs Elevator
+- ❌ No impressions (too complex to track reliably)
+- ❌ No clicks (clicks = scans in our simplified model)
+- ✅ Shows last scan timestamp
+- ✅ Simple, clear, and actionable
+
+### Database Function for Tracking:
+
+```sql
+CREATE OR REPLACE FUNCTION increment_boost_scan_count(
+  p_boost_id UUID
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_current_count INTEGER;
+BEGIN
+  -- Check if boost is active
+  IF NOT EXISTS (
+    SELECT 1 FROM public.token_boost_requests
+    WHERE id = p_boost_id 
+      AND status = 'active'
+      AND expires_at > NOW()
+  ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'message', 'Boost is not active or has expired'
+    );
+  END IF;
+  
+  -- Insert or update analytics record
+  INSERT INTO public.token_boost_analytics (
+    boost_request_id,
+    total_scans,
+    last_scan_at
+  ) VALUES (
+    p_boost_id,
+    1,
+    NOW()
+  )
+  ON CONFLICT (boost_request_id) 
+  DO UPDATE SET
+    total_scans = token_boost_analytics.total_scans + 1,
+    last_scan_at = NOW(),
+    updated_at = NOW()
+  RETURNING total_scans INTO v_current_count;
+  
+  RETURN jsonb_build_object(
+    'success', true,
+    'totalScans', v_current_count
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+### Why Only Total Scans?
+
+1. **Simplicity**: Easy to understand for advertisers
+2. **Clarity**: One clear metric = better decision making
+3. **Privacy**: Don't expose detailed user behavior
+4. **Performance**: Less database overhead
+5. **Focus**: Scans are the primary conversion metric
+
+---
+
+## 10. Security Considerations
 
 1. **Image URL Validation**
    - Check valid image formats
@@ -931,14 +1131,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ---
 
-## 10. Future Enhancements (Phase 2)
+## 11. Future Enhancements (Phase 2)
 
-1. **Analytics Dashboard**
-   - Track impressions, clicks, scans
-   - **Click-through rate (CTR) metrics**
-   - **Conversion rate (clicks that resulted in scans)**
-   - ROI metrics for advertisers
-   - **Heatmap of most clicked tokens**
+1. **Extended Analytics** (Optional)
+   - Daily scan trends (chart showing scans per day)
+   - Peak scan hours
+   - Geographic distribution (if available)
+   - **Still no Basic vs Elevator breakdown** - keep it simple
 
 2. **Auto-renewal**
    - Option to auto-renew boosts
@@ -1060,11 +1259,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 - Average boost duration purchased
 - Credits spent on boosts vs other features
 - User retention after first boost
-- **Click-through rate (CTR) per placement location**
-- **Conversion rate (clicks → scans)**
-- **Average time from click to scan**
+- **Total scans per boost** (primary KPI)
+- **Average scans per boost**
+- **Scan conversion rate** (clicks → scans)
 - **Revenue per boosted token**
 - **Repeat advertiser rate**
+- **Average time from click to scan**
 
 ---
 
