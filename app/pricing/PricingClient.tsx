@@ -100,9 +100,7 @@ export default function PricingClient() {
                 <div className={`text-2xl font-bold ${isHot ? 'text-white' : 'text-themed'}`}>
                   ${pkg.priceUsd}
                 </div>
-                <div className={`text-xs mb-4 ${isHot ? 'text-white/60' : 'text-muted-themed'}`}>
-                  ~{pkg.priceSol} SOL
-                </div>
+                <div className="mb-4" />
                 <div
                   className={`py-2 rounded-lg text-center text-sm font-semibold transition ${
                     isHot
