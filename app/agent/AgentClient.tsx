@@ -87,7 +87,7 @@ function isLiqLocked(token: AgentToken): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AgentClient() {
   const { isAuthenticated, sessionLoading } = useAuth();
-  const { deductCredits, refreshBalance, hasEnoughCredits } = useCredits();
+  const { deductCredits, refreshBalance, hasEnoughCredits, balance } = useCredits();
   const [tokens, setTokens] = useState<AgentToken[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -461,6 +461,7 @@ export default function AgentClient() {
             setShowCreditStore(true);
           }}
           scanType="ELEVATOR"
+          currentBalance={balance.balance}
         />
       )}
       {showCreditStore && (
