@@ -75,7 +75,10 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   const navLinks = [
     { href: '/', label: 'Scanner', icon: Search },
     { href: '/pricing', label: 'Pricing', icon: DollarSign },
-    ...(isAuthenticated ? [{ href: '/referrals', label: 'Referral', icon: Gift }] : []),
+    ...(isAuthenticated ? [
+      { href: '/referrals', label: 'Referral', icon: Gift },
+      { href: '/advertising', label: 'Advertising', icon: Zap }
+    ] : []),
     { href: '/agent', label: 'Agent', icon: Bot },
   ];
 

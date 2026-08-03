@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap, Flame } from 'lucide-react';
 import Navigation from '@/components/layout/Navigation';
+import BoostedTokenBanner from '@/components/boost/BoostedTokenBanner';
 import { useCredits } from '@/contexts/CreditContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
@@ -161,6 +162,17 @@ export default function PricingClient() {
               </div>
             ))}
           </div>
+        </motion.div>
+
+        {/* Featured Tokens */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="glass-strong rounded-2xl p-6 mb-8"
+        >
+          <h2 className="text-xl font-bold gradient-text mb-5">Featured Tokens</h2>
+          <BoostedTokenBanner placement="pricing" />
         </motion.div>
 
         {/* CTA */}

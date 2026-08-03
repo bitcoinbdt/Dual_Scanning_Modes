@@ -24,6 +24,7 @@ import type { OnChainData } from '@/types/scanner';
 import { SCAN_COSTS } from '@/types/credits';
 import Navigation from '@/components/layout/Navigation';
 import NewsTimeline from '@/components/NewsTimeline';
+import BoostedTokenBanner from '@/components/boost/BoostedTokenBanner';
 import toast from 'react-hot-toast';
 
 // Dynamically import heavy components to reduce initial bundle size
@@ -104,6 +105,30 @@ function HomePageContent() {
     checkBackend();
   }, []);
 
+  // Handle boosted token click - populate scanner input
+  const handleBoostedTokenClick = useCallback((contractAddress: string, blockchain: string) => {
+    setAddress(contractAddress);
+    
+    // Set the appropriate blockchain if available
+    if (blockchain === 'solana' || blockchain === 'ethereum' || blockchain === 'bsc') {
+      setSelectedChain(blockchain === 'ethereum' ? 'eth' : blockchain);
+    }
+    
+    // Scroll to scanner input
+    setTimeout(() => {
+      const scannerInput = document.querySelector('input[placeholder*="Token Contract"]');
+      if (scannerInput) {
+        scannerInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (scannerInput as HTMLInputElement).focus();
+      }
+    }, 100);
+    
+    toast.success(`Token address loaded. Select scan type and click Scan!`, {
+      duration: 4000,
+      icon: '🎯',
+    });
+  }, []);
+
   const handleScan = async (addr: string, type: 'BASIC' | 'ELEVATOR') => {
     if (!isAuthenticated) {
       toast.error('Please login to scan tokens');
@@ -163,6 +188,12 @@ function HomePageContent() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* News Timeline */}
         <NewsTimeline />
+
+        {/* Featured/Boosted Tokens Banner */}
+        <BoostedTokenBanner 
+          placement="home" 
+          onTokenClick={handleBoostedTokenClick}
+        />
 
         {/* Scan Terminal */}
         <section className="mb-6">

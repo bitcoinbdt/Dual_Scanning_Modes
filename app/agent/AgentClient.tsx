@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import Navigation from '@/components/layout/Navigation';
+import BoostedTokenBanner from '@/components/boost/BoostedTokenBanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditContext';
 import AuthModal from '@/components/AuthModal';
@@ -256,6 +257,11 @@ export default function AgentClient() {
             </div>
           )}
         </div>
+
+        {/* Featured Tokens - Show only when idle */}
+        {!scanning && tokens.length === 0 && !error && (
+          <BoostedTokenBanner placement="agent" />
+        )}
 
         {/* Error */}
         {error && (
