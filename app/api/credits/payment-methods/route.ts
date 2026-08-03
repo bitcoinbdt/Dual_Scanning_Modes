@@ -40,11 +40,12 @@ export async function GET(request: NextRequest) {
 function getFallbackPaymentMethods() {
   return [
     {
-      id: 'usdc-wallet',
-      name: 'USDC',
+      id: 'usdc-spl',
+      name: 'USDC (SPL)',
       type: 'crypto',
+      network: 'Solana',
       address: process.env.PAYMENT_WALLET_USDC || 'Configure USDC wallet in admin panel',
-      instructions: 'Send USDC to the address above, then submit your transaction hash.',
+      instructions: 'Send USDC via Solana network (SPL token), then submit your transaction hash.',
       is_active: true,
       display_order: 1,
       icon: 'USDC',
