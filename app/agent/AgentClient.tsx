@@ -392,7 +392,7 @@ export default function AgentClient() {
               >
                 {/* Pulsing background rings */}
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-20 group-hover:opacity-40 transition-opacity duration-300 animate-pulse" />
-                <div className="absolute inset-2 rounded-full border-2 border-dashed border-primary-themed group-hover:border-solid group-hover:rotate-180 transition-all duration-700" />
+                <div className="absolute inset-2 rounded-full border-2 border-dashed rgb-border group-hover:border-solid group-hover:rotate-180 transition-all duration-700" />
                 
                 {/* Main robot circle */}
                 <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 border border-primary-themed/30 group-hover:border-primary-themed">
