@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import Link from 'next/link';
 import Navigation from '@/components/layout/Navigation';
 import {
   Rocket,
@@ -134,11 +133,6 @@ export default function AgentClient() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* Header */}
         <div className="mb-6">
-          <div className="text-xs text-muted-themed mb-2">
-            <Link href="/" className="hover:text-themed transition">OnChain Alpha Scanner</Link>
-            {' / '}
-            <span className="text-themed">Crypto Hype Agent</span>
-          </div>
           <h1 className="text-3xl font-bold gradient-text mb-1 flex items-center gap-2">
             <Search className="w-7 h-7" /> Crypto Hype Agent
           </h1>
