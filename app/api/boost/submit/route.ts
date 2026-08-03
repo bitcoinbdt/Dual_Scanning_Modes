@@ -99,14 +99,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const balance = transactions.reduce((sum, tx) => {
-      if (['purchase', 'bonus', 'refund'].includes(tx.type)) {
-        return sum + tx.amount;
-      } else if (['scan_deduction', 'boost_purchase'].includes(tx.type)) {
-        return sum + tx.amount; // amount is already negative
-      }
-      return sum;
-    }, 0);
+    // Calculate balance - amounts are already positive/negative
+    const balance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
 
     if (balance < creditsCost) {
       return NextResponse.json<BoostSubmitResponse>(
