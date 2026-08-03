@@ -20,6 +20,8 @@ function AdminDashboardContent() {
     totalRequests: 0,
     activePaymentMethods: 0,
     totalPaymentMethods: 0,
+    pendingBoostRequests: 0,
+    activeBoostRequests: 0,
   });
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -34,9 +36,10 @@ function AdminDashboardContent() {
   const loadStats = async () => {
     setLoading(true);
     try {
-      const [requestsRes, methodsRes] = await Promise.all([
+      const [requestsRes, methodsRes, boostRes] = await Promise.all([
         fetch('/api/admin/credit-requests?status=all'),
         fetch('/api/admin/payment-methods'),
+        fetch('/api/admin/boost-requests?status=all'),
       ]);
 
       if (requestsRes.ok && methodsRes.ok) {
@@ -46,11 +49,22 @@ function AdminDashboardContent() {
         const requests = requestsData.requests || [];
         const methods = methodsData.paymentMethods || [];
 
+        let pendingBoostRequests = 0;
+        let activeBoostRequests = 0;
+        if (boostRes.ok) {
+          const boostData = await boostRes.json();
+          const boosts = boostData.requests || [];
+          pendingBoostRequests = boosts.filter((b: any) => b.status === 'pending').length;
+          activeBoostRequests = boosts.filter((b: any) => b.status === 'active').length;
+        }
+
         setStats({
           pendingRequests: requests.filter((r: any) => r.status === 'pending').length,
           totalRequests: requests.length,
           activePaymentMethods: methods.filter((m: any) => m.is_active).length,
           totalPaymentMethods: methods.length,
+          pendingBoostRequests,
+          activeBoostRequests,
         });
       }
     } catch (error) {
@@ -138,9 +152,9 @@ function AdminDashboardContent() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5" style={{ marginBottom: '32px' }}>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5" style={{ marginBottom: '32px' }}>
           <StatCard
-            label="Pending Requests"
+            label="Pending Credits"
             value={loading ? null : stats.pendingRequests}
             accent="#f59e0b"
             accentBg="rgba(245,158,11,0.1)"
@@ -149,6 +163,31 @@ function AdminDashboardContent() {
             icon={
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+            }
+          />
+          <StatCard
+            label="Pending Boosts"
+            value={loading ? null : stats.pendingBoostRequests}
+            accent="#a855f7"
+            accentBg="rgba(168,85,247,0.1)"
+            accentBorder="rgba(168,85,247,0.2)"
+            urgent={stats.pendingBoostRequests > 0}
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            }
+          />
+          <StatCard
+            label="Active Boosts"
+            value={loading ? null : stats.activeBoostRequests}
+            accent="#34d399"
+            accentBg="rgba(52,211,153,0.1)"
+            accentBorder="rgba(52,211,153,0.2)"
+            icon={
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
             }
           />
@@ -169,11 +208,11 @@ function AdminDashboardContent() {
           <StatCard
             label="Active Gateways"
             value={loading ? null : stats.activePaymentMethods}
-            accent="#34d399"
-            accentBg="rgba(52,211,153,0.1)"
-            accentBorder="rgba(52,211,153,0.2)"
+            accent="#f472b6"
+            accentBg="rgba(244,114,182,0.1)"
+            accentBorder="rgba(244,114,182,0.2)"
             icon={
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2">
                 <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
                 <line x1="1" y1="10" x2="23" y2="10"/>
               </svg>
@@ -182,11 +221,11 @@ function AdminDashboardContent() {
           <StatCard
             label="Total Gateways"
             value={loading ? null : stats.totalPaymentMethods}
-            accent="#f472b6"
-            accentBg="rgba(244,114,182,0.1)"
-            accentBorder="rgba(244,114,182,0.2)"
+            accent="#06b6d4"
+            accentBg="rgba(6,182,212,0.1)"
+            accentBorder="rgba(6,182,212,0.2)"
             icon={
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2">
                 <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
             }
@@ -209,6 +248,17 @@ function AdminDashboardContent() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="9 11 12 14 22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              }
+            />
+            <CompactActionButton
+              href="/admin/boost-requests"
+              title="Review Boost Requests"
+              badge={stats.pendingBoostRequests > 0 ? stats.pendingBoostRequests : undefined}
+              accent="#a855f7"
+              icon={
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
               }
             />
@@ -280,6 +330,7 @@ function AdminDashboardContent() {
                 <StatusItem label="Admin Account" value={user?.email || '—'} status="active" mono />
                 <StatusItem label="Database" value="Connected (Supabase)" status="active" />
                 <StatusItem label="Credit System" value="Active & Operational" status="active" />
+                <StatusItem label="Boost System" value={`${stats.activeBoostRequests} Active Token(s)`} status="active" />
                 <StatusItem label="Payment Processing" value="Manual Review Mode" status="active" />
               </div>
             </div>

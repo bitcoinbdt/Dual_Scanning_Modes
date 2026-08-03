@@ -52,8 +52,8 @@ export default function BoostRequestForm() {
     if (formData.tokenSymbol.length > 10) newErrors.tokenSymbol = 'Token symbol must be 10 characters or less';
     
     if (!formData.tokenLogoUrl.trim()) newErrors.tokenLogoUrl = 'Token logo URL is required';
-    if (formData.tokenLogoUrl && !formData.tokenLogoUrl.match(/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i)) {
-      newErrors.tokenLogoUrl = 'Please provide a valid image URL (jpg, png, gif, webp)';
+    if (formData.tokenLogoUrl && !formData.tokenLogoUrl.match(/^https?:\/\/.+/i)) {
+      newErrors.tokenLogoUrl = 'Please provide a valid image URL starting with http:// or https://';
     }
     
     if (!formData.tokenContractAddress.trim()) {
@@ -204,7 +204,7 @@ export default function BoostRequestForm() {
                 <AlertCircle className="w-3 h-3" /> {errors.tokenLogoUrl}
               </p>
             )}
-            <p className="text-xs text-muted-themed mt-1">Supported: JPG, PNG, GIF, WEBP</p>
+            <p className="text-xs text-muted-themed mt-1">Any public image URL (JPG, PNG, GIF, WEBP, SVG or CDN links)</p>
           </div>
 
           {/* Contract Address */}
