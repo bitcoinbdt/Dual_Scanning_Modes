@@ -212,8 +212,8 @@ export default function AgentClient() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1 flex items-center gap-2">
-            <Search className="w-6 h-6 sm:w-7 sm:h-7" /> Crypto Hype Agent
+          <h1 className="text-2xl sm:text-3xl font-bold gradient-text mb-1 flex items-center gap-1.5 sm:gap-2">
+            <Search className="w-5 h-5 sm:w-7 sm:h-7" /> Crypto Hype Agent
           </h1>
           <p className="text-xs sm:text-sm text-muted-themed">
             Fetches the top 20 boosted token profiles from DexScreener and enriches them with live pair data.
