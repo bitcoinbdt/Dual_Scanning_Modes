@@ -101,10 +101,22 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center glow-sm group-hover:glow-primary transition">
-                <Zap className="w-5 h-5 text-white" fill="white" />
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-slate-900 to-indigo-950 flex items-center justify-center border border-sky-400/30 group-hover:border-sky-400/60 transition shadow-[0_0_10px_rgba(56,189,248,0.2)] group-hover:shadow-[0_0_15px_rgba(56,189,248,0.4)]">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-sky-400 group-hover:text-indigo-400 transition-colors"
+                >
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" fillOpacity="0.2" />
+                </svg>
               </div>
-              <span className="hidden sm:block font-bold text-themed text-lg">
+              <span className="hidden sm:block font-bold text-themed text-lg tracking-tight">
                 OnChain<span className="gradient-text">Alpha</span>
               </span>
             </Link>
