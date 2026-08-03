@@ -8,6 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     const headersList = await headers();
     const authHeader = headersList.get('authorization');
@@ -20,11 +21,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // Use anon client only for JWT verification
+    const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
+    // Use service role client for all DB operations (bypasses RLS)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey ?? supabaseAnonKey);
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser(token);
+    } = await supabaseAnon.auth.getUser(token);
 
     if (authError || !user) {
       return NextResponse.json<BoostSubmitResponse>(
