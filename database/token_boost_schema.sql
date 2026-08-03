@@ -151,14 +151,8 @@ RETURNS JSONB AS $$
 DECLARE
   v_current_balance INTEGER;
 BEGIN
-  -- Calculate current balance
-  SELECT COALESCE(SUM(
-    CASE 
-      WHEN type IN ('purchase', 'bonus', 'refund') THEN amount
-      WHEN type IN ('scan_deduction', 'boost_purchase') THEN amount
-      ELSE 0
-    END
-  ), 0) INTO v_current_balance
+  -- Calculate current balance (sum all amounts - they're already positive/negative)
+  SELECT COALESCE(SUM(amount), 0) INTO v_current_balance
   FROM public.credit_transactions
   WHERE user_id = p_user_id;
   
@@ -212,14 +206,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Boost not found');
   END IF;
   
-  -- Calculate current balance
-  SELECT COALESCE(SUM(
-    CASE 
-      WHEN type IN ('purchase', 'bonus', 'refund') THEN amount
-      WHEN type IN ('scan_deduction', 'boost_purchase') THEN amount
-      ELSE 0
-    END
-  ), 0) INTO v_current_balance
+  -- Calculate current balance (sum all amounts - they're already positive/negative)
+  SELECT COALESCE(SUM(amount), 0) INTO v_current_balance
   FROM public.credit_transactions
   WHERE user_id = v_boost.user_id;
   
