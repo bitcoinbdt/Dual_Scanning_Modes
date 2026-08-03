@@ -40,6 +40,17 @@ export async function GET(request: NextRequest) {
 function getFallbackPaymentMethods() {
   return [
     {
+      id: 'binance-pay',
+      name: 'Binance Pay',
+      type: 'crypto',
+      network: 'Binance',
+      address: process.env.PAYMENT_WALLET_BINANCE || 'Configure Binance Pay ID in admin panel',
+      instructions: 'Send payment via Binance Pay to the Pay ID above, then submit your transaction hash.',
+      is_active: true,
+      display_order: 1,
+      icon: 'BINANCE',
+    },
+    {
       id: 'usdc-spl',
       name: 'USDC (SPL)',
       type: 'crypto',
@@ -47,7 +58,7 @@ function getFallbackPaymentMethods() {
       address: process.env.PAYMENT_WALLET_USDC || 'Configure USDC wallet in admin panel',
       instructions: 'Send USDC via Solana network (SPL token), then submit your transaction hash.',
       is_active: true,
-      display_order: 1,
+      display_order: 2,
       icon: 'USDC',
     },
     {
@@ -57,7 +68,7 @@ function getFallbackPaymentMethods() {
       address: process.env.PAYMENT_WALLET_USDT || 'Configure USDT wallet in admin panel',
       instructions: 'Send USDT via TRC-20 network, then submit your transaction hash.',
       is_active: true,
-      display_order: 2,
+      display_order: 3,
       icon: 'USDT',
     },
   ];
