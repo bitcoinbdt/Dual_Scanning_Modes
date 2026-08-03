@@ -76,27 +76,14 @@ function AdminDashboardContent() {
         backdropFilter: 'blur(20px)',
         position: 'sticky',
         top: 0,
-        zIndex: 50,
+        zIndex: 30,
       }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 16px' }}>
           <div className="h-14 md:h-16" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="w-8 h-8 md:w-9 md:h-9" style={{
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #7c3aed, #db2777)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 0 20px rgba(124,58,237,0.4)',
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <div className="hidden md:block">
-                <span style={{ color: 'white', fontWeight: 700, fontSize: '16px' }}>Admin Console</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1px' }}>
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
-                  <span style={{ color: '#64748b', fontSize: '11px' }}>System Operational</span>
-                </div>
+              <div className="hidden lg:flex items-center gap-2">
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+                <span style={{ color: '#64748b', fontSize: '11px' }}>System Operational</span>
               </div>
             </div>
 
@@ -120,24 +107,6 @@ function AdminDashboardContent() {
                 </svg>
                 <span className="hidden lg:inline">Refresh</span>
               </button>
-
-              <Link
-                href="/"
-                className="text-xs md:text-sm px-3 py-2 md:px-4 md:py-2"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  borderRadius: '8px',
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(219,39,119,0.2))',
-                  border: '1px solid rgba(124,58,237,0.3)',
-                  color: '#c4b5fd', fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                <span className="hidden sm:inline">Back to App</span>
-              </Link>
 
               <div className="w-8 h-8 md:w-9 md:h-9" style={{
                 borderRadius: '50%',

@@ -2,22 +2,17 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp, Database, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Database, RefreshCw } from 'lucide-react';
 import { 
   fetchCurrentPriceFromDexScreener,
-  calculateAllWalletPnL,
   RawTransaction,
   HolderInfo,
-  OHLCVCandle,
-  WalletPnL
+  OHLCVCandle
 } from '@/utils/pnlCalculator';
 import { WalletCell } from './WalletCell';
-import { PnLIndicator } from './PnLIndicator';
-import { PnLTooltip } from './PnLTooltip';
 import { ActionBadge } from './ActionBadge';
 import { TxHashLink } from './TxHashLink';
 import { HolderGrowthChart } from './HolderGrowthChart';
-import { useWalletPnL, CostMethod } from '@/hooks/useWalletPnL';
 import { ExchangeFlowCard } from './ExchangeFlowCard';
 import { VerificationBadge } from './VerificationBadge';
 
@@ -67,13 +62,13 @@ interface FlatTransaction {
   roundTrips?: number;
 }
 
-type FilterType = 'ALL' | 'BUY' | 'SELL' | 'PROFIT' | 'LOSS';
-type SortBy = 'time' | 'amount' | 'pnl';
+type FilterType = 'ALL' | 'BUY' | 'SELL';
+type SortBy = 'time' | 'amount';
 type SortOrder = 'asc' | 'desc';
 
 /**
  * Raw Transaction Table Component
- * Main table displaying all transactions with P&L indicators
+ * Displays all transactions with Current Price column instead of P&L
  */
 export function RawTransactionTable({ 
   rawData, 
@@ -81,13 +76,9 @@ export function RawTransactionTable({
   tokenAddress,
   network = 'solana'
 }: RawTransactionTableProps) {
-  const [costMethod, setCostMethod] = useState<CostMethod>('average');
-  const [includeFees, setIncludeFees] = useState(true);
-  
-  // Detect actual blockchain from data (prefer rawData.blockchain over network prop)
+  // Detect actual blockchain from data
   const detectedChain = rawData.blockchain || network;
   
-  // Chain display info
   const getChainInfo = (chain: string) => {
     switch(chain) {
       case 'solana':
@@ -111,7 +102,6 @@ export function RawTransactionTable({
   const [sortBy, setSortBy] = useState<SortBy>('time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(1);
-  const [hoveredWallet, setHoveredWallet] = useState<string | null>(null);
   
   const itemsPerPage = 50;
   
@@ -132,7 +122,7 @@ export function RawTransactionTable({
     fetchPrice();
   }, [tokenAddress]);
   
-  // Normalize transactions to RawTransaction format if they are UniversalTransactions
+  // Normalize transactions
   const normalizedTransactions = useMemo<RawTransaction[]>(() => {
     const txList = rawData?.transactions ?? [];
     return txList.map(tx => {
@@ -230,7 +220,7 @@ export function RawTransactionTable({
             });
           }
           
-          // Add entry for sender (SELL) - only if different from receiver
+          // Add entry for sender (SELL)
           if (transfer.from && transfer.from !== transfer.to) {
             flat.push({
               timestamp: tx.timestamp,
@@ -254,37 +244,6 @@ export function RawTransactionTable({
     return flat;
   }, [normalizedTransactions]);
   
-  // Calculate P&L for all wallets dynamically using hook (Feature 9)
-  const baseWalletPnL = useWalletPnL(
-    normalizedTransactions,
-    rawData?.holders ?? [],
-    rawData?.ohlcv ?? [],
-    currentPrice,
-    costMethod
-  );
-
-  // Fee-adjusted dynamic P&L mapping (Feature 11)
-  const walletPnL = useMemo(() => {
-    const adjusted = new Map<string, WalletPnL>();
-    
-    for (const [wallet, pnl] of baseWalletPnL.entries()) {
-      if (includeFees) {
-        adjusted.set(wallet, {
-          ...pnl,
-          realizedPnL: pnl.costBasisUnknown ? null : (pnl.netRealizedPnL !== undefined ? pnl.netRealizedPnL : pnl.realizedPnL),
-          unrealizedPnL: pnl.costBasisUnknown ? null : (pnl.netUnrealizedPnL !== undefined ? pnl.netUnrealizedPnL : pnl.unrealizedPnL),
-          totalPnL: pnl.costBasisUnknown ? null : (pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL),
-          pnlPercentage: pnl.costBasisUnknown ? null : (pnl.netPnLPercentage !== undefined ? pnl.netPnLPercentage : pnl.pnlPercentage),
-          status: pnl.costBasisUnknown ? 'unknown' : (((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) || 0) > 0.01 ? 'profit' : (((pnl.netTotalPnL !== undefined ? pnl.netTotalPnL : pnl.totalPnL) || 0) < -0.01 ? 'loss' : 'breakeven'))
-        });
-      } else {
-        adjusted.set(wallet, pnl);
-      }
-    }
-    
-    return adjusted;
-  }, [baseWalletPnL, includeFees]);
-  
   // Filter transactions
   const filteredTransactions = useMemo(() => {
     let filtered = flatTransactions;
@@ -293,20 +252,10 @@ export function RawTransactionTable({
       filtered = filtered.filter(tx => tx.action === 'BUY');
     } else if (filter === 'SELL') {
       filtered = filtered.filter(tx => tx.action === 'SELL');
-    } else if (filter === 'PROFIT') {
-      filtered = filtered.filter(tx => {
-        const pnl = walletPnL.get(tx.wallet);
-        return pnl && pnl.status === 'profit';
-      });
-    } else if (filter === 'LOSS') {
-      filtered = filtered.filter(tx => {
-        const pnl = walletPnL.get(tx.wallet);
-        return pnl && pnl.status === 'loss';
-      });
     }
     
     return filtered;
-  }, [flatTransactions, filter, walletPnL]);
+  }, [flatTransactions, filter]);
   
   // Sort transactions
   const sortedTransactions = useMemo(() => {
@@ -319,17 +268,13 @@ export function RawTransactionTable({
         comparison = a.timestamp - b.timestamp;
       } else if (sortBy === 'amount') {
         comparison = a.amount - b.amount;
-      } else if (sortBy === 'pnl') {
-        const pnlA = walletPnL.get(a.wallet);
-        const pnlB = walletPnL.get(b.wallet);
-        comparison = (pnlA?.totalPnL || 0) - (pnlB?.totalPnL || 0);
       }
       
       return sortOrder === 'asc' ? comparison : -comparison;
     });
     
     return sorted;
-  }, [filteredTransactions, sortBy, sortOrder, walletPnL]);
+  }, [filteredTransactions, sortBy, sortOrder]);
   
   // Paginate
   const paginatedTransactions = useMemo(() => {
@@ -343,7 +288,7 @@ export function RawTransactionTable({
   // Format time
   const formatTime = (timestamp: number) => {
     const now = Date.now();
-    const diff = now - (timestamp * 1000); // Convert to ms
+    const diff = now - (timestamp * 1000);
     
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
@@ -367,76 +312,57 @@ export function RawTransactionTable({
     return new Set(flatTransactions.map(tx => tx.wallet)).size;
   }, [flatTransactions]);
   
+  // Helper to format price values
+  const formatPrice = (value: number) => {
+    if (value === 0) return '$0.00';
+    if (value < 0.000001) return `$${value.toExponential(2)}`;
+    return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}`;
+  };
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      {/* Header with Stats */}
-      <div className="glass-card p-6 rounded-2xl border border-white/10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Database className="w-6 h-6 text-primary-400" />
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-xl font-black italic uppercase text-slate-200">
-                  Raw Transaction Data
-                </h3>
-                {/* Chain Badge */}
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${chainInfo.bgColor} ${chainInfo.color} border border-current/20`}>
-                  {chainInfo.emoji} {chainInfo.name}
-                </span>
-
-                {/* Verification Trust Badge (Feature 12) */}
-                <VerificationBadge trustScore={rawData.trust_score} />
-                
-                {/* Holder Spike Badge (Feature 1) */}
-                {rawData.holder_spike && (
-                  <span 
-                    title={`New holders (24h): ${rawData.new_holders_24h}, Total before: ${rawData.total_holders_before_24h}`}
-                    className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 cursor-help flex items-center gap-1 animate-pulse"
-                  >
-                    🔥 Holder Spike: +{rawData.spike_percentage?.toFixed(1)}% in 24h
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 mt-1">
-                Complete on-chain activity with real-time P&L
-              </p>
-            </div>
+      {/* Network & Summary Info */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 glass-card rounded-xl border border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-sm">{chainInfo.emoji}</span>
+            <span className="text-xs font-bold text-slate-300">Chain:</span>
+            <span className={`text-xs font-extrabold uppercase ${chainInfo.color}`}>
+              {chainInfo.name}
+            </span>
           </div>
           
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-400">Total TXs</span>
-              <span className="text-lg font-black text-white font-mono">
-                {flatTransactions.length.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-400">Unique Wallets</span>
-              <span className="text-lg font-black text-white font-mono">
-                {uniqueWalletsCount.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-slate-400">Current Price</span>
-              <span className="text-lg font-black text-primary-400 font-mono">
-                {priceLoading ? '...' : `$${currentPrice.toFixed(8)}`}
-              </span>
-            </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <Database className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-xs font-bold text-slate-300">Scanned Batch:</span>
+            <span className="text-xs font-extrabold text-white">
+              {normalizedTransactions.length} Transactions
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-xs font-bold text-slate-300">Unique Wallets:</span>
+            <span className="text-xs font-extrabold text-white">
+              {uniqueWalletsCount}
+            </span>
           </div>
         </div>
+        
+        {/* Verification System (Feature 12) */}
+        <VerificationBadge trustScore={rawData.trust_score} />
       </div>
 
-      {/* Exchange Flow Summary Card (Feature 10) */}
+      {/* Exchange Flows (Feature 10) */}
       <ExchangeFlowCard metrics={rawData.exchange_flow} tokenSymbol={tokenSymbol} />
 
-      {/* Wash Trading Summary Card */}
-      {rawData.wash_trading?.detected && (
-        <div className="glass-card p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 flex items-center gap-4">
-          <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400 border border-rose-500/20">
+      {/* Wash Trading Banner (Feature 14) */}
+      {rawData.wash_trading && rawData.wash_trading.detected && (
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 animate-pulse-glow">
+          <div className="p-2 bg-rose-500/10 rounded-lg text-rose-400">
             <RefreshCw className="w-6 h-6 animate-spin" style={{ animationDuration: '6s' }} />
           </div>
           <div>
@@ -448,7 +374,7 @@ export function RawTransactionTable({
         </div>
       )}
       
-      {/* Main layout grid (Feature 2) */}
+      {/* Main layout grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Transaction list, filters, table, pagination (span 2) */}
         <div className="lg:col-span-2 space-y-4">
@@ -457,12 +383,12 @@ export function RawTransactionTable({
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
               {/* Filter Buttons */}
               <div className="flex flex-wrap gap-2">
-                {(['ALL', 'BUY', 'SELL', 'PROFIT', 'LOSS'] as FilterType[]).map((f) => (
+                {(['ALL', 'BUY', 'SELL'] as FilterType[]).map((f) => (
                   <button
                     key={f}
                     onClick={() => {
                       setFilter(f);
-                      setPage(1); // Reset to first page
+                      setPage(1);
                     }}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                       filter === f
@@ -470,40 +396,13 @@ export function RawTransactionTable({
                         : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
-                    {f === 'PROFIT' && <TrendingUp className="w-3 h-3 inline mr-1" />}
-                    {f === 'LOSS' && <TrendingDown className="w-3 h-3 inline mr-1" />}
                     {f}
                   </button>
                 ))}
               </div>
               
-              {/* Sort and Cost Basis controls */}
+              {/* Sort and controls */}
               <div className="flex gap-4 items-center flex-wrap">
-                {/* Include Fees Toggle (Feature 11) */}
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={includeFees}
-                    onChange={(e) => setIncludeFees(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded bg-slate-900 border-white/10 text-primary-600 focus:ring-primary-500/50"
-                  />
-                  <span className="text-xs font-bold text-slate-300">Include Fees</span>
-                </label>
-
-                {/* Cost Basis Selector (Feature 9) */}
-                <div className="flex gap-2 items-center">
-                  <span className="text-xs text-slate-400">Cost Basis:</span>
-                  <select
-                    value={costMethod}
-                    onChange={(e) => setCostMethod(e.target.value as CostMethod)}
-                    className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50 font-bold"
-                  >
-                    <option value="average">Weighted Avg</option>
-                    <option value="fifo">FIFO</option>
-                    <option value="lifo">LIFO</option>
-                  </select>
-                </div>
-
                 {/* Sort Dropdown */}
                 <div className="flex gap-2 items-center">
                   <span className="text-xs text-slate-400">Sort by:</span>
@@ -514,7 +413,6 @@ export function RawTransactionTable({
                   >
                     <option value="time">Time</option>
                     <option value="amount">Amount</option>
-                    <option value="pnl">P&L</option>
                   </select>
                 </div>
                 
@@ -555,22 +453,17 @@ export function RawTransactionTable({
                       Tx Hash
                     </th>
                     <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      P&L
+                      Current Price
                     </th>
                   </tr>
                 </thead>
                 
                 <tbody>
                   {paginatedTransactions.map((tx, idx) => {
-                    const pnl = walletPnL.get(tx.wallet);
-                    const isHovered = hoveredWallet === tx.wallet;
-                    
                     return (
                       <tr
                         key={`${tx.signature}-${tx.wallet}-${idx}`}
                         className="group border-b border-white/5 hover:bg-white/5 transition-colors"
-                        onMouseEnter={() => setHoveredWallet(tx.wallet)}
-                        onMouseLeave={() => setHoveredWallet(null)}
                       >
                         {/* Time */}
                         <td className="p-4">
@@ -623,44 +516,14 @@ export function RawTransactionTable({
                           <TxHashLink hash={tx.signature} network={detectedChain as 'solana' | 'ethereum' | 'bsc'} />
                         </td>
                         
-                        {/* P&L */}
-                        <td className="p-4 text-right relative font-mono text-xs text-slate-500">
-                           {tx.action === 'TRANSFER' ? (
-                             <span>N/A</span>
-                           ) : (
-                             <div className="relative">
-                               <div className="flex items-center justify-end gap-1.5">
-                                 {pnl?.costBasisUnknown ? (
-                                   <span 
-                                     title="First purchase outside scan window. True cost basis unknown. PnL cannot be calculated reliably."
-                                     className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold cursor-help select-none"
-                                   >
-                                     Unknown Cost Basis
-                                   </span>
-                                 ) : (
-                                   <>
-                                     {pnl?.hasIncompleteHistory && (
-                                       <span 
-                                         title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
-                                         className="cursor-help text-amber-500 font-bold select-none text-xs"
-                                       >
-                                         ⚠️
-                                       </span>
-                                     )}
-                                     <PnLIndicator pnl={pnl} />
-                                   </>
-                                 )}
-                               </div>
-                               
-                               {/* Tooltip on hover */}
-                               {isHovered && pnl && !pnl.costBasisUnknown && (
-                                 <div className="absolute right-0 top-full mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                   <PnLTooltip pnl={pnl} />
-                                 </div>
-                               )}
-                             </div>
-                           )}
-                         </td>
+                        {/* Current Price */}
+                        <td className="p-4 text-right font-mono text-xs text-white font-bold">
+                          {priceLoading ? (
+                            <span className="text-slate-500">Loading...</span>
+                          ) : (
+                            formatPrice(currentPrice)
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -699,7 +562,7 @@ export function RawTransactionTable({
               </div>
             </div>
           )}
-
+          
           {/* Holder Growth Chart Component */}
           <HolderGrowthChart 
             growthData={rawData.holder_growth} 
@@ -707,7 +570,7 @@ export function RawTransactionTable({
           />
         </div>
 
-        {/* Right Column: Top Holders (span 1) */}
+        {/* Right Column: Top Holders */}
         <div className="lg:col-span-1 space-y-4">
           <div className="glass-card p-6 rounded-xl border border-white/10 bg-slate-900/10 flex flex-col h-full">
             <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
@@ -744,22 +607,7 @@ export function RawTransactionTable({
                     </div>
                     
                     <div className="text-right flex-shrink-0">
-                      <div className="text-xs font-bold text-white font-mono flex items-center justify-end gap-1">
-                        {walletPnL.get(holder.wallet)?.costBasisUnknown ? (
-                          <span 
-                            title="First purchase outside scan window. True cost basis unknown."
-                            className="cursor-help text-amber-500 font-bold select-none text-[10px]"
-                          >
-                            ⚠️
-                          </span>
-                        ) : walletPnL.get(holder.wallet)?.hasIncompleteHistory ? (
-                          <span 
-                            title="⚠️ Incomplete history – first purchase may be outside scanned window. PnL might be inaccurate."
-                            className="cursor-help text-amber-500 font-bold select-none text-[10px]"
-                          >
-                            ⚠️
-                          </span>
-                        ) : null}
+                      <div className="text-xs font-bold text-white font-mono">
                         {holder.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </div>
                       <div className="text-[9px] text-slate-500">
