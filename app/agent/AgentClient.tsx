@@ -236,10 +236,7 @@ export default function AgentClient() {
 
         {/* Control Panel */}
         <div className="glass-strong rounded-2xl p-6 mb-6 rgb-border">
-          <h2 className="text-lg font-bold text-themed mb-1">Scan Control</h2>
-          <p className="text-sm text-muted-themed mb-4">
-            Pulls top 20 boosted profiles · enriches with live pair data
-          </p>
+          <h2 className="text-lg font-bold text-themed mb-4">Scan Control</h2>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="glass rounded-lg p-3 text-center">
