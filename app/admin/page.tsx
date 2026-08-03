@@ -227,27 +227,25 @@ function AdminDashboardContent() {
             <h2 style={{ color: 'white', fontSize: '20px', fontWeight: 700, margin: 0 }}>Quick Actions</h2>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-            <ActionCard
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <CompactActionButton
               href="/admin/credit-requests"
               title="Review Credit Requests"
-              description="Approve or reject pending credit purchase requests from users"
               badge={stats.pendingRequests > 0 ? stats.pendingRequests : undefined}
               accent="#f59e0b"
               icon={
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polyline points="9 11 12 14 22 4"/>
                   <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
               }
             />
-            <ActionCard
+            <CompactActionButton
               href="/admin/payment-methods"
               title="Manage Payment Methods"
-              description="Configure wallet addresses for Binance, KuCoin, USDT, USDC, and TRX"
               accent="#7c3aed"
               icon={
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
                   <line x1="1" y1="10" x2="23" y2="10"/>
                 </svg>
@@ -332,62 +330,96 @@ function StatCard({ label, value, accent, accentBg, accentBorder, icon, urgent }
   );
 }
 
-// ─── Action Card ─────────────────────────────────────────────────────────────
+// ─── Compact Action Button ───────────────────────────────────────────────────
 
-function ActionCard({ href, title, description, badge, accent, icon }: {
-  href: string; title: string; description: string;
-  badge?: number; accent: string; icon: React.ReactNode;
+function CompactActionButton({ href, title, badge, accent, icon }: {
+  href: string; title: string; badge?: number; accent: string; icon: React.ReactNode;
 }) {
   return (
     <Link href={href} style={{ textDecoration: 'none' }}>
       <div style={{
-        background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)',
-        borderRadius: '16px', padding: '24px', cursor: 'pointer', height: '100%',
+        background: 'rgba(255,255,255,0.02)', 
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '12px', 
+        padding: '14px 18px', 
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        transition: 'all 0.2s ease',
       }}
         onMouseEnter={e => {
           const el = e.currentTarget as HTMLDivElement;
-          el.style.background = 'rgba(255,255,255,0.04)';
+          el.style.background = 'rgba(255,255,255,0.05)';
           el.style.borderColor = accent + '50';
-          el.style.transform = 'translateY(-2px)';
-          el.style.boxShadow = `0 12px 40px ${accent}18`;
+          el.style.transform = 'translateX(4px)';
         }}
         onMouseLeave={e => {
           const el = e.currentTarget as HTMLDivElement;
           el.style.background = 'rgba(255,255,255,0.02)';
-          el.style.borderColor = 'rgba(255,255,255,0.07)';
-          el.style.transform = 'translateY(0)';
-          el.style.boxShadow = 'none';
+          el.style.borderColor = 'rgba(255,255,255,0.08)';
+          el.style.transform = 'translateX(0)';
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
           <div style={{
-            width: '48px', height: '48px', borderRadius: '12px',
-            background: accent + '18', border: `1px solid ${accent}30`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent,
+            width: '36px', 
+            height: '36px', 
+            borderRadius: '10px',
+            background: accent + '18', 
+            border: `1px solid ${accent}30`,
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            color: accent,
+            flexShrink: 0,
           }}>
             {icon}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {badge !== undefined && badge > 0 && (
-              <span style={{
-                padding: '4px 12px', borderRadius: '20px',
-                background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-                color: '#f59e0b', fontSize: '13px', fontWeight: 700,
-              }}>{badge} pending</span>
-            )}
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '50%',
-              background: 'rgba(255,255,255,0.05)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b',
+          <span style={{ 
+            color: 'white', 
+            fontSize: '15px', 
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {title}
+          </span>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {badge !== undefined && badge > 0 && (
+            <span style={{
+              padding: '4px 10px', 
+              borderRadius: '20px',
+              background: 'rgba(245,158,11,0.15)', 
+              border: '1px solid rgba(245,158,11,0.3)',
+              color: '#f59e0b', 
+              fontSize: '12px', 
+              fontWeight: 700,
+              minWidth: '24px',
+              textAlign: 'center',
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </div>
+              {badge}
+            </span>
+          )}
+          <div style={{
+            width: '28px', 
+            height: '28px', 
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.05)',
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            color: '#64748b',
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
           </div>
         </div>
-        <h3 style={{ color: 'white', fontSize: '17px', fontWeight: 700, margin: '0 0 6px' }}>{title}</h3>
-        <p style={{ color: '#64748b', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>{description}</p>
       </div>
     </Link>
   );
