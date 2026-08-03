@@ -4,9 +4,13 @@ import { headers } from 'next/headers';
 import { fetchTokenPrice } from '@/services/coingeckoService';
 import type { Blockchain } from '@/types/boost';
 
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: RouteContext
 ) {
   try {
     const params = await context.params;
