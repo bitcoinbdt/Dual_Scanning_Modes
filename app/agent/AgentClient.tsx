@@ -391,7 +391,7 @@ export default function AgentClient() {
                 <div className="absolute inset-2 rounded-full border-2 border-dashed border-primary-themed/30 group-hover:border-solid group-hover:rotate-180 transition-all duration-700" />
                 
                 {/* Main robot circle */}
-                <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 rgb-border">
+                <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 border-2 border-primary-themed group-hover:border-accent-themed animate-pulse-glow">
                   {scanning ? (
                     <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-primary-themed animate-spin" />
                   ) : (
