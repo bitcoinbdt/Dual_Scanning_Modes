@@ -150,11 +150,19 @@ CREATE OR REPLACE FUNCTION deduct_boost_credits(
 RETURNS JSONB AS $$
 DECLARE
   v_current_balance INTEGER;
+  v_new_balance INTEGER;
 BEGIN
-  -- Calculate current balance (sum all amounts - they're already positive/negative)
-  SELECT COALESCE(SUM(amount), 0) INTO v_current_balance
-  FROM public.credit_transactions
-  WHERE user_id = p_user_id;
+  -- Get current balance from user_profiles
+  SELECT credits_balance INTO v_current_balance
+  FROM public.user_profiles
+  WHERE id = p_user_id;
+  
+  IF v_current_balance IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'message', 'User profile not found'
+    );
+  END IF;
   
   -- Check sufficient balance
   IF v_current_balance < p_credits THEN
@@ -164,7 +172,16 @@ BEGIN
     );
   END IF;
   
-  -- Create deduction transaction
+  -- Calculate new balance
+  v_new_balance := v_current_balance - p_credits;
+  
+  -- Update user_profiles balance
+  UPDATE public.user_profiles
+  SET credits_balance = v_new_balance,
+      updated_at = NOW()
+  WHERE id = p_user_id;
+  
+  -- Create transaction record
   INSERT INTO public.credit_transactions (
     user_id,
     type,
@@ -176,14 +193,14 @@ BEGIN
     p_user_id,
     'boost_purchase',
     -p_credits,
-    v_current_balance - p_credits,
+    v_new_balance,
     'Token boost advertising fee',
     jsonb_build_object('boost_id', p_boost_id)
   );
   
   RETURN jsonb_build_object(
     'success', true,
-    'newBalance', v_current_balance - p_credits
+    'newBalance', v_new_balance
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -196,6 +213,7 @@ RETURNS JSONB AS $$
 DECLARE
   v_boost RECORD;
   v_current_balance INTEGER;
+  v_new_balance INTEGER;
 BEGIN
   -- Get boost details
   SELECT * INTO v_boost
@@ -206,12 +224,25 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Boost not found');
   END IF;
   
-  -- Calculate current balance (sum all amounts - they're already positive/negative)
-  SELECT COALESCE(SUM(amount), 0) INTO v_current_balance
-  FROM public.credit_transactions
-  WHERE user_id = v_boost.user_id;
+  -- Get current balance from user_profiles
+  SELECT credits_balance INTO v_current_balance
+  FROM public.user_profiles
+  WHERE id = v_boost.user_id;
   
-  -- Create refund transaction
+  IF v_current_balance IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'User profile not found');
+  END IF;
+  
+  -- Calculate new balance
+  v_new_balance := v_current_balance + v_boost.credits_cost;
+  
+  -- Update user_profiles balance
+  UPDATE public.user_profiles
+  SET credits_balance = v_new_balance,
+      updated_at = NOW()
+  WHERE id = v_boost.user_id;
+  
+  -- Create refund transaction record
   INSERT INTO public.credit_transactions (
     user_id,
     type,
@@ -223,7 +254,7 @@ BEGIN
     v_boost.user_id,
     'refund',
     v_boost.credits_cost,
-    v_current_balance + v_boost.credits_cost,
+    v_new_balance,
     'Boost request rejected - credits refunded',
     jsonb_build_object('boost_id', p_boost_id, 'reason', v_boost.rejection_reason)
   );
@@ -231,7 +262,7 @@ BEGIN
   RETURN jsonb_build_object(
     'success', true,
     'refundedCredits', v_boost.credits_cost,
-    'newBalance', v_current_balance + v_boost.credits_cost
+    'newBalance', v_new_balance
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

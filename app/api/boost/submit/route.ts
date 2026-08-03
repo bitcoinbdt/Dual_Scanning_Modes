@@ -85,22 +85,30 @@ export async function POST(request: NextRequest) {
     // Calculate credit cost
     const creditsCost = BOOST_PRICING[body.durationHours];
 
-    // Check if user has enough credits
-    const { data: transactions, error: txError } = await supabase
-      .from('credit_transactions')
-      .select('amount, type')
-      .eq('user_id', user.id);
+    // Check if user has enough credits from user_profiles
+    const { data: userProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('credits_balance')
+      .eq('id', user.id)
+      .single();
 
-    if (txError) {
-      console.error('Error fetching credit balance:', txError);
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
       return NextResponse.json<BoostSubmitResponse>(
-        { success: false, message: 'Error checking credit balance', error: txError.message },
+        { success: false, message: 'Error checking credit balance', error: profileError.message },
         { status: 500 }
       );
     }
 
-    // Calculate balance - amounts are already positive/negative
-    const balance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const balance = userProfile?.credits_balance || 0;
+
+    console.log('[Boost Submit] Balance check:', {
+      userId: user.id,
+      userEmail: user.email,
+      calculatedBalance: balance,
+      requiredCredits: creditsCost,
+      hasEnough: balance >= creditsCost
+    });
 
     if (balance < creditsCost) {
       return NextResponse.json<BoostSubmitResponse>(
