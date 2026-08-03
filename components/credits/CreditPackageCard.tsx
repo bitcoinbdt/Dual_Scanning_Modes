@@ -81,10 +81,7 @@ export function CreditPackageCard({ package: pkg, isSelected, onSelect }: Credit
 
       {/* Price */}
       <div className="text-center mb-4">
-        <div className="text-2xl font-black text-primary-400 mb-1">
-          {formatSolAmount(pkg.priceSol)}
-        </div>
-        <div className="text-sm text-slate-500">
+        <div className="text-3xl font-black text-primary-400">
           {formatUsdAmount(pkg.priceUsd)}
         </div>
       </div>
