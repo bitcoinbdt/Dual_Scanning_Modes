@@ -24,10 +24,10 @@ import type { ReferralCodeResponse } from '@/types/referral';
 import toast from 'react-hot-toast';
 
 const REFERRAL_TIERS = [
-  { name: 'Starter', credits: 50, priceSol: '0.5', bonus: 5, bonusPct: 10, hot: false, best: false },
-  { name: 'Basic',   credits: 100, priceSol: '0.9', bonus: 15, bonusPct: 15, hot: false, best: false },
-  { name: 'Pro',     credits: 200, priceSol: '1.6', bonus: 40, bonusPct: 20, hot: true, best: false },
-  { name: 'Premium', credits: 500, priceSol: '3.5', bonus: 125, bonusPct: 25, hot: false, best: true },
+  { name: 'Starter', credits: 100, priceUsd: '$4.99', bonus: 20, bonusPct: 20, hot: false, best: false },
+  { name: 'Basic',   credits: 250, priceUsd: '$9.00', bonus: 50, bonusPct: 25, hot: false, best: false },
+  { name: 'Pro',     credits: 600, priceUsd: '$19.00', bonus: 150, bonusPct: 30, hot: true, best: false },
+  { name: 'Premium', credits: 1300, priceUsd: '$39.00', bonus: 400, bonusPct: 35, hot: false, best: true },
 ];
 
 const TERMS = [
@@ -258,7 +258,7 @@ export default function ReferralsClient() {
                 <tr className="text-xs text-muted-themed border-b border-white/10">
                   <th className="text-left py-2 px-3">Package</th>
                   <th className="text-center py-2 px-3">Credits</th>
-                  <th className="text-center py-2 px-3">Price (SOL)</th>
+                  <th className="text-center py-2 px-3">Price (USD)</th>
                   <th className="text-center py-2 px-3">Your Bonus</th>
                   <th className="text-center py-2 px-3">Bonus %</th>
                 </tr>
@@ -280,7 +280,7 @@ export default function ReferralsClient() {
                       )}
                     </td>
                     <td className="text-center py-3 px-3 text-themed">{tier.credits}</td>
-                    <td className="text-center py-3 px-3 text-muted-themed">{tier.priceSol}</td>
+                    <td className="text-center py-3 px-3 text-muted-themed">{tier.priceUsd}</td>
                     <td className="text-center py-3 px-3">
                       <span className="inline-flex items-center gap-1 text-primary-themed font-bold">
                         <Zap className="w-3.5 h-3.5" fill="currentColor" />
@@ -347,7 +347,7 @@ export default function ReferralsClient() {
               { step: 1, title: 'Share Code', desc: 'Send your referral code to friends' },
               { step: 2, title: 'They Sign Up', desc: 'Friend uses your code during signup' },
               { step: 3, title: 'First Purchase', desc: 'They buy their first credits' },
-              { step: 4, title: 'Get Bonus', desc: 'Earn 10–25% bonus credits instantly' },
+              { step: 4, title: 'Get Bonus', desc: 'Earn 20–35% bonus credits instantly' },
             ].map(({ step, title, desc }) => (
               <div key={step} className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold shrink-0">

@@ -104,8 +104,8 @@ export function InsufficientCreditsModal({
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6">
               <h4 className="text-sm font-bold text-blue-400 mb-2">💡 Recommended Package</h4>
               <p className="text-slate-300 text-xs">
-                The <span className="font-bold text-white">Starter Package (50 credits)</span> would give you{' '}
-                {Math.floor(50 / SCAN_COSTS[scanType])} {scanType === 'BASIC' ? 'Basic' : 'Elevator'} scans
+                The <span className="font-bold text-white">Starter Package (100 credits for $4.99)</span> would give you{' '}
+                {Math.floor(100 / SCAN_COSTS[scanType])} {scanType === 'BASIC' ? 'Basic' : 'Elevator'} scans
               </p>
             </div>
 
