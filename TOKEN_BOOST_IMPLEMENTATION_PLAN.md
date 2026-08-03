@@ -5,38 +5,158 @@ A credit-based token advertising system where users can submit tokens for featur
 
 ---
 
-## 1. Feature Placement Locations
+## 1. Feature Placement Locations (Code-Based Analysis)
 
-### Current Locations Identified:
-Based on the screenshot provided and codebase analysis:
+### Placement Location #1: Home Page (Scanner) - PRIMARY
+**File**: `app/page.tsx`  
+**Line Reference**: Between `<NewsTimeline />` and `{/* Scan Terminal */}` section  
+**Exact Position**: After line with NewsTimeline component, before the scanner terminal card  
+**Priority**: **HIGHEST** - Most visible, prime real estate
 
-1. **Home Page (Scanner Page) - Top Boosted Section**
-   - Location: Above the scan terminal
-   - Display: Horizontal scrolling carousel of boosted tokens
-   - Shows: Token logo, name, symbol, **live price from CoinGecko**, boost indicator
-   - Interaction: **Click to auto-populate scanner input field** (no auto-scan)
-   - Priority: HIGH (Most visible)
+```tsx
+// app/page.tsx - Line ~270
+<main className="max-w-4xl mx-auto px-4 sm:px-6 pt-28 pb-16">
+  {/* News Timeline */}
+  <NewsTimeline />
 
-2. **Agent Page - Featured Tokens Banner**
-   - Location: Below control panel, above results
-   - Display: Featured token cards
-   - Shows: Logo, symbol, live price, performance metrics
-   - Interaction: **Click to navigate to home page with pre-filled address**
-   - Priority: MEDIUM
+  {/* ✨ INSERT BOOSTED TOKENS BANNER HERE ✨ */}
+  <BoostedTokenBanner 
+    placement="home" 
+    onTokenClick={handleBoostedTokenClick} 
+  />
 
-3. **Pricing Page - Sponsored Tokens Section**
-   - Location: Between pricing cards and footer
-   - Display: Grid of featured tokens
-   - Shows: Logo, symbol, live price
-   - Interaction: **Click to navigate to home page with pre-filled address**
-   - Priority: LOW
+  {/* Scan Terminal */}
+  <section className="mb-6">
+    <div className="glass-strong rounded-2xl p-6 sm:p-8 rgb-border">
+      ...
+    </div>
+  </section>
+</main>
+```
 
-4. **Navigation Bar - Rotating Featured Token**
-   - Location: Between navigation links and credit badge
-   - Display: Small rotating token badge
-   - Shows: Logo + symbol + live price
-   - Interaction: **Click to navigate to home page with pre-filled address**
-   - Priority: LOW
+**Display Format**:
+- Horizontal scrolling carousel
+- Shows 5-7 compact token cards at once
+- Positioned prominently above scanner input
+- Full-width responsive container
+- Minimal spacing (mb-4 or mb-6)
+
+---
+
+### Placement Location #2: Agent Page - SECONDARY
+**File**: `app/agent/AgentClient.tsx`  
+**Line Reference**: After control panel, before results/empty state  
+**Exact Position**: After the control panel cards grid, before `{/* Empty state */}` section  
+**Priority**: **MEDIUM**
+
+```tsx
+// app/agent/AgentClient.tsx - After control panel
+<div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
+  {/* Control Panel with status badge and metrics */}
+  ...
+</div>
+
+{/* ✨ INSERT FEATURED TOKENS BANNER HERE ✨ */}
+{!scanning && tokens.length === 0 && !error && (
+  <BoostedTokenBanner 
+    placement="agent" 
+  />
+)}
+
+{/* Empty state or Results */}
+```
+
+**Display Format**:
+- Horizontal row of 3-5 featured tokens
+- Only shown when no agent results are displayed
+- Links redirect to home page with address param
+- Matches control panel styling
+
+---
+
+### Placement Location #3: Pricing Page - TERTIARY
+**File**: `app/pricing/PricingClient.tsx`  
+**Line Reference**: After "Why Choose OnChain Alpha?" section, before CTA  
+**Exact Position**: After benefits grid, before final CTA button  
+**Priority**: **LOW**
+
+```tsx
+// app/pricing/PricingClient.tsx - Line ~155
+{/* Benefits */}
+<motion.div className="glass-strong rounded-2xl p-6 mb-8">
+  <h2 className="text-xl font-bold gradient-text mb-5">Why Choose OnChain Alpha?</h2>
+  ...
+</motion.div>
+
+{/* ✨ INSERT SPONSORED TOKENS SECTION HERE ✨ */}
+<motion.div
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.35 }}
+  className="glass-strong rounded-2xl p-6 mb-8"
+>
+  <h2 className="text-xl font-bold gradient-text mb-5">Featured Tokens</h2>
+  <BoostedTokenBanner placement="pricing" />
+</motion.div>
+
+{/* CTA */}
+<motion.div className="text-center">
+  ...
+</motion.div>
+```
+
+**Display Format**:
+- Grid layout: 2 rows × 3 columns on desktop
+- Wrapped in titled section
+- Static display (no scrolling)
+- Links redirect to home page
+
+---
+
+### Placement Location #4: Navigation Bar - OPTIONAL (Phase 2)
+**File**: `components/layout/Navigation.tsx`  
+**Line Reference**: Between navigation links and credit badge  
+**Priority**: **LOWEST** (Future Enhancement)
+
+```tsx
+// components/layout/Navigation.tsx - Inside header nav
+<div className="flex items-center gap-3">
+  {/* Navigation links */}
+  
+  {/* ✨ INSERT ROTATING FEATURED TOKEN HERE ✨ */}
+  <RotatingFeaturedToken />
+  
+  {/* Credit badge */}
+  {isAuthenticated && (
+    <button className="flex items-center gap-1.5...">
+      ...
+    </button>
+  )}
+</div>
+```
+
+**Display Format**:
+- Single token, rotates every 10 seconds
+- Very compact: Logo + Symbol + Price only
+- 100-120px width max
+- Click redirects to home
+
+---
+
+## Summary of Placements by Priority:
+
+| Location | File | Priority | Visibility | Interaction |
+|----------|------|----------|------------|-------------|
+| **Home (Above Scanner)** | `app/page.tsx` | HIGHEST | Maximum | Direct populate input |
+| **Agent (Below Control)** | `app/agent/AgentClient.tsx` | MEDIUM | High | Redirect with address |
+| **Pricing (Before CTA)** | `app/pricing/PricingClient.tsx` | LOW | Medium | Redirect with address |
+| **Navigation Bar** | `components/layout/Navigation.tsx` | LOWEST | Persistent | Redirect with address |
+
+**Implementation Order**: 
+1. Home page (Phase 3, Week 1)
+2. Agent page (Phase 3, Week 1)
+3. Pricing page (Phase 3, Week 2)
+4. Navigation bar (Phase 4 or Future)
 
 ---
 
