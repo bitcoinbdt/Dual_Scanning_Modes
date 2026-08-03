@@ -110,8 +110,8 @@ export default function AgentClient() {
     setTokens([]);
 
     const interval = setInterval(() => {
-      setProgress((p) => Math.min(p + 1, 19));
-    }, 120);
+      setProgress((p) => Math.min(p + 1, 9));
+    }, 180);
 
     try {
       const token = localStorage.getItem('authToken');
@@ -137,7 +137,7 @@ export default function AgentClient() {
       refreshBalance();
       
       clearInterval(interval);
-      setProgress(20);
+      setProgress(10);
       setTokens(data.tokens || []);
       setLastScan(new Date().toLocaleTimeString());
       toast.success('Agent completed successfully! 5 credits deducted.');
@@ -255,12 +255,12 @@ export default function AgentClient() {
             <div className="mt-4 animate-fade-in">
               <div className="flex items-center justify-between text-xs text-muted-themed mb-1">
                 <span>Progress</span>
-                <span>{progress} / 20</span>
+                <span>{progress} / 10</span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full gradient-primary transition-all duration-150"
-                  style={{ width: `${(progress / 20) * 100}%` }}
+                  style={{ width: `${(progress / 10) * 100}%` }}
                 />
               </div>
             </div>
@@ -291,9 +291,9 @@ export default function AgentClient() {
         {!scanning && tokens.length > 0 && (
           <div className="animate-fade-in">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-themed">{tokens.length} hype tokens found</h2>
+              <h2 className="text-xl font-bold text-themed">Top {tokens.length} Hype Tokens</h2>
               <span className="text-xs text-muted-themed flex items-center gap-1">
-                <Activity className="w-3 h-3" /> Sorted by boost rank
+                <Activity className="w-3 h-3" /> Sorted by hype score
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -431,10 +431,10 @@ export default function AgentClient() {
 
             <h3 className="text-lg sm:text-xl font-bold text-themed mb-1 sm:mb-2">No results yet</h3>
             <p className="text-xs sm:text-sm text-muted-themed mb-1 sm:mb-2">
-              Click the robot to scan for trending tokens
+              Click the robot to find the top 10 hyped tokens
             </p>
             <p className="text-[10px] sm:text-xs text-muted-themed/70">
-              Fetches top 20 boosted profiles from DexScreener
+              Multi-source discovery · Quality filtered · Cross-chain
             </p>
 
             {/* Preview cards */}
