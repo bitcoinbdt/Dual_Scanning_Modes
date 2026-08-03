@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Combine boosts with their analytics
     const requests = boosts.map((boost: any) => {
-      const boostAnalytics = analytics.find((a) => a.boost_request_id === boost.id);
+      const boostAnalytics = analytics.find((a: any) => a.boost_request_id === boost.id);
 
       return {
         id: boost.id,
@@ -87,8 +87,8 @@ export async function GET(request: NextRequest) {
         },
         analytics: boostAnalytics
           ? {
-              totalScans: boostAnalytics.total_scans,
-              lastScanAt: boostAnalytics.last_scan_at,
+              totalScans: (boostAnalytics as any).total_scans,
+              lastScanAt: (boostAnalytics as any).last_scan_at,
             }
           : null,
       };
