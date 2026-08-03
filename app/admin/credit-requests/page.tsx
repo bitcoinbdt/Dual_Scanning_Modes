@@ -50,36 +50,36 @@ function CreditRequestsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0118] py-8 px-4">
+    <div className="min-h-screen bg-[#0a0118] py-4 md:py-8 px-3 md:px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Credit Purchase Requests
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+              Credit Requests
               {filter === 'pending' && pendingCount > 0 && (
-                <span className="ml-3 px-3 py-1 bg-yellow-500/20 text-yellow-400 text-lg rounded-full">
-                  {pendingCount} pending
+                <span className="ml-2 md:ml-3 px-2 md:px-3 py-1 bg-yellow-500/20 text-yellow-400 text-sm md:text-lg rounded-full">
+                  {pendingCount}
                 </span>
               )}
             </h1>
-            <p className="text-gray-400">Review and approve credit purchase requests</p>
+            <p className="text-sm md:text-base text-gray-400">Review and approve credit purchase requests</p>
           </div>
           <Link
             href="/admin"
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            className="px-3 md:px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm md:text-base whitespace-nowrap"
           >
-            ← Back to Admin
+            ← Back
           </Link>
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto pb-2">
           {(['pending', 'approved', 'rejected', 'all'] as const).map((status) => (
             <button
               key={status}
               onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg transition-colors capitalize ${
+              className={`px-3 md:px-4 py-2 rounded-lg transition-colors capitalize text-sm md:text-base whitespace-nowrap ${
                 filter === status
                   ? 'bg-purple-600 text-white'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
@@ -161,21 +161,21 @@ function RequestCard({ request, onReview, onReload }: RequestCardProps) {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-lg font-semibold text-white">
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
+        <div className="flex-1 w-full">
+          <div className="flex items-center gap-2 md:gap-3 mb-2 flex-wrap">
+            <h3 className="text-base md:text-lg font-semibold text-white">
               {request.credits_amount} Credits
             </h3>
-            <span className={`px-3 py-1 text-sm rounded-full border ${statusColors[request.status]}`}>
+            <span className={`px-2 md:px-3 py-1 text-xs md:text-sm rounded-full border ${statusColors[request.status]}`}>
               {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
             </span>
           </div>
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-xs md:text-sm">
             Requested by: <span className="text-white">{request.user_email || 'Unknown'}</span>
           </p>
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-xs md:text-sm">
             Submitted: {formatDate(request.created_at)}
           </p>
         </div>
@@ -183,14 +183,14 @@ function RequestCard({ request, onReview, onReload }: RequestCardProps) {
         {request.status === 'pending' && (
           <button
             onClick={onReview}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+            className="w-full sm:w-auto px-3 md:px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm md:text-base"
           >
             Review
           </button>
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-700">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-4 pt-4 border-t border-gray-700">
         <div>
           <p className="text-sm text-gray-400 mb-1">Payment Method</p>
           <p className="text-white font-medium">
@@ -209,9 +209,9 @@ function RequestCard({ request, onReview, onReload }: RequestCardProps) {
         </div>
 
         <div className="md:col-span-2">
-          <p className="text-sm text-gray-400 mb-1">Transaction Hash</p>
-          <div className="flex items-center gap-2">
-            <p className="text-white font-mono text-sm break-all bg-gray-900/50 px-3 py-2 rounded flex-1">
+          <p className="text-xs md:text-sm text-gray-400 mb-1">Transaction Hash</p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <p className="text-white font-mono text-xs md:text-sm break-all bg-gray-900/50 px-3 py-2 rounded flex-1">
               {request.transaction_hash}
             </p>
             <button
@@ -219,7 +219,7 @@ function RequestCard({ request, onReview, onReload }: RequestCardProps) {
                 navigator.clipboard.writeText(request.transaction_hash);
                 toast.success('Copied!');
               }}
-              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm"
+              className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-xs md:text-sm whitespace-nowrap"
             >
               Copy
             </button>
@@ -292,9 +292,9 @@ function ReviewModal({ request, onClose, onSuccess }: ReviewModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 max-w-2xl w-full">
-        <h2 className="text-2xl font-bold text-white mb-6">Review Credit Request</h2>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4">
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl md:text-2xl font-bold text-white mb-4 md:mb-6">Review Credit Request</h2>
 
         {/* Request Summary */}
         <div className="bg-gray-900/50 rounded-lg p-4 mb-6 space-y-2">

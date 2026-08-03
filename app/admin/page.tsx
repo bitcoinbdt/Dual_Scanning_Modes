@@ -78,16 +78,16 @@ function AdminDashboardContent() {
         top: 0,
         zIndex: 50,
       }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 16px' }}>
+          <div className="h-14 md:h-16" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="w-8 h-8 md:w-9 md:h-9" style={{
+                borderRadius: '8px',
                 background: 'linear-gradient(135deg, #7c3aed, #db2777)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 0 20px rgba(124,58,237,0.4)',
               }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
@@ -100,11 +100,12 @@ function AdminDashboardContent() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 onClick={loadStats}
+                className="hidden md:flex"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
+                  alignItems: 'center', gap: '6px',
                   padding: '8px 14px', borderRadius: '8px',
                   background: 'rgba(255,255,255,0.05)',
                   border: '1px solid rgba(255,255,255,0.08)',
@@ -117,31 +118,32 @@ function AdminDashboardContent() {
                   <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
                   <path d="M8 16H3v5"/>
                 </svg>
-                Refresh
+                <span className="hidden lg:inline">Refresh</span>
               </button>
 
               <Link
                 href="/"
+                className="text-xs md:text-sm px-3 py-2 md:px-4 md:py-2"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: '8px',
+                  borderRadius: '8px',
                   background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(219,39,119,0.2))',
                   border: '1px solid rgba(124,58,237,0.3)',
-                  color: '#c4b5fd', fontSize: '13px', fontWeight: 600,
+                  color: '#c4b5fd', fontWeight: 600,
                   textDecoration: 'none',
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
-                Back to App
+                <span className="hidden sm:inline">Back to App</span>
               </Link>
 
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%',
+              <div className="w-8 h-8 md:w-9 md:h-9" style={{
+                borderRadius: '50%',
                 background: 'linear-gradient(135deg, #7c3aed, #db2777)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'white', fontWeight: 700, fontSize: '14px',
+                color: 'white', fontWeight: 700, fontSize: '13px',
                 border: '2px solid rgba(124,58,237,0.4)',
               }}>
                 {user?.email?.charAt(0).toUpperCase()}
@@ -151,23 +153,23 @@ function AdminDashboardContent() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
 
         {/* Hero Header */}
-        <div style={{ marginBottom: '40px' }}>
-          <p style={{ color: '#7c3aed', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '8px' }}>
+        <div style={{ marginBottom: '32px' }}>
+          <p style={{ color: '#7c3aed', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '6px' }}>
             {greeting()}, Admin
           </p>
-          <h1 style={{ color: 'white', fontSize: '36px', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: '8px', margin: 0 }}>
+          <h1 className="text-2xl md:text-4xl" style={{ color: 'white', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: '8px', margin: 0 }}>
             Dashboard Overview
           </h1>
-          <p style={{ color: '#475569', fontSize: '14px', marginTop: '8px' }}>
+          <p className="text-xs md:text-sm" style={{ color: '#475569', marginTop: '8px' }}>
             {user?.email} &middot; {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
 
         {/* Stats Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '40px' }}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5" style={{ marginBottom: '32px' }}>
           <StatCard
             label="Pending Requests"
             value={loading ? null : stats.pendingRequests}
@@ -223,9 +225,9 @@ function AdminDashboardContent() {
         </div>
 
         {/* Quick Actions */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-            <h2 style={{ color: 'white', fontSize: '20px', fontWeight: 700, margin: 0 }}>Quick Actions</h2>
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <h2 className="text-lg md:text-xl" style={{ color: 'white', fontWeight: 700, margin: 0 }}>Quick Actions</h2>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -329,7 +331,8 @@ function StatCard({ label, value, accent, accentBg, accentBorder, icon, urgent }
     <div style={{
       background: 'rgba(255,255,255,0.02)',
       border: `1px solid ${urgent ? accent + '60' : accentBorder}`,
-      borderRadius: '16px', padding: '24px',
+      borderRadius: '12px', 
+      padding: '16px',
       position: 'relative', overflow: 'hidden',
       boxShadow: urgent ? `0 0 24px ${accent}28` : 'none',
     }}>
@@ -338,27 +341,27 @@ function StatCard({ label, value, accent, accentBg, accentBorder, icon, urgent }
         width: '80px', height: '80px', borderRadius: '50%',
         background: accentBg, filter: 'blur(20px)', pointerEvents: 'none',
       }} />
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div style={{
-          width: '44px', height: '44px', borderRadius: '12px',
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <div className="w-8 h-8 md:w-11 md:h-11" style={{
+          borderRadius: '10px',
           background: accentBg, border: `1px solid ${accentBorder}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          {icon}
+          <div className="scale-75 md:scale-100">{icon}</div>
         </div>
         {urgent && (
-          <span style={{
-            padding: '4px 10px', borderRadius: '20px',
+          <span className="hidden md:inline-block" style={{
+            padding: '4px 8px', borderRadius: '20px',
             background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-            color: '#f59e0b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-          }}>Action Needed</span>
+            color: '#f59e0b', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+          }}>Action</span>
         )}
       </div>
-      <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 500, margin: '0 0 6px' }}>{label}</p>
+      <p className="text-xs md:text-sm" style={{ color: '#64748b', fontWeight: 500, margin: '0 0 4px' }}>{label}</p>
       {value === null ? (
-        <div style={{ width: '60px', height: '36px', background: 'rgba(255,255,255,0.06)', borderRadius: '8px' }} />
+        <div style={{ width: '40px', height: '28px', background: 'rgba(255,255,255,0.06)', borderRadius: '8px' }} />
       ) : (
-        <p style={{ color: 'white', fontSize: '42px', fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, margin: 0 }}>
+        <p className="text-3xl md:text-5xl" style={{ color: 'white', fontWeight: 800, letterSpacing: '-1px', lineHeight: 1, margin: 0 }}>
           {value}
         </p>
       )}
@@ -377,12 +380,12 @@ function CompactActionButton({ href, title, badge, accent, icon }: {
         background: 'rgba(255,255,255,0.02)', 
         border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '12px', 
-        padding: '14px 18px', 
+        padding: '12px 14px', 
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '12px',
+        gap: '10px',
         transition: 'all 0.2s ease',
       }}
         onMouseEnter={e => {
@@ -398,11 +401,9 @@ function CompactActionButton({ href, title, badge, accent, icon }: {
           el.style.transform = 'translateX(0)';
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-          <div style={{
-            width: '36px', 
-            height: '36px', 
-            borderRadius: '10px',
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+          <div className="w-8 h-8 md:w-9 md:h-9" style={{
+            borderRadius: '8px',
             background: accent + '18', 
             border: `1px solid ${accent}30`,
             display: 'flex', 
@@ -411,11 +412,10 @@ function CompactActionButton({ href, title, badge, accent, icon }: {
             color: accent,
             flexShrink: 0,
           }}>
-            {icon}
+            <div className="scale-90 md:scale-100">{icon}</div>
           </div>
-          <span style={{ 
+          <span className="text-sm md:text-base" style={{ 
             color: 'white', 
-            fontSize: '15px', 
             fontWeight: 600,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -425,25 +425,22 @@ function CompactActionButton({ href, title, badge, accent, icon }: {
           </span>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {badge !== undefined && badge > 0 && (
-            <span style={{
-              padding: '4px 10px', 
+            <span className="text-xs md:text-sm" style={{
+              padding: '3px 8px', 
               borderRadius: '20px',
               background: 'rgba(245,158,11,0.15)', 
               border: '1px solid rgba(245,158,11,0.3)',
               color: '#f59e0b', 
-              fontSize: '12px', 
               fontWeight: 700,
-              minWidth: '24px',
+              minWidth: '20px',
               textAlign: 'center',
             }}>
               {badge}
             </span>
           )}
-          <div style={{
-            width: '28px', 
-            height: '28px', 
+          <div className="w-6 h-6 md:w-7 md:h-7" style={{
             borderRadius: '50%',
             background: 'rgba(255,255,255,0.05)',
             display: 'flex', 
@@ -451,7 +448,7 @@ function CompactActionButton({ href, title, badge, accent, icon }: {
             justifyContent: 'center', 
             color: '#64748b',
           }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
           </div>

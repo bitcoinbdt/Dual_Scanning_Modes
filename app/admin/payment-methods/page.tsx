@@ -104,24 +104,24 @@ function PaymentMethodsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0118] py-8 px-4">
+    <div className="min-h-screen bg-[#0a0118] py-4 md:py-8 px-3 md:px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Configure Gateways</h1>
-            <p className="text-gray-400">Set addresses for the 5 default payment methods below</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Configure Gateways</h1>
+            <p className="text-sm md:text-base text-gray-400">Set addresses for the 5 default payment methods below</p>
           </div>
           <Link
             href="/admin"
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors border border-white/10"
+            className="px-3 md:px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors border border-white/10 text-sm md:text-base whitespace-nowrap"
           >
-            ← Back to Admin
+            ← Back
           </Link>
         </div>
 
         {/* Predefined Grid Layout of Default Methods */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {paymentMethods
             .sort((a, b) => a.display_order - b.display_order)
             .map((method) => (
@@ -227,14 +227,14 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
   const brand = getBrandDetails(method.name);
 
   return (
-    <div className={`glass-card rounded-2xl border ${brand.border} p-6 transition-all duration-300 shadow-xl ${isActive ? `shadow-2xl ${brand.glow}` : 'opacity-70 hover:opacity-100'}`}>
-      <div className="flex items-center justify-between mb-6">
+    <div className={`glass-card rounded-2xl border ${brand.border} p-4 md:p-6 transition-all duration-300 shadow-xl ${isActive ? `shadow-2xl ${brand.glow}` : 'opacity-70 hover:opacity-100'}`}>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 gap-3">
         <div className="flex items-center gap-3">
-          <PaymentMethodLogo name={method.name} className="w-10 h-10" />
+          <PaymentMethodLogo name={method.name} className="w-8 h-8 md:w-10 md:h-10" />
           <div>
-            <h3 className="text-xl font-bold text-white">{method.name}</h3>
+            <h3 className="text-lg md:text-xl font-bold text-white">{method.name}</h3>
             {method.network && (
-              <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${brand.bg} ${brand.text}`}>
+              <span className={`px-2 md:px-2.5 py-0.5 rounded text-xs font-bold ${brand.bg} ${brand.text}`}>
                 {method.network} Network
               </span>
             )}
@@ -250,13 +250,13 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
             className="sr-only peer" 
           />
           <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white"></div>
-          <span className="ml-2.5 text-sm font-semibold text-slate-400">
+          <span className="ml-2 md:ml-2.5 text-xs md:text-sm font-semibold text-slate-400">
             {isActive ? 'Active' : 'Inactive'}
           </span>
         </label>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 md:space-y-4">
         {/* Address Input */}
         <div>
           <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
@@ -266,7 +266,7 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
             type="text"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-white focus:outline-none"
             placeholder={`Enter ${method.name} identifier`}
           />
         </div>
@@ -280,7 +280,7 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
             type="text"
             value={qrCodeUrl}
             onChange={(e) => setQrCodeUrl(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none font-mono"
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-white focus:outline-none font-mono"
             placeholder="https://example.com/qr.png"
           />
         </div>
@@ -293,7 +293,7 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
           <textarea
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-white focus:outline-none"
             placeholder="Step by step instructions for the buyer..."
             rows={2}
           />
@@ -303,7 +303,7 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full mt-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+          className="w-full mt-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2.5 md:py-3 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
         >
           {saving ? 'Saving changes...' : 'Save Configuration'}
         </button>
