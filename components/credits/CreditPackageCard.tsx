@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Check, Flame, Star, Zap } from 'lucide-react';
 import type { CreditPackage } from '@/types/credits';
-import { calculateScanExamples, formatSolAmount, formatUsdAmount } from '@/services/creditApi';
+import { calculateScanExamples, formatUsdAmount } from '@/services/creditApi';
 
 interface CreditPackageCardProps {
   package: CreditPackage;

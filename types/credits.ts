@@ -4,7 +4,6 @@ export interface CreditPackage {
   id: string;
   name: string;
   credits: number;
-  priceSol: number;
   priceUsd: number;
   bonusPercentage: number;
   displayOrder: number;
@@ -24,21 +23,7 @@ export interface CreditTransaction {
   amount: number;
   description: string;
   balanceAfter: number;
-  solanaTxSignature?: string;
   createdAt: string;
-}
-
-export interface PurchaseCreditRequest {
-  packageId: string;
-  walletAddress: string;
-  txSignature: string;
-}
-
-export interface PurchaseCreditResponse {
-  success: boolean;
-  newBalance: number;
-  transactionId: string;
-  creditsAdded: number;
 }
 
 export interface ScanCostInfo {

@@ -4,7 +4,8 @@ import { CreditPackage } from '@/types/credits';
 /**
  * GET /api/credits/packages
  * Returns the available credit packages for the manual purchase system.
- * These are fixed tiers — the user picks one, pays the admin, submits a tx hash.
+ * These are fixed tiers — the user picks one, pays via a manual gateway,
+ * submits proof, and an admin approves the credit top-up.
  */
 export async function GET(request: NextRequest) {
   const packages: CreditPackage[] = [
@@ -12,7 +13,6 @@ export async function GET(request: NextRequest) {
       id: 'starter',
       name: 'Starter',
       credits: 100,
-      priceSol: 0.5,
       priceUsd: 4.99,
       bonusPercentage: 20,
       displayOrder: 1,
@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
       id: 'basic',
       name: 'Basic',
       credits: 250,
-      priceSol: 0.9,
       priceUsd: 9,
       bonusPercentage: 25,
       displayOrder: 2,
@@ -30,7 +29,6 @@ export async function GET(request: NextRequest) {
       id: 'pro',
       name: 'Pro',
       credits: 600,
-      priceSol: 1.6,
       priceUsd: 19,
       bonusPercentage: 30,
       displayOrder: 3,
@@ -41,7 +39,6 @@ export async function GET(request: NextRequest) {
       id: 'premium',
       name: 'Premium',
       credits: 1300,
-      priceSol: 3.5,
       priceUsd: 39,
       bonusPercentage: 35,
       displayOrder: 4,

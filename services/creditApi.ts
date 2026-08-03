@@ -2,14 +2,10 @@ import axios from 'axios';
 import type {
   CreditBalance,
   CreditPackage,
-  PurchaseCreditRequest,
-  PurchaseCreditResponse,
   CreditHistoryQuery,
   CreditHistoryResponse,
 } from '@/types/credits';
 
-// Use the Next.js proxy rewrite (/proxy/api/*) so the browser never makes a
-// cross-origin request. Next.js forwards it server-side to the real backend.
 const creditApiClient = axios.create({
   baseURL: '',
   timeout: 30000,
@@ -29,7 +25,7 @@ creditApiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor to handle network errors gracefully
+// Suppress noisy backend-unavailable errors
 let hasLoggedBackendUnavailable = false;
 
 creditApiClient.interceptors.response.use(
@@ -52,13 +48,8 @@ export async function getCreditBalance(): Promise<CreditBalance> {
   try {
     const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
     return response.data;
-  } catch (error: any) {
-    // Silently fall back to mock balance - no need to spam console
-    return {
-      balance: 0,
-      totalPurchased: 0,
-      totalSpent: 0,
-    };
+  } catch {
+    return { balance: 0, totalPurchased: 0, totalSpent: 0 };
   }
 }
 
@@ -69,22 +60,8 @@ export async function getCreditPackages(): Promise<CreditPackage[]> {
   try {
     const response = await creditApiClient.get<{ packages: CreditPackage[] }>('/api/credits/packages');
     return response.data.packages;
-  } catch (error: any) {
-    // Silently fall back to mock packages
+  } catch {
     return getMockPackages();
-  }
-}
-
-/**
- * Purchase credits with Phantom wallet
- */
-export async function purchaseCredits(data: PurchaseCreditRequest): Promise<PurchaseCreditResponse> {
-  try {
-    const response = await creditApiClient.post<PurchaseCreditResponse>('/proxy/api/credits/purchase', data);
-    return response.data;
-  } catch (error: any) {
-    console.error('Error purchasing credits:', error);
-    throw new Error(error.response?.data?.message || 'Failed to purchase credits');
   }
 }
 
@@ -97,12 +74,8 @@ export async function getCreditHistory(query?: CreditHistoryQuery): Promise<Cred
       params: query,
     });
     return response.data;
-  } catch (error: any) {
-    console.error('Error fetching credit history:', error);
-    return {
-      transactions: [],
-      total: 0,
-    };
+  } catch {
+    return { transactions: [], total: 0 };
   }
 }
 
@@ -119,7 +92,7 @@ export async function checkSufficientCredits(scanType: 'BASIC' | 'ELEVATOR'): Pr
   const balance = await getCreditBalance();
   const required = SCAN_COSTS[scanType];
   const sufficient = balance.balance >= required;
-  
+
   return {
     sufficient,
     required,
@@ -129,64 +102,15 @@ export async function checkSufficientCredits(scanType: 'BASIC' | 'ELEVATOR'): Pr
 }
 
 /**
- * Mock packages for development (until backend is ready)
+ * Fallback packages (used when API is unavailable)
  */
 function getMockPackages(): CreditPackage[] {
   return [
-    {
-      id: 'starter',
-      name: 'Starter',
-      credits: 100,
-      priceSol: 0.5,
-      priceUsd: 4.99,
-      bonusPercentage: 20,
-      displayOrder: 1,
-    },
-    {
-      id: 'basic',
-      name: 'Basic',
-      credits: 250,
-      priceSol: 0.9,
-      priceUsd: 9,
-      bonusPercentage: 25,
-      displayOrder: 2,
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      credits: 600,
-      priceSol: 1.6,
-      priceUsd: 19,
-      bonusPercentage: 30,
-      displayOrder: 3,
-      isHot: true,
-      isBestValue: true,
-    },
-    {
-      id: 'premium',
-      name: 'Premium',
-      credits: 1300,
-      priceSol: 3.5,
-      priceUsd: 39,
-      bonusPercentage: 35,
-      displayOrder: 4,
-    },
+    { id: 'starter',  name: 'Starter',  credits: 100,  priceUsd: 4.99, bonusPercentage: 20, displayOrder: 1 },
+    { id: 'basic',    name: 'Basic',    credits: 250,  priceUsd: 9,    bonusPercentage: 25, displayOrder: 2 },
+    { id: 'pro',      name: 'Pro',      credits: 600,  priceUsd: 19,   bonusPercentage: 30, displayOrder: 3, isHot: true, isBestValue: true },
+    { id: 'premium',  name: 'Premium',  credits: 1300, priceUsd: 39,   bonusPercentage: 35, displayOrder: 4 },
   ];
-}
-
-/**
- * Validate Solana transaction signature format
- */
-export function isValidSolanaSignature(signature: string): boolean {
-  // Solana signatures are base58 encoded and typically 87-88 characters
-  return /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(signature);
-}
-
-/**
- * Format SOL amount for display
- */
-export function formatSolAmount(amount: number): string {
-  return `${amount.toFixed(2)} SOL`;
 }
 
 /**
