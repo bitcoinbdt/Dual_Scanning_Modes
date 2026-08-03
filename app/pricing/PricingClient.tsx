@@ -129,6 +129,11 @@ export default function PricingClient() {
               cost={2}
               desc="Quick security audit, risk metrics, and market overview for any token."
             />
+            <CostCard
+              title="Crypto Hype Agent 🤖"
+              cost={5}
+              desc="Fetches and ranks the top 20 boosted DexScreener tokens with live pair enrichment — runs once per click."
+            />
             {ELEVATOR_COSTS.map((opt) => (
               <CostCard
                 key={opt.credits}
