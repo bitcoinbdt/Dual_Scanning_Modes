@@ -40,14 +40,14 @@ export async function GET(request: NextRequest) {
 function getFallbackPaymentMethods() {
   return [
     {
-      id: 'sol-wallet',
-      name: 'Solana (SOL)',
+      id: 'usdc-wallet',
+      name: 'USDC',
       type: 'crypto',
-      address: process.env.PAYMENT_WALLET_SOL || 'Configure SOL wallet in admin panel',
-      instructions: 'Send SOL to the address above, then submit your transaction hash.',
+      address: process.env.PAYMENT_WALLET_USDC || 'Configure USDC wallet in admin panel',
+      instructions: 'Send USDC to the address above, then submit your transaction hash.',
       is_active: true,
       display_order: 1,
-      icon: 'SOL',
+      icon: 'USDC',
     },
     {
       id: 'usdt-trc20',
