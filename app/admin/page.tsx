@@ -90,7 +90,7 @@ function AdminDashboardContent() {
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <div>
+              <div className="hidden md:block">
                 <span style={{ color: 'white', fontWeight: 700, fontSize: '16px' }}>Admin Console</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1px' }}>
                   <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
