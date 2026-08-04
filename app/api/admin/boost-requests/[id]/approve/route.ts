@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { headers } from 'next/headers';
+import { requireAdmin } from '@/lib/auth/adminAuth';
 import { fetchTokenPrice } from '@/services/coingeckoService';
 import type { Blockchain } from '@/types/boost';
 
@@ -8,61 +8,24 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(
-  request: NextRequest,
-  context: RouteContext
-) {
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    // Use the same admin check as all other admin routes
+    const adminUser = await requireAdmin();
+
     const params = await context.params;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Use anon client only for JWT verification
-    const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
-    // Use service role client for all DB operations (bypasses RLS)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey ?? supabaseAnonKey);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAnon.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is admin
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      return NextResponse.json(
-        { success: false, message: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-
     const boostId = params.id;
     const body = await request.json();
+    const supabase = getServiceClient();
 
-    // Get boost details
+    // Fetch the boost request
     const { data: boost, error: boostError } = await supabase
       .from('token_boost_requests')
       .select('*')
@@ -83,29 +46,28 @@ export async function POST(
       );
     }
 
-    // Try to fetch price from CoinGecko
+    // Try to fetch current price from CoinGecko (optional)
     let priceData = null;
     try {
       priceData = await fetchTokenPrice(
         boost.token_contract_address,
         boost.blockchain as Blockchain
       );
-    } catch (error) {
-      console.error('Error fetching price during approval:', error);
-      // Continue without price - it's optional
+    } catch (err) {
+      console.error('Error fetching price during approval (non-fatal):', err);
     }
 
-    // Update boost to approved status
+    // Mark as approved
     const { error: updateError } = await supabase
       .from('token_boost_requests')
       .update({
         status: 'approved',
         reviewed_at: new Date().toISOString(),
-        reviewed_by: user.id,
+        reviewed_by: adminUser.id,
         admin_notes: body.adminNotes || null,
-        current_price_usd: priceData?.priceUsd,
-        price_change_24h: priceData?.priceChange24h,
-        last_price_update: priceData?.lastUpdated.toISOString(),
+        current_price_usd: priceData?.priceUsd ?? null,
+        price_change_24h: priceData?.priceChange24h ?? null,
+        last_price_update: priceData ? priceData.lastUpdated?.toISOString() : null,
       })
       .eq('id', boostId);
 
@@ -117,15 +79,15 @@ export async function POST(
       );
     }
 
-    // Activate the boost immediately (set start and expiry times)
+    // Activate immediately (sets starts_at and expires_at)
     const { data: activateResult, error: activateError } = await supabase.rpc('activate_boost', {
       p_boost_id: boostId,
     });
 
-    if (activateError || !activateResult.success) {
-      console.error('Error activating boost:', activateError || activateResult.message);
+    if (activateError || !activateResult?.success) {
+      console.error('Error activating boost:', activateError || activateResult?.message);
       return NextResponse.json(
-        { success: false, message: 'Error activating boost' },
+        { success: false, message: 'Boost approved but activation failed. Run the FIX_BOOST_SYSTEM.sql in Supabase.' },
         { status: 500 }
       );
     }
@@ -138,10 +100,11 @@ export async function POST(
       message: 'Boost approved and activated successfully',
     });
   } catch (error: any) {
-    console.error('Unexpected error in approve boost:', error);
+    console.error('Error in approve boost POST:', error);
+    const isAuth = error.message?.includes('Unauthorized');
     return NextResponse.json(
-      { success: false, message: 'Internal server error', error: error.message },
-      { status: 500 }
+      { success: false, message: error.message || 'Internal server error' },
+      { status: isAuth ? 401 : 500 }
     );
   }
 }

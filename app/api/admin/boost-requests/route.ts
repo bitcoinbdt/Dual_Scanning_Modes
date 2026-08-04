@@ -1,59 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { headers } from 'next/headers';
+import { requireAdmin } from '@/lib/auth/adminAuth';
+
+function getServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // Use the same admin check as all other admin routes
+    await requireAdmin();
 
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const supabase = getServiceClient();
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Use anon client only for JWT verification
-    const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
-    // Use service role client for all DB operations (bypasses RLS)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey ?? supabaseAnonKey);
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAnon.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Check if user is admin
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile?.is_admin) {
-      return NextResponse.json(
-        { success: false, message: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-
-    // Get status filter from query params
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status');
 
-    // Build query
     let query = supabase
       .from('token_boost_requests')
       .select(`
@@ -62,7 +27,6 @@ export async function GET(request: NextRequest) {
       `)
       .order('requested_at', { ascending: false });
 
-    // Apply status filter if provided
     if (statusFilter && statusFilter !== 'all') {
       query = query.eq('status', statusFilter);
     }
@@ -77,8 +41,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform data for admin view
-    const requests = boosts.map((boost: any) => ({
+    const requests = (boosts || []).map((boost: any) => ({
       id: boost.id,
       userId: boost.user_id,
       userEmail: boost.user?.email || 'Unknown',
@@ -105,16 +68,13 @@ export async function GET(request: NextRequest) {
       adminNotes: boost.admin_notes,
     }));
 
-    return NextResponse.json({
-      success: true,
-      requests,
-      count: requests.length,
-    });
+    return NextResponse.json({ success: true, requests, count: requests.length });
   } catch (error: any) {
-    console.error('Unexpected error in admin boost-requests:', error);
+    console.error('Error in admin boost-requests GET:', error);
+    const isAuth = error.message?.includes('Unauthorized');
     return NextResponse.json(
-      { success: false, message: 'Internal server error', error: error.message },
-      { status: 500 }
+      { success: false, message: error.message || 'Internal server error' },
+      { status: isAuth ? 401 : 500 }
     );
   }
 }
