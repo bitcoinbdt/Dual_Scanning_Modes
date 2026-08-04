@@ -209,7 +209,7 @@ export function calculateReferralBonus(packageId: string, credits: number): numb
  * Generate shareable text for social media
  */
 export function generateShareText(code: string): string {
-  return `Join me on OnChain Alpha Scanner and get credits for your first scan! Use my referral code: ${code}`;
+  return `Join me on OnChain Crypto Scanner and get credits for your first scan! Use my referral code: ${code}`;
 }
 
 /**

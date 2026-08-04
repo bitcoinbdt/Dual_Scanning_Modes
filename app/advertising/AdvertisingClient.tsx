@@ -81,7 +81,7 @@ export default function AdvertisingClient() {
             <h1 className="text-4xl font-extrabold gradient-text">Token Advertising</h1>
           </div>
           <p className="text-muted-themed text-lg max-w-2xl mx-auto">
-            Feature your token across OnChain Alpha Scanner. Get direct visibility to active traders and investors.
+            Feature your token across OnChain Crypto Scanner. Get direct visibility to active traders and investors.
           </p>
         </motion.div>
 

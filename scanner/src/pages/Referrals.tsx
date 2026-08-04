@@ -69,7 +69,7 @@ export function Referrals() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold gradient-text mb-1">Referral Program</h1>
           <p className="text-muted-themed">
-            Earn bonus credits by inviting friends to OnChain Alpha Scanner
+            Earn bonus credits by inviting friends to OnChain Crypto Scanner
           </p>
         </div>
 

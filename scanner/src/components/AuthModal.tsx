@@ -90,7 +90,7 @@ export function AuthModal({ open, onClose, onSuccess }: AuthModalProps) {
         <p className="text-sm text-muted-themed mb-5">
           {mode === 'login'
             ? 'Sign in to scan tokens and manage credits'
-            : 'Join OnChain Alpha Scanner'}
+            : 'Join OnChain Crypto Scanner'}
         </p>
 
         {error && (

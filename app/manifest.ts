@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'OnChain Alpha Scanner',
-    short_name: 'OCA Scanner',
-    description: 'Advanced multi-chain token scanner with on-chain security audits and real-time market intelligence.',
+    name: 'OnChain Crypto Scanner',
+    short_name: 'Crypto Scanner',
+    description: 'Token contract address scanner – multi-chain on-chain security audits and real-time market intelligence.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0f1e',

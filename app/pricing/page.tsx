@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Pricing & Credits',
   description: 'Simple credit-based pricing. No subscriptions. Buy credits and scan any token instantly on Solana, BSC, or Ethereum.',
   openGraph: {
-    title: 'Pricing & Credits | OnChain Alpha Scanner',
+    title: 'Pricing & Credits | OnChain Crypto Scanner',
     url: '/pricing',
   },
 };

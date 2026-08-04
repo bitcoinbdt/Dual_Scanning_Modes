@@ -72,7 +72,7 @@ export default function ReferralDashboard() {
         );
         break;
       case 'email':
-        window.location.href = `mailto:?subject=Join OnChain Alpha Scanner&body=${encodeURIComponent(text + '\n\n' + url)}`;
+        window.location.href = `mailto:?subject=Join OnChain Crypto Scanner&body=${encodeURIComponent(text + '\n\n' + url)}`;
         break;
     }
   };

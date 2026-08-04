@@ -141,7 +141,7 @@ function SignupPageContent() {
         >
           <h1 className="text-3xl font-bold gradient-text">Create Account</h1>
           <p className="text-sm text-muted-themed mt-1">
-            Join OnChain Alpha Scanner and start analyzing tokens
+            Join OnChain Crypto Scanner and start analyzing tokens
           </p>
         </motion.div>
 

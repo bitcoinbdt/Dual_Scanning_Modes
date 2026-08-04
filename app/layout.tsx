@@ -13,27 +13,27 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL('https://scanner.coinxera.com'),
   title: {
-    default: 'OnChain Alpha Scanner - Token Analysis & Security Scanner',
-    template: '%s | OnChain Alpha Scanner',
+    default: 'OnChain Crypto Scanner - Token Contract Address Scanner & Security Audits',
+    template: '%s | OnChain Crypto Scanner',
   },
-  description: 'Advanced cryptocurrency token scanner with on-chain analysis, security audits, P&L analysis, and real-time market intelligence.',
-  keywords: ['token scanner', 'crypto security', 'solana scanner', 'BSC scanner', 'ethereum scanner', 'on-chain analysis', 'rug pull detector', 'P&L analysis'],
-  authors: [{ name: 'OnChain Alpha' }],
+  description: 'OnChain Crypto Scanner – the #1 token contract address scanner. Instant on-chain security audits, rug-pull detection, P&L analysis, and real-time market intelligence for Solana, BSC & Ethereum.',
+  keywords: ['token contract address scanner', 'onchain crypto scanner', 'token scanner', 'crypto contract scanner', 'solana token scanner', 'BSC token scanner', 'ethereum token scanner', 'on-chain analysis', 'rug pull detector', 'crypto security audit', 'P&L analysis', 'smart contract scanner'],
+  authors: [{ name: 'OnChain Crypto Scanner' }],
   verification: {
     google: '5z5ZX_cY44RAb70VUQCtLvUdObxfJK9IFx_lqDIqvcE',
   },
   openGraph: {
     type: 'website',
-    siteName: 'OnChain Alpha Scanner',
-    title: 'OnChain Alpha Scanner - Token Analysis & Security Scanner',
-    description: 'Advanced cryptocurrency token scanner with on-chain analysis, security audits, P&L analysis, and real-time market intelligence.',
+    siteName: 'OnChain Crypto Scanner',
+    title: 'OnChain Crypto Scanner - Token Contract Address Scanner & Security Audits',
+    description: 'OnChain Crypto Scanner – the #1 token contract address scanner. Instant on-chain security audits, rug-pull detection, P&L analysis, and real-time market intelligence for Solana, BSC & Ethereum.',
     url: 'https://scanner.coinxera.com',
-    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'OnChain Alpha Scanner' }],
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'OnChain Crypto Scanner - Token Contract Address Scanner' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'OnChain Alpha Scanner',
-    description: 'Advanced cryptocurrency token scanner with on-chain analysis, security audits, P&L analysis, and real-time market intelligence.',
+    title: 'OnChain Crypto Scanner',
+    description: 'OnChain Crypto Scanner – the #1 token contract address scanner. Instant on-chain security audits, rug-pull detection, P&L analysis, and real-time market intelligence for Solana, BSC & Ethereum.',
     images: ['/og-image.png'],
   },
   robots: {
@@ -53,10 +53,11 @@ export default function RootLayout({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
-    'name': 'OnChain Alpha Scanner',
+    'name': 'OnChain Crypto Scanner',
+    'alternateName': 'Token Contract Address Scanner',
     'url': 'https://scanner.coinxera.com',
     'applicationCategory': 'FinanceApplication',
-    'description': 'Advanced multi-chain token security scanner with on-chain analysis, security audits, and real-time market intelligence.',
+    'description': 'OnChain Crypto Scanner is the #1 token contract address scanner. Scan any crypto token contract for security risks, rug-pull signals, on-chain analytics, and P&L data across Solana, BSC & Ethereum.',
     'offers': {
       '@type': 'Offer',
       'priceCurrency': 'USD',

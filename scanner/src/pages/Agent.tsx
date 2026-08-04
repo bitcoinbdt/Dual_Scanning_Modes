@@ -105,7 +105,7 @@ export function Agent() {
         {/* Header */}
         <div className="mb-6">
           <div className="text-xs text-muted-themed mb-2">
-            <Link to="/" className="hover:text-themed">OnChain Alpha Scanner</Link>
+            <Link to="/" className="hover:text-themed">OnChain Crypto Scanner</Link>
             {' / '}
             <span className="text-themed">Crypto Hype Agent</span>
           </div>

@@ -3,7 +3,7 @@ import SignupClient from './SignupClient';
 
 export const metadata: Metadata = {
   title: 'Create Account',
-  description: 'Sign up for OnChain Alpha Scanner and get instant access to token security audits and on-chain analytics.',
+  description: 'Sign up for OnChain Crypto Scanner and get instant access to token contract address scanning, security audits, and on-chain analytics.',
   robots: {
     index: true,
     follow: true,
