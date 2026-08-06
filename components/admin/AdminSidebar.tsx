@@ -17,7 +17,7 @@ import {
 interface AdminRoute {
   name: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   badgeKey?: 'pendingCredits' | 'pendingBoosts';
   accentColor?: string;
   description: string;
