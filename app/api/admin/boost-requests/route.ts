@@ -21,10 +21,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('token_boost_requests')
-      .select(`
-        *,
-        user:user_profiles!token_boost_requests_user_id_fkey(email, display_name)
-      `)
+      .select('*')
       .order('requested_at', { ascending: false });
 
     if (statusFilter && statusFilter !== 'all') {
@@ -41,32 +38,57 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const requests = (boosts || []).map((boost: any) => ({
-      id: boost.id,
-      userId: boost.user_id,
-      userEmail: boost.user?.email || 'Unknown',
-      userName: boost.user?.display_name || 'Unknown',
-      status: boost.status,
-      tokenInfo: {
-        name: boost.token_name,
-        symbol: boost.token_symbol,
-        logoUrl: boost.token_logo_url,
-        contractAddress: boost.token_contract_address,
-        blockchain: boost.blockchain,
-        website: boost.website,
-        description: boost.description,
-        coingeckoId: boost.coingecko_id,
-      },
-      durationHours: boost.duration_hours,
-      creditsSpent: boost.credits_cost,
-      requestedAt: boost.requested_at,
-      reviewedAt: boost.reviewed_at,
-      reviewedBy: boost.reviewed_by,
-      startsAt: boost.starts_at,
-      expiresAt: boost.expires_at,
-      rejectionReason: boost.rejection_reason,
-      adminNotes: boost.admin_notes,
-    }));
+    // Fetch corresponding user profiles to avoid foreign key PostgREST join errors
+    const userIds = Array.from(new Set((boosts || []).map((b: any) => b.user_id)));
+    const userProfilesMap = new Map<string, { email: string; display_name: string }>();
+
+    if (userIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, email, display_name')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.error('Error fetching user profiles for boosts:', profilesError);
+      } else if (profiles) {
+        profiles.forEach((p: any) => {
+          userProfilesMap.set(p.id, {
+            email: p.email || 'Unknown',
+            display_name: p.display_name || 'Unknown'
+          });
+        });
+      }
+    }
+
+    const requests = (boosts || []).map((boost: any) => {
+      const user = userProfilesMap.get(boost.user_id);
+      return {
+        id: boost.id,
+        userId: boost.user_id,
+        userEmail: user?.email || 'Unknown',
+        userName: user?.display_name || 'Unknown',
+        status: boost.status,
+        tokenInfo: {
+          name: boost.token_name,
+          symbol: boost.token_symbol,
+          logoUrl: boost.token_logo_url,
+          contractAddress: boost.token_contract_address,
+          blockchain: boost.blockchain,
+          website: boost.website,
+          description: boost.description,
+          coingeckoId: boost.coingecko_id,
+        },
+        durationHours: boost.duration_hours,
+        creditsSpent: boost.credits_cost,
+        requestedAt: boost.requested_at,
+        reviewedAt: boost.reviewed_at,
+        reviewedBy: boost.reviewed_by,
+        startsAt: boost.starts_at,
+        expiresAt: boost.expires_at,
+        rejectionReason: boost.rejection_reason,
+        adminNotes: boost.admin_notes,
+      };
+    });
 
     return NextResponse.json({ success: true, requests, count: requests.length });
   } catch (error: any) {
