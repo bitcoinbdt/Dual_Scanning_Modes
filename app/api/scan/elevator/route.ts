@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
             total_holders_before_24h: rawData.total_holders_before_24h,
             top_10_wallets: rawData.wallet_metrics.top_10_wallets,
             top_holders_filtered: rawData.wallet_metrics.top_holders_filtered,
-            holder_growth: computeHolderGrowth(rawData.transactions),
+
             exchange_flow: exchangeResult.metrics,
             trust_score: {
               verifiedCount: verificationResult.verifiedCount,
@@ -377,67 +377,6 @@ function isSystemAddressStatic(address: string): boolean {
   return SYSTEM_SET.has(addr);
 }
 
-function computeHolderGrowth(transactions: any[]): Array<{ timestamp: number, holders: number }> {
-  if (transactions.length === 0) return [];
-  
-  const sortedTxs = [...transactions].sort((a, b) => a.timestamp - b.timestamp);
-  const balances = new Map<string, number>();
-  const growthPoints: Array<{ timestamp: number; holders: number }> = [];
-  
-  const startTime = sortedTxs[0].timestamp;
-  const endTime = sortedTxs[sortedTxs.length - 1].timestamp;
-  
-  const durationDays = (endTime - startTime) / 86400;
-  const intervalSeconds = durationDays > 4 ? 86400 : 14400; // Daily or 4-hourly
-  
-  let currentIntervalLimit = startTime + intervalSeconds;
-  
-  for (const tx of sortedTxs) {
-    const from = tx.from;
-    const to = tx.to;
-    const amount = tx.amount;
-    
-    if (from && !isSystemAddressStatic(from)) {
-      const bal = balances.get(from) || 0;
-      balances.set(from, Math.max(0, bal - amount));
-    }
-    
-    if (to && !isSystemAddressStatic(to)) {
-      const bal = balances.get(to) || 0;
-      balances.set(to, bal + amount);
-    }
-    
-    while (tx.timestamp >= currentIntervalLimit) {
-      let holderCount = 0;
-      for (const [_, bal] of balances.entries()) {
-        if (bal > 1e-6) {
-          holderCount++;
-        }
-      }
-      
-      growthPoints.push({
-        timestamp: currentIntervalLimit * 1000,
-        holders: holderCount
-      });
-      
-      currentIntervalLimit += intervalSeconds;
-    }
-  }
-  
-  let finalHolderCount = 0;
-  for (const [_, bal] of balances.entries()) {
-    if (bal > 1e-6) {
-      finalHolderCount++;
-    }
-  }
-  
-  growthPoints.push({
-    timestamp: endTime * 1000,
-    holders: finalHolderCount
-  });
-  
-  return growthPoints;
-}
 
 function tagAndComputeExchangeFlow(
   transactions: any[],

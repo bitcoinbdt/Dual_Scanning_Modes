@@ -12,7 +12,7 @@ import {
 import { WalletCell } from './WalletCell';
 import { ActionBadge } from './ActionBadge';
 import { TxHashLink } from './TxHashLink';
-import { HolderGrowthChart } from './HolderGrowthChart';
+
 import { ExchangeFlowCard } from './ExchangeFlowCard';
 import { VerificationBadge } from './VerificationBadge';
 
@@ -27,7 +27,7 @@ interface RawTransactionTableProps {
     new_holders_24h?: number;
     total_holders_before_24h?: number;
     top_holders_filtered?: HolderInfo[];
-    holder_growth?: Array<{ timestamp: number, holders: number }>;
+
     exchange_flow?: {
       totalTokensToExchanges: number;
       totalTokensFromExchanges: number;
@@ -558,14 +558,8 @@ export function RawTransactionTable({
         )}
       </div>
 
-      {/* Analytics & Charts Section (Below Table) */}
+      {/* Analytics Section (Below Table) */}
       <div className="space-y-6 mt-6">
-
-        {/* Holder Growth Chart — full width */}
-        <HolderGrowthChart
-          growthData={rawData.holder_growth}
-          holderSpike={rawData.holder_spike}
-        />
 
         {/* Top 10 Wallets — flat responsive grid */}
         <div className="glass-card p-5 rounded-xl border border-white/10 bg-slate-900/10">
