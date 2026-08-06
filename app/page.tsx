@@ -37,7 +37,6 @@ const InsufficientCreditsModal = dynamic(() => import('@/components/credits/Insu
 const CreditStoreModal = dynamic(() => import('@/components/credits/CreditStoreModal').then(mod => mod.CreditStoreModal));
 
 const CHAINS = [
-  { id: 'auto', label: 'Auto-detect' },
   { id: 'solana', label: 'Solana' },
   { id: 'bsc', label: 'BSC' },
   { id: 'eth', label: 'Ethereum' },
@@ -63,7 +62,7 @@ function HomePageContent() {
   const [isElevatorMode, setIsElevatorMode] = useState(false);
   const [address, setAddress] = useState('');
   const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR'>('BASIC');
-  const [selectedChain, setSelectedChain] = useState<'auto' | 'solana' | 'bsc' | 'eth'>('auto');
+  const [selectedChain, setSelectedChain] = useState<'solana' | 'bsc' | 'eth'>('solana');
   const [chainAmbiguous, setChainAmbiguous] = useState(false);
   const [elevatorCredits, setElevatorCredits] = useState<5 | 10 | 20 | 30>(10);
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
@@ -152,8 +151,7 @@ function HomePageContent() {
       toast.success(`${required} credits deducted. Scanning...`);
 
       if (type === 'ELEVATOR') {
-        const preferredChain = selectedChain === 'auto' ? undefined : selectedChain;
-        const res = await startElevatorScan(addr, required, preferredChain);
+        const res = await startElevatorScan(addr, required, selectedChain);
         setElevatorData(res.rawData);
         setIsElevatorMode(true);
         setLoading(false);
@@ -241,7 +239,7 @@ function HomePageContent() {
                 {/* Blockchain */}
                 <div>
                   <label className="text-xs text-muted-themed mb-2 block">Blockchain</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {CHAINS.map((c) => (
                       <button
                         key={c.id}
@@ -289,7 +287,7 @@ function HomePageContent() {
                 >
                   <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                   <span className="text-blue-200">
-                    <strong>Multi-Chain Support:</strong> Elevator Deep Scan supports Solana, BSC, and Ethereum. Auto-detect analyzes the address format.
+                    <strong>Multi-Chain Support:</strong> Elevator Deep Scan supports Solana, BSC, and Ethereum.
                   </span>
                 </div>
 
@@ -380,7 +378,7 @@ function HomePageContent() {
               {scanType === 'ELEVATOR'
                 ? `Analyzing ${
                     elevatorCredits === 5 ? 50 : elevatorCredits === 10 ? 100 : elevatorCredits === 20 ? 200 : 500
-                  } transactions on ${selectedChain === 'auto' ? 'auto-detect chain' : selectedChain.toUpperCase()}`
+                  } transactions on ${selectedChain.toUpperCase()}`
                 : 'Running security audits and risk analysis...'}
             </p>
           </div>
