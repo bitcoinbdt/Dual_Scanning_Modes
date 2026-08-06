@@ -52,10 +52,12 @@ function BoostRequestsContent() {
   const loadRequests = async () => {
     setLoading(true);
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       const response = await fetch(
         filter === 'all'
           ? '/api/admin/boost-requests'
-          : `/api/admin/boost-requests?status=${filter}`
+          : `/api/admin/boost-requests?status=${filter}`,
+        { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
       );
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -349,6 +351,7 @@ function ReviewModal({
 
     setProcessing(true);
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
       const url =
         action === 'approve'
           ? `/api/admin/boost-requests/${request.id}/approve`
@@ -361,7 +364,10 @@ function ReviewModal({
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       });
 
