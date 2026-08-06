@@ -359,7 +359,53 @@ export function RawTransactionTable({
           </div>
         </div>
       )}
-      
+
+      {/* Top 10 Wallets — flat responsive grid (above transaction table) */}
+      {rawData.top_holders_filtered && rawData.top_holders_filtered.length > 0 && (
+        <div className="glass-card p-5 rounded-xl border border-white/10 bg-slate-900/10">
+          <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+            <span className="text-sm font-black italic uppercase text-slate-200">
+              👥 Top 10 Wallets (Filtered)
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {rawData.top_holders_filtered.slice(0, 10).map((holder, idx) => (
+              <div
+                key={holder.wallet}
+                className="flex flex-col gap-2 p-3 rounded-xl border border-white/5 bg-slate-950/50 hover:bg-white/5 transition-all"
+              >
+                {/* Rank + Wash badge */}
+                <div className="flex items-center justify-between gap-1 flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-500 font-mono">#{idx + 1}</span>
+                  {rawData.wash_trading?.wash_wallets?.includes(holder.wallet) && (
+                    <span
+                      title="Wash Trader: this wallet has both bought and sold within the scanned batch."
+                      className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[9px] font-bold border border-rose-500/20 cursor-help select-none"
+                    >
+                      🔄 Wash
+                    </span>
+                  )}
+                </div>
+                {/* Wallet address */}
+                <WalletCell wallet={holder.wallet} />
+                {/* Balance + tx count */}
+                <div className="flex items-end justify-between mt-1">
+                  <span className="text-[9px] text-slate-500 font-mono">
+                    {holder.tx_count} tx
+                  </span>
+                  <div className="text-right">
+                    <div className="text-xs font-bold text-white font-mono">
+                      {holder.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[9px] text-slate-500">{tokenSymbol}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Transaction List (Full Width) */}
       <div className="space-y-4">
         {/* Filters and Sorting */}
@@ -558,61 +604,7 @@ export function RawTransactionTable({
         )}
       </div>
 
-      {/* Analytics Section (Below Table) */}
-      <div className="space-y-6 mt-6">
 
-        {/* Top 10 Wallets — flat responsive grid */}
-        <div className="glass-card p-5 rounded-xl border border-white/10 bg-slate-900/10">
-          <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
-            <span className="text-sm font-black italic uppercase text-slate-200">
-              👥 Top 10 Wallets (Filtered)
-            </span>
-          </div>
-
-          {(!rawData.top_holders_filtered || rawData.top_holders_filtered.length === 0) ? (
-            <p className="text-xs text-slate-500 italic">No holders data available or all filtered.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {rawData.top_holders_filtered.slice(0, 10).map((holder, idx) => (
-                <div
-                  key={holder.wallet}
-                  className="flex flex-col gap-2 p-3 rounded-xl border border-white/5 bg-slate-950/50 hover:bg-white/5 transition-all"
-                >
-                  {/* Rank + Wash badge */}
-                  <div className="flex items-center justify-between gap-1 flex-wrap">
-                    <span className="text-[10px] font-bold text-slate-500 font-mono">#{idx + 1}</span>
-                    {rawData.wash_trading?.wash_wallets?.includes(holder.wallet) && (
-                      <span
-                        title="Wash Trader: this wallet has both bought and sold within the scanned batch."
-                        className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[9px] font-bold border border-rose-500/20 cursor-help select-none"
-                      >
-                        🔄 Wash
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Wallet address */}
-                  <WalletCell wallet={holder.wallet} />
-
-                  {/* Balance + tx count */}
-                  <div className="flex items-end justify-between mt-1">
-                    <span className="text-[9px] text-slate-500 font-mono">
-                      {holder.tx_count} tx
-                    </span>
-                    <div className="text-right">
-                      <div className="text-xs font-bold text-white font-mono">
-                        {holder.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[9px] text-slate-500">{tokenSymbol}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-      </div>
     </motion.div>
   );
 }
