@@ -70,6 +70,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (token) {
           const headers = new Headers(init?.headers);
+          
+          // If input is a Request object, merge its headers so we don't drop them
+          if (typeof Request !== 'undefined' && input instanceof Request) {
+            input.headers.forEach((value, key) => {
+              if (!headers.has(key)) {
+                headers.set(key, value);
+              }
+            });
+          }
+
           if (!headers.has('Authorization')) {
             headers.set('Authorization', `Bearer ${token}`);
           }
