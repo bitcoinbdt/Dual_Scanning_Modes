@@ -83,9 +83,27 @@ export default function BoostRequestForm() {
     setShowConfirmation(false);
 
     try {
+      // Fetch session token dynamically from Supabase / localStorage
+      const { supabase } = await import('@/lib/supabase');
+      let token: string | null = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token ?? null;
+        if (token) localStorage.setItem('authToken', token);
+      } catch {
+        token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/boost/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(formData),
       });
 

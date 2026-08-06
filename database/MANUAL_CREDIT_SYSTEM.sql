@@ -64,16 +64,45 @@ CREATE TRIGGER update_credit_requests_updated_at
 -- 6. Create function to add credits on approval
 CREATE OR REPLACE FUNCTION handle_credit_approval()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_new_balance INTEGER;
 BEGIN
   -- Only process when status changes from pending to approved
   IF NEW.status = 'approved' AND OLD.status = 'pending' THEN
     -- Add credits to user_profiles table
-    INSERT INTO user_profiles (user_id, credits_balance)
-    VALUES (NEW.user_id, NEW.credits_amount)
-    ON CONFLICT (user_id) 
+    INSERT INTO public.user_profiles (id, email, display_name, credits_balance)
+    VALUES (NEW.user_id, 'user@example.com', 'User', NEW.credits_amount)
+    ON CONFLICT (id) 
     DO UPDATE SET 
-      credits_balance = user_profiles.credits_balance + NEW.credits_amount,
+      credits_balance = public.user_profiles.credits_balance + NEW.credits_amount,
       updated_at = NOW();
+
+    -- Fetch the updated balance
+    SELECT credits_balance INTO v_new_balance
+    FROM public.user_profiles
+    WHERE id = NEW.user_id;
+
+    -- Record transaction in ledger
+    INSERT INTO public.credit_transactions (
+      user_id,
+      type,
+      amount,
+      balance_after,
+      description,
+      metadata
+    ) VALUES (
+      NEW.user_id,
+      'purchase',
+      NEW.credits_amount,
+      v_new_balance,
+      'Credit purchase approved — ' || NEW.credit_package_id,
+      jsonb_build_object(
+        'request_id', NEW.id,
+        'package_id', NEW.credit_package_id,
+        'price_usd', NEW.price_usd,
+        'tx_hash', NEW.transaction_hash
+      )
+    );
   END IF;
   
   RETURN NEW;

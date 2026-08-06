@@ -46,12 +46,35 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
+    // Helper to calculate ledger totals
+    const getLedgerTotals = async (userId: string) => {
+      const { data: txs } = await supabaseAdmin
+        .from('credit_transactions')
+        .select('type, amount')
+        .eq('user_id', userId);
+
+      let totalPurchased = 0;
+      let totalSpent = 0;
+
+      if (txs) {
+        for (const tx of txs) {
+          if (tx.type === 'purchase' || tx.type === 'bonus') {
+            totalPurchased += (tx.amount ?? 0);
+          } else if (tx.type === 'scan_deduction' || tx.type === 'boost_purchase') {
+            totalSpent += Math.abs(tx.amount ?? 0);
+          }
+        }
+      }
+      return { totalPurchased, totalSpent };
+    };
+
     // Profile exists — return it
     if (profile) {
+      const { totalPurchased, totalSpent } = await getLedgerTotals(user.id);
       return NextResponse.json({
         balance: profile.credits_balance ?? 0,
-        totalPurchased: profile.credits_balance ?? 0,
-        totalSpent: profile.total_scans ?? 0,
+        totalPurchased,
+        totalSpent,
       });
     }
 
@@ -76,17 +99,21 @@ export async function GET(request: NextRequest) {
 
     if (insertError || !newProfile) {
       console.error('[Credits Balance] Auto-create failed:', insertError?.message);
-      return NextResponse.json({ balance: 0, totalPurchased: 0, totalSpent: 0 });
+      return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 });
     }
 
+    // Since it's a new profile, ledger totals are 0
     return NextResponse.json({
       balance: newProfile.credits_balance ?? 0,
-      totalPurchased: newProfile.credits_balance ?? 0,
-      totalSpent: newProfile.total_scans ?? 0,
+      totalPurchased: 0,
+      totalSpent: 0,
     });
 
   } catch (error: any) {
     console.error('[Credits Balance] Unhandled error:', error?.message);
-    return NextResponse.json({ balance: 0, totalPurchased: 0, totalSpent: 0 });
+    return NextResponse.json(
+      { error: error.message || 'Failed to retrieve balance' },
+      { status: 500 }
+    );
   }
 }

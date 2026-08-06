@@ -160,17 +160,21 @@ export async function POST(request: NextRequest) {
       p_credits: creditsCost,
     });
 
-    if (deductError || !deductResult.success) {
-      console.error('Error deducting credits:', deductError || deductResult.message);
+    if (deductError || !deductResult || !deductResult.success) {
+      const errorMsg = deductError?.message || deductResult?.message || 'Credit deduction failed';
+      console.error('Error deducting credits:', errorMsg);
       
-      // Rollback boost request
-      await supabase.from('token_boost_requests').delete().eq('id', boost.id);
+      // Rollback boost request with proper error logging
+      const { error: rollbackError } = await supabase.from('token_boost_requests').delete().eq('id', boost.id);
+      if (rollbackError) {
+        console.error(`[API] Failed to rollback/delete token_boost_requests row ${boost.id}:`, rollbackError);
+      }
 
       return NextResponse.json<BoostSubmitResponse>(
         {
           success: false,
           message: 'Error deducting credits',
-          error: deductError?.message || deductResult.message,
+          error: errorMsg,
         },
         { status: 500 }
       );
@@ -180,7 +184,7 @@ export async function POST(request: NextRequest) {
       success: true,
       boostId: boost.id,
       creditsDeducted: creditsCost,
-      newBalance: deductResult.newBalance,
+      newBalance: deductResult?.newBalance,
       message: 'Boost request submitted successfully. Awaiting admin approval.',
     });
   } catch (error: any) {

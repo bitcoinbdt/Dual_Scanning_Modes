@@ -27,6 +27,11 @@ try {
 }
 
 export async function POST(request: NextRequest) {
+  let userId: string | null = null;
+  let creditsDeducted = false;
+  let creditsSpentVal = 10;
+  let tokenAddr = '';
+
   try {
     // 1. Authenticate user from Authorization header
     const headersList = await headers();
@@ -49,6 +54,9 @@ export async function POST(request: NextRequest) {
     }
 
     const { address, creditsSpent = 10, preferredChain } = await request.json();
+    userId = user.id;
+    creditsSpentVal = creditsSpent;
+    tokenAddr = address;
     
     // Validate input
     if (!address) {
@@ -146,6 +154,10 @@ export async function POST(request: NextRequest) {
         p_token_address: address,
       }
     );
+
+    if (!rpcError) {
+      creditsDeducted = true;
+    }
 
     if (rpcError) {
       console.error('[Elevator Scan API] Credit deduction error:', rpcError);
@@ -303,6 +315,25 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
+    if (creditsDeducted && userId) {
+      console.log(`[API] Attempting credit refund of ${creditsSpentVal} for user ${userId} due to scan failure...`);
+      try {
+        const { error: refundError } = await supabase.rpc('refund_credits_for_scan', {
+          p_user_id: userId,
+          p_amount: creditsSpentVal,
+          p_scan_type: 'ELEVATOR',
+          p_token_address: tokenAddr,
+        });
+        if (refundError) {
+          console.error('[API] Credit refund RPC failed:', refundError);
+        } else {
+          console.log('[API] Credit refund successful');
+        }
+      } catch (refundErr) {
+        console.error('[API] Error calling credit refund RPC:', refundErr);
+      }
+    }
+
     console.error('[API] Elevator scan error:', error);
     return NextResponse.json(
       { 

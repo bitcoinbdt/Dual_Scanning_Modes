@@ -84,33 +84,77 @@ export async function POST(
     // On approval: verify trigger ran, manually add credits if not
     if (status === 'approved') {
       try {
-        const { data: profile } = await supabaseAdmin
-          .from('user_profiles')
-          .select('credits_balance')
-          .eq('id', existingRequest.user_id)
-          .single();
+        // Query to see if the trigger already wrote the ledger transaction
+        const { data: ledgerTx } = await supabaseAdmin
+          .from('credit_transactions')
+          .select('id')
+          .eq('user_id', existingRequest.user_id)
+          .eq('type', 'purchase')
+          .filter('metadata->>request_id', 'eq', existingRequest.id)
+          .maybeSingle();
 
-        if (profile) {
-          // Check if trigger already incremented (balance would have changed)
-          // Safe fallback: always ensure credits are correct using direct update
-          const expectedMin = existingRequest.credits_amount;
-          if ((profile.credits_balance ?? 0) < expectedMin) {
-            // Trigger didn't fire — manually add credits
-            await supabaseAdmin
-              .from('user_profiles')
-              .update({
-                credits_balance: (profile.credits_balance ?? 0) + existingRequest.credits_amount,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', existingRequest.user_id);
-            console.log(`[Admin] Manually added ${existingRequest.credits_amount} credits to user ${existingRequest.user_id}`);
-          } else {
-            console.log(`[Admin] Trigger ran. Balance: ${profile.credits_balance}`);
+        if (!ledgerTx) {
+          console.warn(`[Admin] Trigger did not write transaction for request ${existingRequest.id}. Executing manual fallback...`);
+          
+          // Get current profile
+          const { data: profile, error: profileError } = await supabaseAdmin
+            .from('user_profiles')
+            .select('credits_balance')
+            .eq('id', existingRequest.user_id)
+            .single();
+
+          if (profileError || !profile) {
+            throw new Error(profileError?.message || 'User profile not found during credit fallback');
           }
+
+          const currentBal = profile.credits_balance ?? 0;
+          const newBal = currentBal + existingRequest.credits_amount;
+
+          // Manually update balance
+          const { error: balanceUpdateError } = await supabaseAdmin
+            .from('user_profiles')
+            .update({
+              credits_balance: newBal,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingRequest.user_id);
+
+          if (balanceUpdateError) {
+            throw new Error('Failed to update balance during fallback: ' + balanceUpdateError.message);
+          }
+
+          // Manually insert transaction ledger record
+          const { error: ledgerInsertError } = await supabaseAdmin
+            .from('credit_transactions')
+            .insert({
+              user_id: existingRequest.user_id,
+              type: 'purchase',
+              amount: existingRequest.credits_amount,
+              balance_after: newBal,
+              description: 'Credit purchase approved (manual fallback) — ' + existingRequest.credit_package_id,
+              metadata: {
+                request_id: existingRequest.id,
+                package_id: existingRequest.credit_package_id,
+                price_usd: existingRequest.price_usd,
+                tx_hash: existingRequest.transaction_hash,
+                fallback: true,
+              },
+            });
+
+          if (ledgerInsertError) {
+            throw new Error('Failed to record ledger transaction during fallback: ' + ledgerInsertError.message);
+          }
+
+          console.log(`[Admin] Successfully completed manual credit fallback for user ${existingRequest.user_id}`);
+        } else {
+          console.log(`[Admin] Trigger executed successfully. Ledger ID: ${ledgerTx.id}`);
         }
-      } catch (creditError) {
-        // Don't fail the whole request — log and continue
-        console.error('[Admin] Credit verification error:', creditError);
+      } catch (creditError: any) {
+        console.error('[Admin] Credit verification or fallback error:', creditError);
+        return NextResponse.json(
+          { error: 'Credit request status updated, but credit allocation failed: ' + (creditError.message || creditError) },
+          { status: 500 }
+        );
       }
     }
 

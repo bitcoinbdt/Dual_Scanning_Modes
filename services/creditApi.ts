@@ -45,12 +45,8 @@ creditApiClient.interceptors.response.use(
  * Get current user's credit balance
  */
 export async function getCreditBalance(): Promise<CreditBalance> {
-  try {
-    const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
-    return response.data;
-  } catch {
-    return { balance: 0, totalPurchased: 0, totalSpent: 0 };
-  }
+  const response = await creditApiClient.get<CreditBalance>('/api/credits/balance');
+  return response.data;
 }
 
 /**

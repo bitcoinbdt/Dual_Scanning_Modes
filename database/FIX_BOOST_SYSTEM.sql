@@ -148,6 +148,15 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Boost not found');
   END IF;
 
+  -- Check if already refunded to prevent double-refund
+  IF EXISTS (
+    SELECT 1 FROM public.credit_transactions
+    WHERE type = 'refund'
+      AND (metadata->>'boost_id')::UUID = p_boost_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'message', 'Credits for this boost request have already been refunded');
+  END IF;
+
   -- Get current balance with row lock
   SELECT credits_balance INTO v_current_balance
   FROM public.user_profiles

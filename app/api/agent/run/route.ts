@@ -115,6 +115,10 @@ async function enrichToken(
 
 // ── Main route ────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
+  let userId: string | null = null;
+  let creditsDeducted = false;
+  const agentCost = 5;
+
   try {
     // 1. Authenticate
     const headersList = await headers();
@@ -135,13 +139,17 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+    userId = user.id;
 
     // 2. Deduct 5 credits atomically
-    const agentCost = 5;
     const { data: newBalance, error: rpcError } = await supabase.rpc(
       'deduct_credits_for_scan',
       { p_user_id: user.id, p_amount: agentCost, p_scan_type: 'AGENT', p_token_address: 'ALL' }
     );
+
+    if (!rpcError) {
+      creditsDeducted = true;
+    }
 
     if (rpcError) {
       console.error('[Agent API] Credit deduction error:', rpcError);
@@ -200,6 +208,25 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
+    if (creditsDeducted && userId) {
+      console.log(`[Agent API] Attempting credit refund of ${agentCost} for user ${userId} due to failure...`);
+      try {
+        const { error: refundError } = await supabase.rpc('refund_credits_for_scan', {
+          p_user_id: userId,
+          p_amount: agentCost,
+          p_scan_type: 'AGENT',
+          p_token_address: 'ALL',
+        });
+        if (refundError) {
+          console.error('[Agent API] Credit refund RPC failed:', refundError);
+        } else {
+          console.log('[Agent API] Credit refund successful');
+        }
+      } catch (refundErr) {
+        console.error('[Agent API] Error calling credit refund RPC:', refundErr);
+      }
+    }
+
     console.error('[Agent API] Run error:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to run agent' },

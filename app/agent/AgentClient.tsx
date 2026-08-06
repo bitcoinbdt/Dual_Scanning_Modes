@@ -144,6 +144,7 @@ export default function AgentClient() {
       toast.success('Agent completed successfully! 5 credits deducted.');
     } catch (err: any) {
       clearInterval(interval);
+      refreshBalance();
       const msg = err instanceof Error ? err.message : 'Agent failed';
       if (msg !== 'Insufficient credits') {
         setError(msg);
