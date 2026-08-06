@@ -54,7 +54,7 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { balance, hasEnoughCredits, deductCredits } = useCredits();
+  const { balance, hasEnoughCredits, deductCredits, refreshBalance } = useCredits();
 
   const [loading, setLoading] = useState(false);
   const [tokenData, setTokenData] = useState<OnChainData | null>(null);
@@ -147,11 +147,10 @@ function HomePageContent() {
     setChainAmbiguous(false);
     
     try {
-      deductCredits(required);
-      toast.success(`${required} credits deducted. Scanning...`);
-
       if (type === 'ELEVATOR') {
         const res = await startElevatorScan(addr, required, selectedChain);
+        // Only deduct credits optimistically after a successful scan
+        deductCredits(required);
         setElevatorData(res.rawData);
         setIsElevatorMode(true);
         setLoading(false);
@@ -162,6 +161,7 @@ function HomePageContent() {
         }
       } else {
         const data = await getBasicScan(addr, 'evm');
+        deductCredits(required);
         setTokenData(data as any);
         setLoading(false);
         toast.success('Scan complete!');
@@ -169,6 +169,8 @@ function HomePageContent() {
     } catch (err: any) {
       console.error(err);
       setLoading(false);
+      // Resync displayed balance from server in case optimistic update ran before the error
+      refreshBalance();
       if (err.code === 'WRONG_CHAIN') {
         toast.error(err.message || 'Wrong chain selected. Please check your blockchain selection.');
         setChainAmbiguous(true);
