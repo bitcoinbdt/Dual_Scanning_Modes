@@ -72,9 +72,23 @@ export default function AdminSidebar() {
   useEffect(() => {
     const fetchPendingCounts = async () => {
       try {
+        // Get the auth token — always read freshest session, fall back to localStorage
+        const { supabase } = await import('@/lib/supabase');
+        let token: string | null = null;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          token = session?.access_token ?? null;
+          if (token) localStorage.setItem('authToken', token);
+        } catch {
+          token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+        }
+
+        const authHeaders: Record<string, string> = {};
+        if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
         const [creditRes, boostRes] = await Promise.all([
-          fetch('/api/admin/credit-requests?status=all'),
-          fetch('/api/admin/boost-requests?status=all'),
+          fetch('/api/admin/credit-requests?status=all', { headers: authHeaders }),
+          fetch('/api/admin/boost-requests?status=all', { headers: authHeaders }),
         ]);
 
         let pendingCredits = 0;
