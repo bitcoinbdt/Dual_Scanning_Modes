@@ -155,6 +155,19 @@ export function RawTransactionTable({
   
   // Flatten transactions into individual rows
   const flatTransactions = useMemo<FlatTransaction[]>(() => {
+    // Helper to detect system addresses (pools, mints, programs)
+    const isSystemAddress = (addr: string) => {
+      if (!addr) return true;
+      const lower = addr.toLowerCase();
+      return (
+        lower === 'pool' ||
+        lower === 'system' ||
+        lower === '0x0000000000000000000000000000000000000000' ||
+        lower === '0x000000000000000000000000000000000000dead' ||
+        lower === '11111111111111111111111111111111'
+      );
+    };
+
     const flat: FlatTransaction[] = [];
     const txList = normalizedTransactions;
     
@@ -169,27 +182,14 @@ export function RawTransactionTable({
       
       transfers.forEach(transfer => {
         if (!isTrade) {
-          if (transfer.to) {
+          // For transfers: only display 1 row per transfer transaction
+          // If the sender is a system/pool/mint address, show the receiver; otherwise show the sender
+          const wallet = isSystemAddress(transfer.from) ? transfer.to : transfer.from;
+          if (wallet) {
             flat.push({
               timestamp: tx.timestamp,
               signature: tx.signature,
-              wallet: transfer.to,
-              action: 'TRANSFER',
-              amount: transfer.amount,
-              from: transfer.from,
-              to: transfer.to,
-              toExchange,
-              fromExchange,
-              exchangeName,
-              isWashTrader,
-              roundTrips
-            });
-          }
-          if (transfer.from && transfer.from !== transfer.to) {
-            flat.push({
-              timestamp: tx.timestamp,
-              signature: tx.signature,
-              wallet: transfer.from,
+              wallet,
               action: 'TRANSFER',
               amount: transfer.amount,
               from: transfer.from,
@@ -202,31 +202,17 @@ export function RawTransactionTable({
             });
           }
         } else {
-          // Add entry for receiver (BUY)
-          if (transfer.to) {
-            flat.push({
-              timestamp: tx.timestamp,
-              signature: tx.signature,
-              wallet: transfer.to,
-              action: 'BUY',
-              amount: transfer.amount,
-              from: transfer.from,
-              to: transfer.to,
-              toExchange,
-              fromExchange,
-              exchangeName,
-              isWashTrader,
-              roundTrips
-            });
-          }
+          // For trades (swaps): only display 1 row (the user's wallet side of the swap)
+          // Identify the user's wallet by picking the non-system wallet from the transfer
+          const wallet = isSystemAddress(transfer.from) ? transfer.to : transfer.from;
+          const action = isSystemAddress(transfer.from) ? 'BUY' : 'SELL';
           
-          // Add entry for sender (SELL)
-          if (transfer.from && transfer.from !== transfer.to) {
+          if (wallet && !isSystemAddress(wallet)) {
             flat.push({
               timestamp: tx.timestamp,
               signature: tx.signature,
-              wallet: transfer.from,
-              action: 'SELL',
+              wallet,
+              action,
               amount: transfer.amount,
               from: transfer.from,
               to: transfer.to,

@@ -36,7 +36,7 @@ const TERMS = [
   'You cannot use your own referral code.',
   "The referral code must be applied before the referred user's first purchase.",
   'Any fraudulent activity or self-referral attempts will result in forfeiture of bonus credits.',
-  'OnChain Alpha reserves the right to modify these terms at any time.',
+  'OnChain Crypto Scanner reserves the right to modify these terms at any time.',
 ];
 
 export default function ReferralsClient() {

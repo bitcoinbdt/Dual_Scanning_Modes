@@ -45,10 +45,10 @@ const Footer: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-sm font-black tracking-tight uppercase italic leading-none bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                  OnChain Alpha
+                  OnChain Crypto Scanner
                 </h1>
                 <p className="text-[8px] text-slate-500 uppercase tracking-widest font-bold leading-none mt-1">
-                  Tactical Recon Engine
+                  Token Contract Scanner
                 </p>
               </div>
             </div>

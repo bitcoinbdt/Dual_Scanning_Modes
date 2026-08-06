@@ -91,7 +91,7 @@ export function Pricing({ onOpenCreditStore }: PricingProps) {
 
         {/* Benefits */}
         <div className="glass-strong rounded-2xl p-6 mb-8">
-          <h2 className="text-xl font-bold gradient-text mb-5">Why Choose OnChain Alpha?</h2>
+          <h2 className="text-xl font-bold gradient-text mb-5">Why Choose OnChain Crypto Scanner?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               'Credits never expire',

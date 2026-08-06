@@ -153,7 +153,7 @@ export default function PricingClient() {
           transition={{ delay: 0.3 }}
           className="glass-strong rounded-2xl p-6 mb-8"
         >
-          <h2 className="text-xl font-bold gradient-text mb-5">Why Choose OnChain Alpha?</h2>
+          <h2 className="text-xl font-bold gradient-text mb-5">Why Choose OnChain Crypto Scanner?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {BENEFITS.map((benefit) => (
               <div key={benefit} className="flex items-center gap-2 glass rounded-lg px-3 py-2.5">

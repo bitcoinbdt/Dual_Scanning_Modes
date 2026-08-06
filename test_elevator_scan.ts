@@ -36,7 +36,7 @@ async function run() {
   console.log(`- Birdeye: ${birdeyeKey.substring(0, 5)}...`);
   console.log(`- Helius: ${heliusKey.substring(0, 5)}...`);
   
-  const tokenAddress = 'DTfN4DotNupzDbqpg6dX4jfXekB5vVkePxjuyivJpump'; // SOL token
+  const tokenAddress = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC token
   const maxTransactions = 50; // Requests 50 transactions (5 credits tier)
   
   console.log(`\nInitializing SolanaCollector for token: ${tokenAddress}`);
