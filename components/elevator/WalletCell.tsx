@@ -41,7 +41,7 @@ export function WalletCell({ wallet, showFull = false }: WalletCellProps) {
         {copied ? (
           <Check className="w-3 h-3 text-green-400" />
         ) : (
-          <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Copy className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity text-slate-400 group-hover:text-primary-400" />
         )}
       </button>
       {copied && (
