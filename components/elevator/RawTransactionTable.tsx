@@ -360,204 +360,216 @@ export function RawTransactionTable({
         </div>
       )}
       
-      {/* Main layout grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Transaction list, filters, table, pagination (span 2) */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Filters and Sorting */}
-          <div className="glass-card p-4 rounded-xl border border-white/10">
-            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-              {/* Filter Buttons */}
-              <div className="flex flex-wrap gap-2">
-                {(['ALL', 'BUY', 'SELL'] as FilterType[]).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => {
-                      setFilter(f);
-                      setPage(1);
-                    }}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                      filter === f
-                        ? 'bg-primary-600 text-white shadow-lg'
-                        : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+      {/* Transaction List (Full Width) */}
+      <div className="space-y-4">
+        {/* Filters and Sorting */}
+        <div className="glass-card p-4 rounded-xl border border-white/10">
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            {/* Filter Buttons */}
+            <div className="flex flex-wrap gap-2">
+              {(['ALL', 'BUY', 'SELL'] as FilterType[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => {
+                    setFilter(f);
+                    setPage(1);
+                  }}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                    filter === f
+                      ? 'bg-primary-600 text-white shadow-lg'
+                      : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            
+            {/* Sort and controls */}
+            <div className="flex gap-4 items-center flex-wrap">
+              {/* Sort Dropdown */}
+              <div className="flex gap-2 items-center">
+                <span className="text-xs text-slate-400">Sort by:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSort(e.target.value as SortBy)}
+                  className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                >
+                  <option value="time">Time</option>
+                  <option value="amount">Amount</option>
+                </select>
               </div>
               
-              {/* Sort and controls */}
-              <div className="flex gap-4 items-center flex-wrap">
-                {/* Sort Dropdown */}
-                <div className="flex gap-2 items-center">
-                  <span className="text-xs text-slate-400">Sort by:</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => handleSort(e.target.value as SortBy)}
-                    className="bg-slate-900 text-slate-300 text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                  >
-                    <option value="time">Time</option>
-                    <option value="amount">Amount</option>
-                  </select>
-                </div>
-                
-                {/* Sort Order Toggle Button */}
-                <button
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="p-2 bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
-                >
-                  {sortOrder === 'asc' ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  )}
-                </button>
-              </div>
+              {/* Sort Order Toggle Button */}
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="p-2 bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                {sortOrder === 'asc' ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
             </div>
           </div>
-          
-          {/* Table */}
-          <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/10 bg-slate-950">
-                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Time
-                    </th>
-                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Wallet
-                    </th>
-                    <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Action
-                    </th>
-                    <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Amount
-                    </th>
-                    <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Tx Hash
-                    </th>
-                    <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
-                      Current Price
-                    </th>
-                  </tr>
-                </thead>
-                
-                <tbody>
-                  {paginatedTransactions.map((tx, idx) => {
-                    return (
-                      <tr
-                        key={`${tx.signature}-${tx.wallet}-${idx}`}
-                        className="group border-b border-white/5 hover:bg-white/5 transition-colors"
-                      >
-                        {/* Time */}
-                        <td className="p-4">
-                          <span className="text-xs text-slate-400 font-mono">
-                            {formatTime(tx.timestamp)}
-                          </span>
-                        </td>
-                        
-                        {/* Wallet */}
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <WalletCell wallet={tx.wallet} />
-                            {tx.isWashTrader && (
-                              <span 
-                                title={`Wash Trader: ${tx.roundTrips} buy-sell round-trips within this batch.`}
-                                className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20 flex items-center gap-1 cursor-help select-none"
-                              >
-                                Wash Trader 🔄
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* Action */}
-                        <td className="p-4 text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            <ActionBadge action={tx.action} />
-                            {tx.exchangeName && (
-                              <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider uppercase flex items-center gap-0.5 animate-pulse">
-                                🏦 {tx.exchangeName}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        
-                        {/* Amount */}
-                        <td className="p-4 text-right">
-                          <div>
-                            <div className="text-sm font-bold text-white">
-                              {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              {tokenSymbol}
-                            </div>
-                          </div>
-                        </td>
-                        
-                        {/* Tx Hash */}
-                        <td className="p-4">
-                          <TxHashLink hash={tx.signature} network={detectedChain as 'solana' | 'ethereum' | 'bsc'} />
-                        </td>
-                        
-                        {/* Current Price */}
-                        <td className="p-4 text-right font-mono text-xs text-white font-bold">
-                          {priceLoading ? (
-                            <span className="text-slate-500">Loading...</span>
-                          ) : (
-                            formatPrice(currentPrice)
+        </div>
+        
+        {/* Table */}
+        <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10 bg-slate-950">
+                  <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4 w-12">
+                    #
+                  </th>
+                  <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Time
+                  </th>
+                  <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Wallet
+                  </th>
+                  <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Action
+                  </th>
+                  <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Amount
+                  </th>
+                  <th className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Tx Hash
+                  </th>
+                  <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-4">
+                    Current Price
+                  </th>
+                </tr>
+              </thead>
+              
+              <tbody>
+                {paginatedTransactions.map((tx, idx) => {
+                  return (
+                    <tr
+                      key={`${tx.signature}-${tx.wallet}-${idx}`}
+                      className="group border-b border-white/5 hover:bg-white/5 transition-colors"
+                    >
+                      {/* Serial Number */}
+                      <td className="p-4 w-12">
+                        <span className="text-xs text-slate-500 font-mono">
+                          {((page - 1) * itemsPerPage) + idx + 1}
+                        </span>
+                      </td>
+
+                      {/* Time */}
+                      <td className="p-4">
+                        <span className="text-xs text-slate-400 font-mono">
+                          {formatTime(tx.timestamp)}
+                        </span>
+                      </td>
+                      
+                      {/* Wallet */}
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <WalletCell wallet={tx.wallet} />
+                          {tx.isWashTrader && (
+                            <span 
+                              title={`Wash Trader: ${tx.roundTrips} buy-sell round-trips within this batch.`}
+                              className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20 flex items-center gap-1 cursor-help select-none"
+                            >
+                              Wash Trader 🔄
+                            </span>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </td>
+                      
+                      {/* Action */}
+                      <td className="p-4 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <ActionBadge action={tx.action} />
+                          {tx.exchangeName && (
+                            <span className="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded font-black tracking-wider uppercase flex items-center gap-0.5 animate-pulse">
+                              🏦 {tx.exchangeName}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Amount */}
+                      <td className="p-4 text-right">
+                        <div>
+                          <div className="text-sm font-bold text-white">
+                            {tx.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {tokenSymbol}
+                          </div>
+                        </div>
+                      </td>
+                      
+                      {/* Tx Hash */}
+                      <td className="p-4">
+                        <TxHashLink hash={tx.signature} network={detectedChain as 'solana' | 'ethereum' | 'bsc'} />
+                      </td>
+                      
+                      {/* Current Price */}
+                      <td className="p-4 text-right font-mono text-xs text-white font-bold">
+                        {priceLoading ? (
+                          <span className="text-slate-500">Loading...</span>
+                        ) : (
+                          formatPrice(currentPrice)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
+            <div className="text-xs text-slate-400">
+              Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
+                <span className="text-xs text-slate-400">Page</span>
+                <span className="text-xs text-white font-bold">{page}</span>
+                <span className="text-xs text-slate-400">of {totalPages}</span>
+              </div>
+              <button
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
             </div>
           </div>
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
-              <div className="text-xs text-slate-400">
-                Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
-                  <span className="text-xs text-slate-400">Page</span>
-                  <span className="text-xs text-white font-bold">{page}</span>
-                  <span className="text-xs text-slate-400">of {totalPages}</span>
-                </div>
-                <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page === totalPages}
-                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {/* Holder Growth Chart Component */}
+        )}
+      </div>
+
+      {/* Analytics & Charts Grid (Below Table) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        {/* Holder Growth Chart (span 2) */}
+        <div className="lg:col-span-2 space-y-4">
           <HolderGrowthChart 
             growthData={rawData.holder_growth} 
             holderSpike={rawData.holder_spike} 
           />
         </div>
 
-        {/* Right Column: Top Holders */}
-        <div className="lg:col-span-1 space-y-4">
+        {/* Top Holders Sidebar (span 1) */}
+        <div className="lg:col-span-1">
           <div className="glass-card p-6 rounded-xl border border-white/10 bg-slate-900/10 flex flex-col h-full">
             <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
               <span className="text-sm font-black italic uppercase text-slate-200">
