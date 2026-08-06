@@ -31,23 +31,42 @@ export async function getAdminUser() {
     const authHeader = headersList.get('authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
+    console.log('[Admin Auth] Authorization header present:', !!authHeader);
+    console.log('[Admin Auth] Token extracted:', token ? `${token.substring(0, 15)}...` : 'None');
+
     // Try bearer token first (sent by client fetch interceptor)
     if (token) {
       const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (!error && user) {
-        if (user.email?.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return null;
+      if (error) {
+        console.error('[Admin Auth] getUser(token) error:', error.message, error.status);
+      }
+      if (user) {
+        console.log('[Admin Auth] getUser(token) success. User email:', user.email);
+        if (user.email?.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+          console.warn('[Admin Auth] User email is not admin email:', user.email);
+          return null;
+        }
         return user;
       }
     }
 
     // Fallback: use the auto-refreshed internal session
     // This handles cases where the stored token is stale/expired
+    console.log('[Admin Auth] Falling back to getSession()...');
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.user) {
+    if (sessionError) {
+      console.error('[Admin Auth] getSession() error:', sessionError.message);
+      return null;
+    }
+    
+    if (!session?.user) {
+      console.log('[Admin Auth] No session/user found in fallback.');
       return null;
     }
 
+    console.log('[Admin Auth] Fallback session user email:', session.user.email);
     if (session.user.email?.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      console.warn('[Admin Auth] Fallback user email is not admin email:', session.user.email);
       return null;
     }
 
