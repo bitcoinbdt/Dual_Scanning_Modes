@@ -169,7 +169,10 @@ function HomePageContent() {
     } catch (err: any) {
       console.error(err);
       setLoading(false);
-      if (err.code === 'AMBIGUOUS_CHAIN') {
+      if (err.code === 'WRONG_CHAIN') {
+        toast.error(err.message || 'Wrong chain selected. Please check your blockchain selection.');
+        setChainAmbiguous(true);
+      } else if (err.code === 'AMBIGUOUS_CHAIN') {
         setChainAmbiguous(true);
       } else {
         toast.error(err.message || 'Error scanning');

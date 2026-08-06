@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Detect blockchain from address format
-    let detection = detectChain(address, preferredChain as 'eth' | 'bsc' | undefined);
+    let detection = detectChain(address, preferredChain as 'solana' | 'eth' | 'bsc' | undefined);
     
     // Auto-detect EVM chain if ambiguous
     if (!detection.isValid && detection.reason === 'ambiguous_evm') {
@@ -83,6 +83,17 @@ export async function POST(request: NextRequest) {
     
     // Check if address format is valid
     if (!detection.isValid) {
+      // Wrong chain selected — return a clear user-facing error before doing any work
+      if (detection.reason === 'wrong_chain') {
+        return NextResponse.json(
+          {
+            error: detection.message,
+            code: 'WRONG_CHAIN',
+            detectedFormat: detection.format
+          },
+          { status: 400 }
+        );
+      }
       // EVM address with no chain specified → prompt user to select ETH or BSC
       if (detection.reason === 'ambiguous_evm') {
         return NextResponse.json(

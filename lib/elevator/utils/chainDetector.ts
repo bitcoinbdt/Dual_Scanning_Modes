@@ -4,7 +4,7 @@
  */
 
 export type SupportedChain = 'solana' | 'bsc' | 'eth' | 'unknown';
-export type DetectionReason = 'ambiguous_evm' | 'unsupported_format' | undefined;
+export type DetectionReason = 'ambiguous_evm' | 'unsupported_format' | 'wrong_chain' | undefined;
 
 export interface ChainDetectionResult {
   chain: SupportedChain;
@@ -17,10 +17,10 @@ export interface ChainDetectionResult {
 /**
  * Detect blockchain from address format
  * @param address - Token address to analyze
- * @param preferredChain - Explicit chain choice by the user ('eth' or 'bsc'). If absent, EVM addresses are treated as ambiguous.
+ * @param preferredChain - Explicit chain choice by the user. If absent, EVM addresses are treated as ambiguous.
  * @returns Detection result with chain type and validity
  */
-export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): ChainDetectionResult {
+export function detectChain(address: string, preferredChain?: 'eth' | 'bsc' | 'solana'): ChainDetectionResult {
   if (!address || typeof address !== 'string') {
     return {
       chain: 'unknown',
@@ -34,6 +34,16 @@ export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): Ch
 
   // Ethereum/BSC format (0x + 40 hexadecimal characters)
   if (/^0x[a-fA-F0-9]{40}$/.test(trimmedAddress)) {
+    // User selected Solana but pasted an EVM address — clear mismatch
+    if (preferredChain === 'solana') {
+      return {
+        chain: 'unknown',
+        isValid: false,
+        format: 'EVM (BSC/Ethereum)',
+        message: 'This looks like an EVM address (BSC or Ethereum), but you selected Solana. Please switch to BSC or Ethereum.',
+        reason: 'wrong_chain'
+      };
+    }
     if (preferredChain === 'eth') {
       return {
         chain: 'eth',
@@ -63,6 +73,16 @@ export function detectChain(address: string, preferredChain?: 'eth' | 'bsc'): Ch
 
   // Solana format (base58, 32-44 characters, excluding confusing chars: 0, O, I, l)
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmedAddress)) {
+    // User selected BSC or ETH but pasted a Solana address — clear mismatch
+    if (preferredChain === 'bsc' || preferredChain === 'eth') {
+      return {
+        chain: 'unknown',
+        isValid: false,
+        format: 'Solana',
+        message: `This looks like a Solana address, but you selected ${preferredChain.toUpperCase()}. Please switch to Solana.`,
+        reason: 'wrong_chain'
+      };
+    }
     return {
       chain: 'solana',
       isValid: true,
