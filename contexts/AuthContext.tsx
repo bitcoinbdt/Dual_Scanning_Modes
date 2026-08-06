@@ -45,7 +45,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       
-      if (url.startsWith('/api/') || url.startsWith('/proxy/')) {
+      let isLocalApi = false;
+      try {
+        const parsedUrl = new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined);
+        isLocalApi = parsedUrl.pathname.startsWith('/api/') || parsedUrl.pathname.startsWith('/proxy/');
+      } catch {
+        isLocalApi = url.startsWith('/api/') || url.startsWith('/proxy/');
+      }
+
+      if (isLocalApi) {
         // Always get the freshest token from the Supabase session (auto-refreshes)
         // Fall back to localStorage only as a secondary option
         let token: string | null = null;
