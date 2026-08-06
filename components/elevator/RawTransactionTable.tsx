@@ -78,21 +78,66 @@ export function RawTransactionTable({
 }: RawTransactionTableProps) {
   // Detect actual blockchain from data
   const detectedChain = rawData.blockchain || network;
-  
+
   const getChainInfo = (chain: string) => {
     switch(chain) {
       case 'solana':
-        return { name: 'Solana', color: 'text-green-400', bgColor: 'bg-green-400/10', emoji: '🟢' };
+        return { name: 'Solana', color: 'text-purple-400', bgColor: 'bg-purple-400/10' };
       case 'bsc':
-        return { name: 'BSC', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', emoji: '🟡' };
+        return { name: 'BSC', color: 'text-yellow-400', bgColor: 'bg-yellow-400/10' };
       case 'eth':
       case 'ethereum':
-        return { name: 'Ethereum', color: 'text-blue-400', bgColor: 'bg-blue-400/10', emoji: '🔵' };
+        return { name: 'Ethereum', color: 'text-blue-400', bgColor: 'bg-blue-400/10' };
       default:
-        return { name: 'Unknown', color: 'text-slate-400', bgColor: 'bg-slate-400/10', emoji: '⚪' };
+        return { name: 'Unknown', color: 'text-slate-400', bgColor: 'bg-slate-400/10' };
     }
   };
-  
+
+  const ChainLogo = ({ chain }: { chain: string }) => {
+    if (chain === 'solana') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 397.7 311.7" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <linearGradient id="sol-a" x1="360.8" y1="351.5" x2="141.2" y2="-69.2" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#00ffa3"/>
+            <stop offset="1" stopColor="#dc1fff"/>
+          </linearGradient>
+          <linearGradient id="sol-b" x1="264.8" y1="401.6" x2="45.2" y2="-19.1" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#00ffa3"/>
+            <stop offset="1" stopColor="#dc1fff"/>
+          </linearGradient>
+          <linearGradient id="sol-c" x1="312.5" y1="376.7" x2="93" y2="-44" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#00ffa3"/>
+            <stop offset="1" stopColor="#dc1fff"/>
+          </linearGradient>
+          <path fill="url(#sol-a)" d="M64.6 237.9a10 10 0 017-2.8h314.6c4.4 0 6.6 5.4 3.5 8.5l-62.7 62.7a10 10 0 01-7 2.8H5.4c-4.4 0-6.6-5.4-3.5-8.5l62.7-62.7z"/>
+          <path fill="url(#sol-b)" d="M64.6 3.8A10.2 10.2 0 0171.6 1h314.6c4.4 0 6.6 5.4 3.5 8.5l-62.7 62.7a10 10 0 01-7 2.8H5.4C1 75 -1.2 69.6 1.9 66.5L64.6 3.8z"/>
+          <path fill="url(#sol-c)" d="M333.1 120.1a10 10 0 00-7-2.8H11.5c-4.4 0-6.6 5.4-3.5 8.5l62.7 62.7a10 10 0 007 2.8h314.6c4.4 0 6.6-5.4 3.5-8.5l-62.7-62.7z"/>
+        </svg>
+      );
+    }
+    if (chain === 'bsc') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 126.61 126.61" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#F0B90B" d="M38.73 53.2L63.3 28.63l24.59 24.59 14.3-14.3L63.3 0 24.43 38.9l14.3 14.3zM0 63.31l14.3-14.31 14.31 14.31L14.3 77.61 0 63.31zm38.73 10.1L63.3 98l24.59-24.59 14.31 14.29-24.6 24.6-.01.01L63.3 126.61 24.41 87.71l-.01-.01 14.33-14.29zm75.17-24.41L128.2 63.31l-14.3 14.3-14.31-14.3 14.31-14.31z"/>
+          <path fill="#F0B90B" d="M77.83 63.3l-14.53-14.53-10.73 10.74-.03.02-1.23 1.23-2.51 2.51.01.02-14.54 14.54 14.53 14.53 14.53-14.53 14.5-14.53z"/>
+        </svg>
+      );
+    }
+    if (chain === 'eth' || chain === 'ethereum') {
+      return (
+        <svg width="18" height="18" viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid">
+          <path fill="#343434" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
+          <path fill="#8C8C8C" d="M127.962 0L0 212.32l127.962 75.638V154.158z"/>
+          <path fill="#3C3C3B" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
+          <path fill="#8C8C8C" d="M127.962 416.905v-104.72L0 236.585z"/>
+          <path fill="#141414" d="M127.961 287.958l127.96-75.637-127.96-58.162z"/>
+          <path fill="#393939" d="M0 212.32l127.96 75.638v-133.8z"/>
+        </svg>
+      );
+    }
+    return <span className="text-slate-400 text-sm">⚪</span>;
+  };
+
   const chainInfo = getChainInfo(detectedChain);
   
   // State
@@ -315,7 +360,7 @@ export function RawTransactionTable({
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 glass-card rounded-xl border border-white/10">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10">
-            <span className="text-sm">{chainInfo.emoji}</span>
+            <ChainLogo chain={detectedChain} />
             <span className="text-xs font-bold text-slate-300">Chain:</span>
             <span className={`text-xs font-extrabold uppercase ${chainInfo.color}`}>
               {chainInfo.name}
