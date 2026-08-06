@@ -418,7 +418,9 @@ function HomePageContent() {
               <Clock className="w-5 h-5 text-blue-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Network Epoch</h4>
               <p className="text-lg font-bold font-mono text-themed truncate mt-1">
-                {tokenData?.networkHealth?.lastBlock || 'Awaiting...'}
+                {tokenData?.networkHealth?.lastBlock
+                  || elevatorData?.networkHealth?.lastBlock
+                  || 'Awaiting...'}
               </p>
             </div>
           </div>
@@ -427,7 +429,9 @@ function HomePageContent() {
               <Database className="w-5 h-5 text-purple-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Block Reward</h4>
               <p className="text-lg font-bold font-mono text-themed truncate mt-1">
-                {tokenData?.networkHealth?.blockReward || 'Awaiting...'}
+                {tokenData?.networkHealth?.blockReward
+                  || elevatorData?.networkHealth?.blockReward
+                  || 'Awaiting...'}
               </p>
             </div>
           </div>
@@ -440,6 +444,8 @@ function HomePageContent() {
                   ? `${new Set(tokenData.liquidityInfo.mainPools.map((p) => p.dex)).size} Global DEX(s)`
                   : tokenData
                   ? '0 Active'
+                  : elevatorData?.exchanges_scanned !== undefined
+                  ? `${elevatorData.exchanges_scanned} CEX(s) Scanned`
                   : 'Awaiting...'}
               </p>
             </div>

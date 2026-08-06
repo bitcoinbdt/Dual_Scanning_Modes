@@ -265,6 +265,43 @@ export async function POST(request: NextRequest) {
           HELIUS_API_KEY
         );
 
+        // Fetch current block / slot for network health stats
+        let networkHealth: { lastBlock: string; blockReward: string } = {
+          lastBlock: 'Deep Scan Active',
+          blockReward: rawData.blockchain === 'solana' ? 'Solana Network Active' : (rawData.blockchain === 'bsc' ? 'BSC Network Active' : 'ETH Network Active'),
+        };
+        try {
+          if (rawData.blockchain === 'solana') {
+            const { Connection } = await import('@solana/web3.js');
+            const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+            const conn = new Connection(HELIUS_URL, 'confirmed');
+            const slot = await conn.getSlot();
+            networkHealth.lastBlock = slot.toLocaleString();
+          } else {
+            const rpcUrl = rawData.blockchain === 'bsc'
+              ? 'https://bsc-dataseed.binance.org/'
+              : 'https://eth.llamarpc.com';
+            const rpcRes = await fetch(rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
+            });
+            const rpcJson = await rpcRes.json();
+            if (rpcJson.result) {
+              networkHealth.lastBlock = parseInt(rpcJson.result, 16).toLocaleString();
+            }
+          }
+        } catch (_e) {
+          // Non-critical — keep default value
+        }
+
+        // Count unique exchanges touched in this scan
+        const uniqueExchangeNames = new Set(
+          rawData.transactions
+            .filter((tx: any) => tx.exchangeName)
+            .map((tx: any) => tx.exchangeName as string)
+        );
+
         return NextResponse.json({
           success: true,
           remainingCredits: newBalance,
@@ -283,6 +320,8 @@ export async function POST(request: NextRequest) {
             total_holders_before_24h: rawData.total_holders_before_24h,
             top_10_wallets: rawData.wallet_metrics.top_10_wallets,
             top_holders_filtered: rawData.wallet_metrics.top_holders_filtered,
+            networkHealth,
+            exchanges_scanned: uniqueExchangeNames.size,
 
             exchange_flow: exchangeResult.metrics,
             trust_score: {
