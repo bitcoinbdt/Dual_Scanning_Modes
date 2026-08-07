@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = getAdminClient();
 
     const body = await request.json();
-    const { name, type, network, address, qr_code_url, instructions, display_order, is_active, icon } = body;
+    const { name, type, network, address, instructions, display_order, is_active, icon } = body;
 
     if (!name || !address) {
       return NextResponse.json(
@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
         type: type || 'crypto',
         network: network || null,
         address,
-        qr_code_url: qr_code_url || null,
         instructions: instructions || null,
         display_order: display_order ?? 0,
         is_active: is_active ?? true,

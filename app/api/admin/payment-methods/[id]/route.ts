@@ -23,7 +23,7 @@ export async function PUT(
     );
 
     const body = await request.json();
-    const { name, network, address, qr_code_url, instructions, display_order, is_active, icon, type } = body;
+    const { name, network, address, instructions, display_order, is_active, icon, type } = body;
 
     // Build update object with only provided fields
     const updates: Record<string, any> = {};
@@ -31,7 +31,6 @@ export async function PUT(
     if (type !== undefined) updates.type = type;
     if (network !== undefined) updates.network = network || null;
     if (address !== undefined) updates.address = address;
-    if (qr_code_url !== undefined) updates.qr_code_url = qr_code_url || null;
     if (instructions !== undefined) updates.instructions = instructions || null;
     if (display_order !== undefined) updates.display_order = display_order;
     if (is_active !== undefined) updates.is_active = is_active;

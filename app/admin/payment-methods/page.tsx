@@ -145,7 +145,6 @@ interface PaymentMethodCardProps {
 function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
   const [address, setAddress] = useState(method.address);
   const [instructions, setInstructions] = useState(method.instructions || '');
-  const [qrCodeUrl, setQrCodeUrl] = useState(method.qr_code_url || '');
   const [isActive, setIsActive] = useState(method.is_active);
   const [saving, setSaving] = useState(false);
 
@@ -158,7 +157,6 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
         body: JSON.stringify({
           address: address.trim(),
           instructions: instructions.trim() || null,
-          qr_code_url: qrCodeUrl.trim() || null,
           is_active: isActive
         }),
       });
@@ -271,19 +269,6 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
           />
         </div>
 
-        {/* QR Code Input */}
-        <div>
-          <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">
-            QR Code Image URL (optional)
-          </label>
-          <input
-            type="text"
-            value={qrCodeUrl}
-            onChange={(e) => setQrCodeUrl(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm text-white focus:outline-none font-mono"
-            placeholder="https://example.com/qr.png"
-          />
-        </div>
 
         {/* Instructions Input */}
         <div>
