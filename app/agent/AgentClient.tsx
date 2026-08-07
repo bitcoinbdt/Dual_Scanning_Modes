@@ -383,26 +383,29 @@ export default function AgentClient() {
           </div>
         )}
 
-        {/* Empty state */}
         {!scanning && tokens.length === 0 && !error && (
           <div className="text-center py-8 sm:py-12">
             {/* Interactive Robot Button */}
-            <div className="relative inline-block mb-4 sm:mb-6">
+            <div className="relative inline-block mb-4 sm:mb-6 animate-float">
+              {/* Radar/Pulsing rings behind */}
+              <div className="absolute -inset-4 rounded-full bg-primary-themed/10 animate-[ping_2s_linear_infinite] pointer-events-none" />
+              <div className="absolute -inset-8 rounded-full bg-primary-themed/5 animate-[ping_3s_linear_infinite] pointer-events-none" />
+
               <button
                 onClick={runAgent}
                 disabled={scanning}
-                className="group relative w-28 h-28 sm:w-32 sm:h-32 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group relative w-36 h-36 sm:w-44 sm:h-44 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
               >
                 {/* Pulsing background rings */}
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-20 group-hover:opacity-40 transition-opacity duration-300 animate-pulse" />
-                <div className="absolute inset-2 rounded-full border-2 border-dashed border-primary-themed/30 group-hover:border-solid group-hover:rotate-180 transition-all duration-700" />
+                <div className="absolute inset-2 rounded-full border-2 border-dashed border-primary-themed/40 animate-[spin_30s_linear_infinite] group-hover:border-solid transition-all duration-700" />
                 
                 {/* Main robot circle */}
-                <div className="absolute inset-4 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-110 transition-all duration-300 border-2 border-primary-themed group-hover:border-accent-themed animate-pulse-glow">
+                <div className="absolute inset-5 sm:inset-6 rounded-full glass-strong flex items-center justify-center group-hover:glow-primary group-hover:scale-105 transition-all duration-300 border-2 border-primary-themed group-hover:border-accent-themed animate-pulse-glow">
                   {scanning ? (
-                    <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-primary-themed animate-spin" />
+                    <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-primary-themed animate-spin" />
                   ) : (
-                    <span className="text-4xl sm:text-5xl group-hover:scale-110 transition-transform duration-300">🤖</span>
+                    <span className="text-5xl sm:text-6xl group-hover:scale-110 transition-transform duration-300">🤖</span>
                   )}
                 </div>
 
