@@ -15,7 +15,7 @@ interface NewsItem {
 const NEWS_ITEMS: NewsItem[] = [
   {
     id: '1',
-    date: '2026-08-03',
+    date: '2026-08-15',
     title: 'System Maintenance',
     description: 'The platform is currently undergoing scheduled maintenance to enhance performance and security. Some features may be temporarily unavailable. We appreciate your patience.',
     type: 'maintenance',
