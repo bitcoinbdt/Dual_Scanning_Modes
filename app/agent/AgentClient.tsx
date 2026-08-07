@@ -434,13 +434,7 @@ export default function AgentClient() {
               </span>
             </div>
 
-            <h3 className="text-lg sm:text-xl font-bold text-themed mb-1 sm:mb-2">No results yet</h3>
-            <p className="text-xs sm:text-sm text-muted-themed mb-1 sm:mb-2">
-              Click the robot to find the top 10 hyped tokens
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-themed/70">
-              Multi-source discovery · Quality filtered · Cross-chain
-            </p>
+
 
             {/* Preview cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto mt-6 sm:mt-8 opacity-20">
