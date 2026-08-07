@@ -213,22 +213,6 @@ export default function AgentClient() {
       <Navigation />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
-        {/* Status Badge */}
-        <div className="flex justify-start mb-4">
-          <span
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-              scanning ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'
-            }`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                scanning ? 'bg-amber-400' : 'bg-green-400'
-              }`}
-            />
-            {scanning ? 'Scanning...' : 'Agent ready'}
-          </span>
-        </div>
-
         {/* Control Panel */}
         <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
           <div className="grid grid-cols-3 gap-3">
@@ -432,6 +416,22 @@ export default function AgentClient() {
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-500 opacity-0 group-hover:opacity-100 group-hover:-translate-x-8 transition-all duration-500 delay-200" />
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-pink-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-8 transition-all duration-500 delay-300" />
               </div>
+            </div>
+
+            {/* Status Badge */}
+            <div className="flex justify-center mb-6">
+              <span
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                  scanning ? 'bg-amber-500/20 text-amber-400 font-mono' : 'bg-green-500/20 text-green-400 font-mono'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                    scanning ? 'bg-amber-400' : 'bg-green-400'
+                  }`}
+                />
+                {scanning ? 'Scanning...' : 'Agent ready'}
+              </span>
             </div>
 
             <h3 className="text-lg sm:text-xl font-bold text-themed mb-1 sm:mb-2">No results yet</h3>
