@@ -310,15 +310,15 @@ function HomePageContent() {
             )}
 
             {/* Address Input */}
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-themed pointer-events-none" />
+            <div className="relative mb-4 rgb-border rounded-lg">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-themed pointer-events-none z-10" />
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 disabled={loading}
                 placeholder="Paste Token Contract Address..."
-                className={`w-full bg-transparent border border-white/10 rounded-lg pl-10 pr-3 py-3 text-sm text-themed font-mono focus:outline-none focus:border-primary-themed transition ${
+                className={`w-full bg-transparent border border-transparent rounded-lg pl-10 pr-3 py-3 text-sm text-themed font-mono focus:outline-none transition ${
                   loading ? 'animate-terminal-flicker' : ''
                 }`}
                 onKeyDown={(e) => {
