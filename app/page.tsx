@@ -415,10 +415,10 @@ function HomePageContent() {
             <div className="glass-strong p-5 rounded-2xl h-full">
               <Clock className="w-5 h-5 text-blue-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Network Epoch</h4>
-              <p className="text-lg font-bold font-mono text-themed truncate mt-1">
+              <p className="text-sm font-bold font-mono text-themed truncate mt-1">
                 {tokenData?.networkHealth?.lastBlock
                   || elevatorData?.networkHealth?.lastBlock
-                  || 'Awaiting...'}
+                  || 'Awaiting for scan...'}
               </p>
             </div>
           </div>
@@ -426,10 +426,10 @@ function HomePageContent() {
             <div className="glass-strong p-5 rounded-2xl h-full">
               <Database className="w-5 h-5 text-purple-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Block Reward</h4>
-              <p className="text-lg font-bold font-mono text-themed truncate mt-1">
+              <p className="text-sm font-bold font-mono text-themed truncate mt-1">
                 {tokenData?.networkHealth?.blockReward
                   || elevatorData?.networkHealth?.blockReward
-                  || 'Awaiting...'}
+                  || 'Awaiting for scan...'}
               </p>
             </div>
           </div>
@@ -437,14 +437,14 @@ function HomePageContent() {
             <div className="glass-strong p-5 rounded-2xl h-full">
               <ExternalLink className="w-5 h-5 text-pink-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Exchanges Scanned</h4>
-              <p className="text-lg font-bold font-mono text-themed truncate mt-1">
+              <p className="text-sm font-bold font-mono text-themed truncate mt-1">
                 {tokenData?.liquidityInfo?.mainPools
                   ? `${new Set(tokenData.liquidityInfo.mainPools.map((p) => p.dex)).size} Global DEX(s)`
                   : tokenData
                   ? '0 Active'
                   : elevatorData?.exchanges_scanned !== undefined
                   ? `${elevatorData.exchanges_scanned} CEX(s) Scanned`
-                  : 'Awaiting...'}
+                  : 'Awaiting for scan...'}
               </p>
             </div>
           </div>
@@ -452,8 +452,8 @@ function HomePageContent() {
             <div className="glass-strong p-5 rounded-2xl h-full">
               <Target className="w-5 h-5 text-cyan-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Scan Status</h4>
-              <p className="text-lg font-bold font-mono text-themed truncate mt-1">
-                {tokenData || elevatorData ? 'Complete' : 'Awaiting...'}
+              <p className="text-sm font-bold font-mono text-themed truncate mt-1">
+                {tokenData || elevatorData ? 'Complete' : 'Awaiting for scan...'}
               </p>
             </div>
           </div>
