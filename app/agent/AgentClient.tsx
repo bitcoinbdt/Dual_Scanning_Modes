@@ -410,11 +410,13 @@ export default function AgentClient() {
                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary-themed to-purple-600 opacity-0 group-hover:opacity-30 blur-xl transition-opacity duration-300" />
                 
                 {/* Cost badge */}
-                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full glass-strong border border-primary-themed/30 group-hover:border-primary-themed transition-all">
-                  <span className="text-xs font-bold gradient-text whitespace-nowrap">
-                    {scanning ? 'Running...' : '5 credits'}
-                  </span>
-                </div>
+                {scanning && (
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full glass-strong border border-primary-themed/30 group-hover:border-primary-themed transition-all">
+                    <span className="text-xs font-bold gradient-text whitespace-nowrap">
+                      Running...
+                    </span>
+                  </div>
+                )}
               </button>
 
               {/* Particle effects on hover */}
