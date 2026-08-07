@@ -129,7 +129,7 @@ function CreditsContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           credit_package_id: selectedPackage.id,
-          credits_amount: selectedPackage.credits,
+          credits_amount: selectedPackage.credits + Math.floor(selectedPackage.credits * selectedPackage.bonusPercentage / 100),
           price_usd: selectedPackage.priceUsd,
           payment_method_id: selectedPaymentMethod.id,
           transaction_hash: transactionHash.trim(),
@@ -197,10 +197,17 @@ function CreditsContent() {
               </div>
               <div className="flex items-center justify-between pb-4 border-b border-white/5">
                 <span className="text-slate-400 text-sm">Credits</span>
-                <span className="text-yellow-400 font-bold flex items-center gap-1.5">
-                  <Zap className="w-4 h-4" fill="currentColor" />
-                  {selectedPackage.credits} Credits
-                </span>
+                <div className="text-right">
+                  <span className="text-yellow-400 font-bold flex items-center gap-1.5 justify-end">
+                    <Zap className="w-4 h-4" fill="currentColor" />
+                    {selectedPackage.credits + Math.floor(selectedPackage.credits * selectedPackage.bonusPercentage / 100)} Credits
+                  </span>
+                  {selectedPackage.bonusPercentage > 0 && (
+                    <span className="text-[10px] text-green-400 block mt-0.5">
+                      Includes {Math.floor(selectedPackage.credits * selectedPackage.bonusPercentage / 100)} bonus ({selectedPackage.bonusPercentage}%)
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-sm">Price</span>
