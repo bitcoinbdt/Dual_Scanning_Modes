@@ -19,6 +19,7 @@ import {
   Loader2,
   Search,
   Lock,
+  Bot,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -214,14 +215,19 @@ export default function AgentClient() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
         {/* Control Panel */}
         <div className="glass-strong rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 rgb-border">
-          <div className="flex items-center justify-center gap-2 mb-4 text-xs">
+          {/* Header & Status */}
+          <div className="flex flex-col items-start gap-1.5 mb-5 border-b border-white/5 pb-4">
+            <div className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary-themed" />
+              <h2 className="text-xl font-extrabold text-themed tracking-tight">Agent</h2>
+            </div>
             <span
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                 scanning ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full animate-pulse ${
+                className={`w-1.5 h-1.5 rounded-full animate-pulse ${
                   scanning ? 'bg-amber-400' : 'bg-green-400'
                 }`}
               />
