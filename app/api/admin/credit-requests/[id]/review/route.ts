@@ -131,10 +131,10 @@ export async function POST(
               type: 'purchase',
               amount: existingRequest.credits_amount,
               balance_after: newBal,
-              description: 'Credit purchase approved (manual fallback) — ' + existingRequest.credit_package_id,
+              description: 'Credit purchase approved (manual fallback) — ' + existingRequest.package_id,
               metadata: {
                 request_id: existingRequest.id,
-                package_id: existingRequest.credit_package_id,
+                package_id: existingRequest.package_id,
                 price_usd: existingRequest.price_usd,
                 tx_hash: existingRequest.transaction_hash,
                 fallback: true,
@@ -155,6 +155,35 @@ export async function POST(
           { error: 'Credit request status updated, but credit allocation failed: ' + (creditError.message || creditError) },
           { status: 500 }
         );
+      }
+
+      // Award referral bonus to the REFERRER (not the buyer).
+      // The bonus credits are added ONLY to the referrer's account by the DB function.
+      // The buyer always receives their full purchased credits unchanged.
+      try {
+        const { data: referralResult, error: referralError } = await supabaseAdmin.rpc(
+          'award_referral_bonus',
+          {
+            p_buyer_user_id: existingRequest.user_id,
+            p_package_id: existingRequest.package_id || 'custom',
+            p_credits_purchased: existingRequest.credits_amount,
+            p_amount_paid: existingRequest.price_usd ?? 0,
+          }
+        );
+
+        if (referralError) {
+          // Non-fatal: log but don't fail the whole request
+          console.warn('[Admin] Referral bonus RPC error (non-fatal):', referralError.message);
+        } else if (referralResult?.awarded) {
+          console.log(
+            `[Admin] Referral bonus awarded: ${referralResult.bonus_credits} credits → referrer ${referralResult.referrer_user_id}`
+          );
+        } else {
+          console.log('[Admin] No referral bonus awarded:', referralResult?.reason || 'No eligible referral');
+        }
+      } catch (referralErr: any) {
+        // Non-fatal: referral bonus failure should not block credit approval
+        console.warn('[Admin] Referral bonus exception (non-fatal):', referralErr.message);
       }
     }
 
