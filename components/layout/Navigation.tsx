@@ -23,10 +23,6 @@ import { useCredits } from '@/contexts/CreditContext';
 import { useAdmin } from '@/hooks/useAdmin';
 import AuthModal from '@/components/AuthModal';
 
-interface NavigationProps {
-  onOpenCreditStore?: () => void;
-}
-
 const THEMES_META = {
   default: { label: 'Dark Blue', primary: '#3b82f6' },
   cyber: { label: 'Cyber Green', primary: '#22c55e' },
@@ -35,7 +31,7 @@ const THEMES_META = {
 
 type ThemeKey = 'default' | 'cyber' | 'neon';
 
-export default function Navigation({ onOpenCreditStore }: NavigationProps) {
+export default function Navigation() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
@@ -88,11 +84,7 @@ export default function Navigation({ onOpenCreditStore }: NavigationProps) {
   };
 
   const handleOpenCredits = () => {
-    if (onOpenCreditStore) {
-      onOpenCreditStore();
-    } else {
-      router.push('/pricing');
-    }
+    router.push('/pricing');
   };
 
   return (

@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditContext';
 import AuthModal from '@/components/AuthModal';
 import { InsufficientCreditsModal } from '@/components/credits/InsufficientCreditsModal';
-import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   Rocket,
@@ -92,12 +92,12 @@ export default function AgentClient() {
   const [tokens, setTokens] = useState<AgentToken[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const router = useRouter();
   const [error, setError] = useState('');
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
-  const [showCreditStore, setShowCreditStore] = useState(false);
 
   const runAgent = useCallback(async () => {
     if (!hasEnoughCredits(5)) {
@@ -173,7 +173,7 @@ export default function AgentClient() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-grid">
-        <Navigation onOpenCreditStore={() => {}} />
+        <Navigation />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16 flex items-center justify-center min-h-[80vh]">
           <div className="glass-strong rounded-2xl p-10 text-center max-w-md w-full rgb-border animate-fade-in">
             <div className="w-20 h-20 mx-auto mb-5 rounded-full gradient-primary flex items-center justify-center glow-primary">
@@ -209,7 +209,7 @@ export default function AgentClient() {
 
   return (
     <div className="min-h-screen bg-grid">
-      <Navigation onOpenCreditStore={() => {}} />
+      <Navigation />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-8 sm:pb-16">
         {/* Control Panel */}
@@ -450,16 +450,10 @@ export default function AgentClient() {
           onClose={() => setShowInsufficientCredits(false)}
           onBuyCredits={() => {
             setShowInsufficientCredits(false);
-            setShowCreditStore(true);
+            router.push('/pricing');
           }}
           scanType="ELEVATOR"
           currentBalance={balance.balance}
-        />
-      )}
-      {showCreditStore && (
-        <CreditStoreModal
-          isOpen={showCreditStore}
-          onClose={() => setShowCreditStore(false)}
         />
       )}
     </div>

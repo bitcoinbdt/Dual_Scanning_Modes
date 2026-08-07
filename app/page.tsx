@@ -34,7 +34,6 @@ const TokenAuditCard = dynamic(() => import('@/components/TokenAuditCard').then(
 const MarketIntelligenceCard = dynamic(() => import('@/components/MarketIntelligenceCard').then(mod => mod.MarketIntelligenceCard));
 const RawTransactionTable = dynamic(() => import('@/components/elevator/RawTransactionTable').then(mod => mod.RawTransactionTable));
 const InsufficientCreditsModal = dynamic(() => import('@/components/credits/InsufficientCreditsModal').then(mod => mod.InsufficientCreditsModal));
-const CreditStoreModal = dynamic(() => import('@/components/credits/CreditStoreModal').then(mod => mod.CreditStoreModal));
 
 const CHAINS = [
   { id: 'solana', label: 'Solana' },
@@ -66,7 +65,6 @@ function HomePageContent() {
   const [chainAmbiguous, setChainAmbiguous] = useState(false);
   const [elevatorCredits, setElevatorCredits] = useState<5 | 10 | 20 | 30>(10);
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
-  const [showCreditStore, setShowCreditStore] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(false);
 
   // Capture referral code from URL parameter and redirect to signup
@@ -186,7 +184,7 @@ function HomePageContent() {
 
   return (
     <div className="min-h-screen bg-grid">
-      <Navigation onOpenCreditStore={() => setShowCreditStore(true)} />
+      <Navigation />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* News Timeline */}
@@ -468,14 +466,11 @@ function HomePageContent() {
         onClose={() => setShowInsufficientCredits(false)}
         onBuyCredits={() => {
           setShowInsufficientCredits(false);
-          setShowCreditStore(true);
+          router.push('/pricing');
         }}
         scanType={scanType}
         currentBalance={balance.balance}
       />
-
-      {/* Credit Store Modal */}
-      <CreditStoreModal isOpen={showCreditStore} onClose={() => setShowCreditStore(false)} />
     </div>
   );
 }

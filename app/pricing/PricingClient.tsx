@@ -1,13 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap, Flame } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import Navigation from '@/components/layout/Navigation';
 import BoostedTokenBanner from '@/components/boost/BoostedTokenBanner';
 import { useCredits } from '@/contexts/CreditContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { CreditStoreModal } from '@/components/credits/CreditStoreModal';
 
 const ELEVATOR_COSTS = [
   { credits: 5, transactions: 50, label: '50 Transactions' },
@@ -28,19 +27,21 @@ const BENEFITS = [
 ];
 
 export default function PricingClient() {
+  const router = useRouter();
   const { packages } = useCredits();
   const { isAuthenticated } = useAuth();
-  const [showCreditStore, setShowCreditStore] = useState(false);
-  const [initialPackageId, setInitialPackageId] = useState<string | undefined>(undefined);
 
   const handleBuyNow = (packageId?: string) => {
-    setInitialPackageId(packageId);
-    setShowCreditStore(true);
+    if (packageId) {
+      router.push(`/credits?package=${packageId}`);
+    } else {
+      router.push('/credits');
+    }
   };
 
   return (
     <div className="min-h-screen bg-grid">
-      <Navigation onOpenCreditStore={() => setShowCreditStore(true)} />
+      <Navigation />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* Header */}
@@ -191,12 +192,6 @@ export default function PricingClient() {
           </button>
         </motion.div>
       </div>
-
-      <CreditStoreModal
-        isOpen={showCreditStore}
-        onClose={() => setShowCreditStore(false)}
-        initialPackageId={initialPackageId}
-      />
     </div>
   );
 }

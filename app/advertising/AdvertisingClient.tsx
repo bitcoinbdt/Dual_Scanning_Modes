@@ -42,7 +42,7 @@ export default function AdvertisingClient() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-grid">
-        <Navigation onOpenCreditStore={() => {}} />
+        <Navigation />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-28 pb-16">
           <div className="text-center glass-strong rounded-2xl p-12">
             <Rocket className="w-16 h-16 text-primary-themed mx-auto mb-4" />
@@ -67,7 +67,7 @@ export default function AdvertisingClient() {
 
   return (
     <div className="min-h-screen bg-grid">
-      <Navigation onOpenCreditStore={() => {}} />
+      <Navigation />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* Header */}
