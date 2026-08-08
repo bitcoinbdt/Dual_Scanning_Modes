@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LiquidityMap",
+  "type": "object",
+  "properties": {
+    "total_liquidity_usd": {
+      "type": "number"
+    },
+    "pools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pool_address": { "type": "string" },
+          "dex_name": { "type": "string" },
+          "token0_reserves": { "type": "string" },
+          "token1_reserves": { "type": "string" },
+          "liquidity_usd": { "type": "number" },
+          "pair_name": { "type": "string" },
+          "fee_tier": { "type": "number" },
+          "pool_age_seconds": { "type": "integer" }
+        },
+        "required": ["pool_address", "dex_name", "token0_reserves", "token1_reserves", "liquidity_usd"]
+      }
+    },
+    "liquidity_concentration_ratio": {
+      "type": "number",
+      "description": "Proportion of total liquidity held in the largest pool (0.0 to 1.0)"
+    },
+    "fragmentation_index": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Indicates if liquidity is spread thinly across too many pools"
+    }
+  },
+  "required": ["total_liquidity_usd", "pools", "liquidity_concentration_ratio", "fragmentation_index"]
+}

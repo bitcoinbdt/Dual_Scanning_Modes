@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TransactionRecord",
+  "type": "object",
+  "properties": {
+    "tx_hash": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "block_number": {
+      "type": "integer"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Epoch timestamp in seconds"
+    },
+    "from_address": {
+      "type": "string"
+    },
+    "to_address": {
+      "type": "string"
+    },
+    "tx_type": {
+      "type": "string",
+      "enum": ["transfer", "swap_buy", "swap_sell", "liquidity_add", "liquidity_remove"]
+    },
+    "amount_token": {
+      "type": "string",
+      "description": "Decimal representation of tokens transferred or swapped"
+    },
+    "amount_usd": {
+      "type": "number"
+    },
+    "gas_used": {
+      "type": "string"
+    },
+    "gas_price_gwei": {
+      "type": "number"
+    }
+  },
+  "required": ["tx_hash", "block_number", "timestamp", "from_address", "to_address", "tx_type"]
+}

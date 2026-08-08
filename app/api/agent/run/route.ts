@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { headers } from 'next/headers';
+import crypto from 'crypto';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface BoostEntry {
@@ -117,6 +118,8 @@ async function enrichToken(
 export async function POST(request: NextRequest) {
   let userId: string | null = null;
   let creditsDeducted = false;
+  let refundIssued = false;           // P2-3: prevents double-refund locally
+  const scanId = crypto.randomUUID(); // P0: unique identifier for database-level idempotency
   const agentCost = 5;
 
   try {
@@ -144,7 +147,7 @@ export async function POST(request: NextRequest) {
     // 2. Deduct 5 credits atomically
     const { data: newBalance, error: rpcError } = await supabase.rpc(
       'deduct_credits_for_scan',
-      { p_user_id: user.id, p_amount: agentCost, p_scan_type: 'AGENT', p_token_address: 'ALL' }
+      { p_user_id: user.id, p_amount: agentCost, p_scan_type: 'AGENT', p_token_address: 'ALL', p_scan_id: scanId }
     );
 
     if (!rpcError) {
@@ -208,7 +211,8 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    if (creditsDeducted && userId) {
+    if (creditsDeducted && userId && !refundIssued) {
+      refundIssued = true;
       console.log(`[Agent API] Attempting credit refund of ${agentCost} for user ${userId} due to failure...`);
       try {
         const { error: refundError } = await supabase.rpc('refund_credits_for_scan', {
@@ -216,6 +220,7 @@ export async function POST(request: NextRequest) {
           p_amount: agentCost,
           p_scan_type: 'AGENT',
           p_token_address: 'ALL',
+          p_scan_id: scanId, // Pass scanId for database-level idempotency
         });
         if (refundError) {
           console.error('[Agent API] Credit refund RPC failed:', refundError);
@@ -229,7 +234,7 @@ export async function POST(request: NextRequest) {
 
     console.error('[Agent API] Run error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to run agent' },
+      { error: 'Failed to run agent. Please try again.' },
       { status: 500 }
     );
   }

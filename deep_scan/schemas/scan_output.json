@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeepScanOutput",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial_failure", "failure"]
+    },
+    "scan_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "type": "integer"
+    },
+    "token_metadata": {
+      "type": "object",
+      "properties": {
+        "address": { "type": "string" },
+        "name": { "type": "string" },
+        "symbol": { "type": "string" },
+        "decimals": { "type": "integer" },
+        "total_supply": { "type": "string" },
+        "creator": { "type": "string" }
+      },
+      "required": ["address", "name", "symbol", "decimals"]
+    },
+    "market_summary": {
+      "type": "object",
+      "properties": {
+        "price_usd": { "type": "number" },
+        "volume_24h_usd": { "type": "number" },
+        "fdv_usd": { "type": "number" },
+        "market_regime": { "type": "string" }
+      },
+      "required": ["price_usd", "volume_24h_usd", "fdv_usd", "market_regime"]
+    },
+    "wallet_quality": {
+      "type": "object",
+      "properties": {
+        "score": { "type": "integer" },
+        "fresh_wallet_ratio": { "type": "number" },
+        "co_funded_clusters_count": { "type": "integer" },
+        "suspicious_wallets": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["score", "fresh_wallet_ratio"]
+    },
+    "organic_price": {
+      "type": "object",
+      "properties": {
+        "organic_score": { "type": "integer" },
+        "hhi_index": { "type": "number" },
+        "wash_trading_volume_ratio": { "type": "number" },
+        "volume_price_divergence": { "type": "boolean" }
+      },
+      "required": ["organic_score", "hhi_index", "wash_trading_volume_ratio"]
+    },
+    "liquidity_stress": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "position_size_usd": { "type": "number" },
+          "price_impact_percentage": { "type": "number" },
+          "slippage_percentage": { "type": "number" },
+          "expected_execution_price": { "type": "number" },
+          "exit_risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+        },
+        "required": ["position_size_usd", "price_impact_percentage", "slippage_percentage", "exit_risk_level"]
+      }
+    },
+    "whale_behavior": {
+      "type": "object",
+      "properties": {
+        "whale_supply_ratio": { "type": "number" },
+        "accumulation_status": { "type": "string" },
+        "active_whales_count": { "type": "integer" }
+      },
+      "required": ["whale_supply_ratio", "accumulation_status"]
+    },
+    "smart_money": {
+      "type": "object",
+      "properties": {
+        "smart_money_score": { "type": "integer" },
+        "inflow_outflow_usd": { "type": "number" },
+        "active_wallets_count": { "type": "integer" },
+        "flow_status": { "type": "string" }
+      },
+      "required": ["smart_money_score", "flow_status"]
+    },
+    "buyer_quality": {
+      "type": "object",
+      "properties": {
+        "score": { "type": "integer" },
+        "returning_buyers_ratio": { "type": "number" },
+        "capital_diversity_ratio": { "type": "number" }
+      },
+      "required": ["score", "returning_buyers_ratio"]
+    },
+    "exit_risk": {
+      "type": "object",
+      "properties": {
+        "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "unrealized_profit_supply_ratio": { "type": "number" },
+        "top_holders_liquidity_ratio": { "type": "number" }
+      },
+      "required": ["risk_level", "unrealized_profit_supply_ratio"]
+    },
+    "capital_efficiency": {
+      "type": "object",
+      "properties": {
+        "market_cap_to_liquidity_ratio": { "type": "number" },
+        "sensitivity": { "type": "string", "enum": ["low", "medium", "high"] }
+      },
+      "required": ["market_cap_to_liquidity_ratio", "sensitivity"]
+    },
+    "top_risks": {
+      "type": "array",
+      "items": { "$ref": "risk_signal.json" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "evidence.json" }
+    },
+    "data_quality": {
+      "type": "object",
+      "properties": {
+        "stale_data_warning": { "type": "boolean" },
+        "block_latency": { "type": "integer" }
+      },
+      "required": ["stale_data_warning"]
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": [
+    "status",
+    "scan_id",
+    "timestamp",
+    "token_metadata",
+    "market_summary",
+    "wallet_quality",
+    "organic_price",
+    "liquidity_stress",
+    "whale_behavior",
+    "smart_money",
+    "buyer_quality",
+    "exit_risk",
+    "capital_efficiency",
+    "top_risks",
+    "evidence",
+    "data_quality",
+    "limitations"
+  ]
+}

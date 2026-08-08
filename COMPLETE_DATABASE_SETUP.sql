@@ -21,10 +21,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =====================================================
 
 -- 1. USER PROFILES TABLE
+-- IMPORTANT: credits_balance is required by the handle_new_user trigger (below)
+-- and by deduct_credits_for_scan / refund_credits_for_scan RPCs.
+-- After running this file you MUST also run: database/deduct_credits_for_scan.sql
 CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   display_name TEXT,
+  credits_balance INTEGER DEFAULT 20 NOT NULL,  -- Starting credits awarded on signup
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   total_scans INTEGER DEFAULT 0,
@@ -156,13 +160,29 @@ CREATE TABLE IF NOT EXISTS public.credit_transactions (
   balance_after INTEGER NOT NULL,
   description TEXT,
   metadata JSONB,
+  scan_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT valid_type CHECK (type IN ('purchase', 'bonus', 'scan_deduction', 'refund', 'adjustment')),
   CONSTRAINT valid_amount CHECK (amount != 0),
-  CONSTRAINT valid_balance CHECK (balance_after >= 0)
+  CONSTRAINT valid_balance CHECK (balance_after >= 0),
+  CONSTRAINT unique_scan_action UNIQUE (scan_id, type)
 );
 
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
+
+-- Upgrade existing credit_transactions table if it already exists from previous phases
+ALTER TABLE public.credit_transactions ADD COLUMN IF NOT EXISTS scan_id UUID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+     WHERE conname = 'unique_scan_action' 
+       AND conrelid = 'public.credit_transactions'::regclass
+  ) THEN
+    ALTER TABLE public.credit_transactions ADD CONSTRAINT unique_scan_action UNIQUE (scan_id, type);
+  END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can view own transactions" ON public.credit_transactions;
 DROP POLICY IF EXISTS "System can insert transactions" ON public.credit_transactions;
@@ -175,6 +195,7 @@ CREATE POLICY "System can insert transactions" ON public.credit_transactions
 CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON public.credit_transactions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_credit_tx_type ON public.credit_transactions(type);
 CREATE INDEX IF NOT EXISTS idx_credit_tx_created ON public.credit_transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_credit_tx_scan_id ON public.credit_transactions(scan_id);
 
 -- =====================================================
 -- STEP 2: CREATE FUNCTIONS
@@ -455,6 +476,136 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ===========================================
+-- deduct_credits_for_scan RPC Function
+-- ===========================================
+-- Drop old 4-parameter overload if it exists (Phase 3 migration leftover)
+DROP FUNCTION IF EXISTS public.deduct_credits_for_scan(uuid, integer, text, text);
+CREATE OR REPLACE FUNCTION deduct_credits_for_scan(
+  p_user_id      UUID,
+  p_amount       INTEGER,
+  p_scan_type    TEXT,
+  p_token_address TEXT,
+  p_scan_id      UUID DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_balance INTEGER;
+  v_new_balance     INTEGER;
+BEGIN
+  IF p_scan_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'scan_deduction'
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+  END IF;
+
+  SELECT credits_balance INTO v_current_balance FROM public.user_profiles WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found for user %', p_user_id;
+  END IF;
+
+  IF v_current_balance < p_amount THEN
+    RAISE EXCEPTION 'Insufficient credit balance. Required: %, Available: %', p_amount, v_current_balance;
+  END IF;
+
+  v_new_balance := v_current_balance - p_amount;
+  UPDATE public.user_profiles SET credits_balance = v_new_balance, updated_at = NOW() WHERE id = p_user_id;
+
+  INSERT INTO public.credit_transactions (
+    user_id, type, amount, balance_after, description, metadata, scan_id
+  ) VALUES (
+    p_user_id, 'scan_deduction', -p_amount, v_new_balance,
+    CASE p_scan_type
+      WHEN 'BASIC'    THEN 'Basic Scan — ' || p_token_address
+      WHEN 'ELEVATOR' THEN 'Elevator Deep Scan — ' || p_token_address
+      WHEN 'DEEP'     THEN 'Deep Scan — ' || p_token_address
+      WHEN 'AGENT'    THEN 'Crypto Hype Agent run'
+      ELSE                 p_scan_type || ' — ' || p_token_address
+    END,
+    jsonb_build_object('scan_type', p_scan_type, 'token_address', p_token_address, 'credits_spent', p_amount),
+    p_scan_id
+  );
+
+  RETURN v_new_balance;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION deduct_credits_for_scan(UUID, INTEGER, TEXT, TEXT, UUID) TO authenticated;
+
+-- ===========================================
+-- refund_credits_for_scan RPC Function
+-- ===========================================
+-- Drop old 4-parameter overload if it exists (Phase 3 migration leftover)
+DROP FUNCTION IF EXISTS public.refund_credits_for_scan(uuid, integer, text, text);
+CREATE OR REPLACE FUNCTION refund_credits_for_scan(
+  p_user_id       UUID,
+  p_amount        INTEGER,
+  p_scan_type     TEXT,
+  p_token_address  TEXT,
+  p_scan_id       UUID DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_balance INTEGER;
+  v_new_balance     INTEGER;
+BEGIN
+  IF p_scan_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'refund'
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'scan_deduction' AND user_id = p_user_id
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+  END IF;
+
+  SELECT credits_balance INTO v_current_balance FROM public.user_profiles WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found for user %', p_user_id;
+  END IF;
+
+  v_new_balance := v_current_balance + p_amount;
+  UPDATE public.user_profiles SET credits_balance = v_new_balance, updated_at = NOW() WHERE id = p_user_id;
+
+  INSERT INTO public.credit_transactions (
+    user_id, type, amount, balance_after, description, metadata, scan_id
+  ) VALUES (
+    p_user_id, 'refund', p_amount, v_new_balance,
+    CASE p_scan_type
+      WHEN 'BASIC'    THEN 'Refund: Basic Scan — ' || p_token_address
+      WHEN 'ELEVATOR' THEN 'Refund: Elevator Deep Scan — ' || p_token_address
+      WHEN 'DEEP'     THEN 'Refund: Deep Scan — ' || p_token_address
+      WHEN 'AGENT'    THEN 'Refund: Crypto Hype Agent run'
+      ELSE                 'Refund: ' || p_scan_type || ' — ' || p_token_address
+    END,
+    jsonb_build_object('scan_type', p_scan_type, 'token_address', p_token_address, 'credits_refunded', p_amount),
+    p_scan_id
+  );
+
+  RETURN v_new_balance;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION refund_credits_for_scan(UUID, INTEGER, TEXT, TEXT, UUID) TO authenticated;
+
 -- =====================================================
 -- STEP 3: VERIFICATION
 -- =====================================================
@@ -482,7 +633,7 @@ SELECT
   COUNT(*) as count
 FROM information_schema.routines
 WHERE routine_schema = 'public'
-  AND routine_name IN ('generate_referral_code', 'handle_new_user', 'apply_referral_code', 'award_referral_bonus');
+  AND routine_name IN ('generate_referral_code', 'handle_new_user', 'apply_referral_code', 'award_referral_bonus', 'deduct_credits_for_scan', 'refund_credits_for_scan');
 
 -- Check trigger exists
 SELECT 
@@ -502,9 +653,9 @@ SELECT
 -- If all counts show expected numbers:
 -- - Tables Created: 5
 -- - RLS Enabled: 5
--- - Functions Created: 4
+-- - Functions Created: 6
 -- - Trigger Created: 1
 -- - Sample Referral Code: 8-character code
 --
--- Your database is ready for signup/login!
+-- Your database is fully ready for signup, logins, and credit-scoped scans!
 -- =====================================================

@@ -306,6 +306,135 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ===========================================
+-- 5. DEDUCT CREDITS FOR SCAN FUNCTION
+-- ===========================================
+-- Drop old 4-parameter overloads if they exist (Phase 3 migration leftover)
+DROP FUNCTION IF EXISTS public.deduct_credits_for_scan(uuid, integer, text, text);
+DROP FUNCTION IF EXISTS public.refund_credits_for_scan(uuid, integer, text, text);
+CREATE OR REPLACE FUNCTION deduct_credits_for_scan(
+  p_user_id      UUID,
+  p_amount       INTEGER,
+  p_scan_type    TEXT,
+  p_token_address TEXT,
+  p_scan_id      UUID DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_balance INTEGER;
+  v_new_balance     INTEGER;
+BEGIN
+  IF p_scan_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'scan_deduction'
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+  END IF;
+
+  SELECT credits_balance INTO v_current_balance FROM public.user_profiles WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found for user %', p_user_id;
+  END IF;
+
+  IF v_current_balance < p_amount THEN
+    RAISE EXCEPTION 'Insufficient credit balance. Required: %, Available: %', p_amount, v_current_balance;
+  END IF;
+
+  v_new_balance := v_current_balance - p_amount;
+  UPDATE public.user_profiles SET credits_balance = v_new_balance, updated_at = NOW() WHERE id = p_user_id;
+
+  INSERT INTO public.credit_transactions (
+    user_id, type, amount, balance_after, description, metadata, scan_id
+  ) VALUES (
+    p_user_id, 'scan_deduction', -p_amount, v_new_balance,
+    CASE p_scan_type
+      WHEN 'BASIC'    THEN 'Basic Scan — ' || p_token_address
+      WHEN 'ELEVATOR' THEN 'Elevator Deep Scan — ' || p_token_address
+      WHEN 'DEEP'     THEN 'Deep Scan — ' || p_token_address
+      WHEN 'AGENT'    THEN 'Crypto Hype Agent run'
+      ELSE                 p_scan_type || ' — ' || p_token_address
+    END,
+    jsonb_build_object('scan_type', p_scan_type, 'token_address', p_token_address, 'credits_spent', p_amount),
+    p_scan_id
+  );
+
+  RETURN v_new_balance;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION deduct_credits_for_scan(UUID, INTEGER, TEXT, TEXT, UUID) TO authenticated;
+
+-- ===========================================
+-- 6. REFUND CREDITS FOR SCAN FUNCTION
+-- ===========================================
+CREATE OR REPLACE FUNCTION refund_credits_for_scan(
+  p_user_id       UUID,
+  p_amount        INTEGER,
+  p_scan_type     TEXT,
+  p_token_address  TEXT,
+  p_scan_id       UUID DEFAULT NULL
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_current_balance INTEGER;
+  v_new_balance     INTEGER;
+BEGIN
+  IF p_scan_id IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'refund'
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM public.credit_transactions
+       WHERE scan_id = p_scan_id AND type = 'scan_deduction' AND user_id = p_user_id
+    ) THEN
+      SELECT credits_balance INTO v_new_balance FROM public.user_profiles WHERE id = p_user_id;
+      RETURN v_new_balance;
+    END IF;
+  END IF;
+
+  SELECT credits_balance INTO v_current_balance FROM public.user_profiles WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User profile not found for user %', p_user_id;
+  END IF;
+
+  v_new_balance := v_current_balance + p_amount;
+  UPDATE public.user_profiles SET credits_balance = v_new_balance, updated_at = NOW() WHERE id = p_user_id;
+
+  INSERT INTO public.credit_transactions (
+    user_id, type, amount, balance_after, description, metadata, scan_id
+  ) VALUES (
+    p_user_id, 'refund', p_amount, v_new_balance,
+    CASE p_scan_type
+      WHEN 'BASIC'    THEN 'Refund: Basic Scan — ' || p_token_address
+      WHEN 'ELEVATOR' THEN 'Refund: Elevator Deep Scan — ' || p_token_address
+      WHEN 'DEEP'     THEN 'Refund: Deep Scan — ' || p_token_address
+      WHEN 'AGENT'    THEN 'Refund: Crypto Hype Agent run'
+      ELSE                 'Refund: ' || p_scan_type || ' — ' || p_token_address
+    END,
+    jsonb_build_object('scan_type', p_scan_type, 'token_address', p_token_address, 'credits_refunded', p_amount),
+    p_scan_id
+  );
+
+  RETURN v_new_balance;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION refund_credits_for_scan(UUID, INTEGER, TEXT, TEXT, UUID) TO authenticated;
+
+-- ===========================================
 -- VERIFICATION QUERIES
 -- ===========================================
 
@@ -321,10 +450,10 @@ WHERE tgname = 'on_auth_user_created';
 SELECT routine_name, routine_type
 FROM information_schema.routines
 WHERE routine_schema = 'public'
-  AND routine_name IN ('generate_referral_code', 'handle_new_user', 'apply_referral_code', 'award_referral_bonus');
+  AND routine_name IN ('generate_referral_code', 'handle_new_user', 'apply_referral_code', 'award_referral_bonus', 'deduct_credits_for_scan', 'refund_credits_for_scan');
 
 -- ===========================================
 -- SUCCESS!
 -- ===========================================
--- If you see 4 functions, Phase 2 is complete!
+-- If you see 6 functions, Phase 2 functions setup is complete!
 -- Next: Test by creating a user and checking if profile + code are auto-created

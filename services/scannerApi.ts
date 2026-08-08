@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import type { DeepScanResult } from '@/lib/deep_scan/types';
 
 export interface BasicScanResponse {
   address: string;
@@ -128,4 +129,36 @@ export async function validateBackendConnection() {
     console.warn('[Scanner API] Health check failed');
     return { connected: false, scanner: 'offline' };
   }
+}
+
+/**
+ * Deep Scan — 15-credit full on-chain intelligence report.
+ * Posts to /api/scan/deep and returns the raw DeepScanResult.
+ */
+export async function getDeepScan(
+  address: string,
+  chain: string
+): Promise<DeepScanResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const res = await fetch('/api/scan/deep', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ address, chain }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    const error: any = new Error(
+      errData.error || `Deep scan failed (HTTP ${res.status})`
+    );
+    error.code = errData.code || 'DEEP_SCAN_ERROR';
+    throw error;
+  }
+
+  return res.json() as Promise<DeepScanResult>;
 }

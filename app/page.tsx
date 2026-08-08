@@ -19,7 +19,8 @@ import dynamic from 'next/dynamic';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCredits } from '@/contexts/CreditContext';
 import { useEventBus } from '@/hooks/useEventBus';
-import { getBasicScan, startElevatorScan, validateBackendConnection } from '@/services/scannerApi';
+import { getBasicScan, startElevatorScan, getDeepScan, validateBackendConnection } from '@/services/scannerApi';
+import type { DeepScanResult } from '@/lib/deep_scan/types';
 import type { OnChainData } from '@/types/scanner';
 import { SCAN_COSTS } from '@/types/credits';
 import Navigation from '@/components/layout/Navigation';
@@ -34,6 +35,7 @@ const TokenAuditCard = dynamic(() => import('@/components/TokenAuditCard').then(
 const MarketIntelligenceCard = dynamic(() => import('@/components/MarketIntelligenceCard').then(mod => mod.MarketIntelligenceCard));
 const RawTransactionTable = dynamic(() => import('@/components/elevator/RawTransactionTable').then(mod => mod.RawTransactionTable));
 const InsufficientCreditsModal = dynamic(() => import('@/components/credits/InsufficientCreditsModal').then(mod => mod.InsufficientCreditsModal));
+const DeepScanResultView = dynamic(() => import('@/components/deep_scan/DeepScanResultView').then(mod => mod.DeepScanResultView));
 
 const CHAINS = [
   { id: 'solana', label: 'Solana' },
@@ -60,7 +62,8 @@ function HomePageContent() {
   const [elevatorData, setElevatorData] = useState<any | null>(null);
   const [isElevatorMode, setIsElevatorMode] = useState(false);
   const [address, setAddress] = useState('');
-  const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR'>('BASIC');
+  const [scanType, setScanType] = useState<'BASIC' | 'ELEVATOR' | 'DEEP'>('BASIC');
+  const [deepData, setDeepData] = useState<DeepScanResult | null>(null);
   const [selectedChain, setSelectedChain] = useState<'solana' | 'bsc' | 'eth'>('solana');
   const [chainAmbiguous, setChainAmbiguous] = useState(false);
   const [elevatorCredits, setElevatorCredits] = useState<5 | 10 | 20 | 30>(10);
@@ -126,7 +129,7 @@ function HomePageContent() {
     });
   }, []);
 
-  const handleScan = async (addr: string, type: 'BASIC' | 'ELEVATOR') => {
+  const handleScan = async (addr: string, type: 'BASIC' | 'ELEVATOR' | 'DEEP') => {
     if (!isAuthenticated) {
       toast.error('Please login to scan tokens');
       return;
@@ -141,6 +144,7 @@ function HomePageContent() {
     setLoading(true);
     setTokenData(null);
     setElevatorData(null);
+    setDeepData(null);
     setIsElevatorMode(false);
     setChainAmbiguous(false);
     
@@ -157,6 +161,12 @@ function HomePageContent() {
           console.log('[Elevator Scan] Metadata:', res.metadata);
           toast.success(`Loaded ${res.metadata.transactionCount} transactions from ${res.metadata.holderCount} holders`);
         }
+      } else if (type === 'DEEP') {
+        const res = await getDeepScan(addr, selectedChain);
+        deductCredits(required);
+        setDeepData(res);
+        setLoading(false);
+        toast.success('Deep Intelligence Scan complete!');
       } else {
         const data = await getBasicScan(addr, 'evm');
         deductCredits(required);
@@ -180,7 +190,7 @@ function HomePageContent() {
     }
   };
 
-  const currentCost = scanType === 'BASIC' ? SCAN_COSTS.BASIC : elevatorCredits;
+  const currentCost = scanType === 'BASIC' ? SCAN_COSTS.BASIC : scanType === 'DEEP' ? SCAN_COSTS.DEEP : elevatorCredits;
 
   return (
     <div className="min-h-screen bg-grid">
@@ -210,6 +220,8 @@ function HomePageContent() {
                 onClick={() => {
                   setScanType('BASIC');
                   setTokenData(null);
+                  setElevatorData(null);
+                  setDeepData(null);
                   setIsElevatorMode(false);
                 }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
@@ -218,12 +230,13 @@ function HomePageContent() {
                     : 'glass text-muted-themed hover:text-themed'
                 }`}
               >
-                Basic Scan
+                Basic
               </button>
               <button
                 onClick={() => {
                   setScanType('ELEVATOR');
-                  setElevatorData(null);
+                  setTokenData(null);
+                  setDeepData(null);
                   setIsElevatorMode(false);
                 }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
@@ -232,9 +245,58 @@ function HomePageContent() {
                     : 'glass text-muted-themed hover:text-themed'
                 }`}
               >
-                Elevator Deep Scan
+                Elevator
+              </button>
+              <button
+                onClick={() => {
+                  setScanType('DEEP');
+                  setTokenData(null);
+                  setElevatorData(null);
+                  setIsElevatorMode(false);
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
+                  scanType === 'DEEP'
+                    ? 'gradient-primary text-white'
+                    : 'glass text-muted-themed hover:text-themed'
+                }`}
+              >
+                Deep
               </button>
             </div>
+
+            {/* Deep Scan Info Banner */}
+            {scanType === 'DEEP' && (
+              <div className="mb-5 space-y-3 animate-fade-in">
+                {/* Blockchain selector for Deep */}
+                <div>
+                  <label className="text-xs text-muted-themed mb-2 block">Blockchain</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {CHAINS.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedChain(c.id as any)}
+                        className={`py-2 rounded-lg text-xs font-medium border transition ${
+                          selectedChain === c.id
+                            ? 'border-primary-themed glow-sm text-primary-themed bg-white/5'
+                            : 'border-white/10 text-muted-themed hover:border-white/20'
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div
+                  className="rounded-lg p-3 text-xs flex items-start gap-2"
+                  style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)' }}
+                >
+                  <Zap className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                  <span className="text-purple-200">
+                    <strong>Deep Intelligence Scan:</strong> Full on-chain analysis — AMM slippage simulation, whale behavior, HHI concentration, market regime, and AI-generated trader report. Costs <strong>{SCAN_COSTS.DEEP} credits</strong>.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Elevator Parameters */}
             {scanType === 'ELEVATOR' && (
@@ -376,12 +438,16 @@ function HomePageContent() {
         {loading && (
           <div className="glass-strong rounded-2xl p-12 text-center animate-fade-in mb-6">
             <Cpu className="w-12 h-12 text-primary-themed animate-spin-slow mx-auto mb-4" />
-            <p className="text-lg font-bold gradient-text">Scanning Blockchain...</p>
+            <p className="text-lg font-bold gradient-text">
+              {scanType === 'DEEP' ? 'Running Deep Intelligence Scan...' : 'Scanning Blockchain...'}
+            </p>
             <p className="text-xs text-muted-themed mt-2 font-mono uppercase tracking-widest animate-pulse">
               {scanType === 'ELEVATOR'
                 ? `Analyzing ${
                     elevatorCredits === 5 ? 50 : elevatorCredits === 10 ? 100 : elevatorCredits === 20 ? 200 : 500
                   } transactions on ${selectedChain.toUpperCase()}`
+                : scanType === 'DEEP'
+                ? `Full on-chain intelligence analysis — ${selectedChain.toUpperCase()} · 15 modules`
                 : 'Running security audits and risk analysis...'}
             </p>
           </div>
@@ -406,6 +472,13 @@ function HomePageContent() {
               tokenAddress={address}
               network={(elevatorData.blockchain || 'solana') as 'solana' | 'ethereum' | 'bsc'}
             />
+          </div>
+        )}
+
+        {/* Deep Scan Results */}
+        {deepData && !loading && (
+          <div className="animate-fade-in">
+            <DeepScanResultView result={deepData} tokenAddress={address} />
           </div>
         )}
 
@@ -453,7 +526,7 @@ function HomePageContent() {
               <Target className="w-5 h-5 text-cyan-400 mb-3" />
               <h4 className="text-[10px] font-bold uppercase text-muted-themed">Scan Status</h4>
               <p className="text-sm font-bold font-mono text-themed truncate mt-1">
-                {tokenData || elevatorData ? 'Complete' : 'Awaiting for scan...'}
+                {tokenData || elevatorData || deepData ? 'Complete' : 'Awaiting for scan...'}
               </p>
             </div>
           </div>
@@ -468,7 +541,7 @@ function HomePageContent() {
           setShowInsufficientCredits(false);
           router.push('/pricing');
         }}
-        scanType={scanType}
+        scanType={scanType as 'BASIC' | 'ELEVATOR' | 'DEEP'}
         currentBalance={balance.balance}
       />
     </div>

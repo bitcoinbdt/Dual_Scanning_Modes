@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   display_name TEXT,
+  credits_balance INTEGER DEFAULT 20 NOT NULL, -- Starting credits awarded on signup
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   total_scans INTEGER DEFAULT 0,
@@ -149,10 +150,12 @@ CREATE TABLE IF NOT EXISTS public.credit_transactions (
   balance_after INTEGER NOT NULL,
   description TEXT,
   metadata JSONB,
+  scan_id UUID,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT valid_type CHECK (type IN ('purchase', 'bonus', 'scan_deduction', 'refund', 'adjustment')),
   CONSTRAINT valid_amount CHECK (amount != 0),
-  CONSTRAINT valid_balance CHECK (balance_after >= 0)
+  CONSTRAINT valid_balance CHECK (balance_after >= 0),
+  CONSTRAINT unique_scan_action UNIQUE (scan_id, type)
 );
 
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
@@ -166,6 +169,7 @@ CREATE POLICY "System can insert transactions" ON public.credit_transactions FOR
 CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON public.credit_transactions(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_credit_tx_type ON public.credit_transactions(type);
 CREATE INDEX IF NOT EXISTS idx_credit_tx_created ON public.credit_transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_credit_tx_scan_id ON public.credit_transactions(scan_id);
 
 -- ===========================================
 -- VERIFICATION QUERIES

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scanToken, validateAddress } from '@/lib/blockchain/tokenScanner';
 import { supabase } from '@/lib/supabase';
 import { headers } from 'next/headers';
+import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Deduct credits from user profile atomically (BASIC scan cost is 2 credits)
     const scanCost = 2;
+    const scanId = crypto.randomUUID();
     const { data: newBalance, error: rpcError } = await supabase.rpc(
       'deduct_credits_for_scan',
       {
@@ -52,6 +54,7 @@ export async function POST(request: NextRequest) {
         p_amount: scanCost,
         p_scan_type: 'BASIC',
         p_token_address: address,
+        p_scan_id: scanId, // Pass scanId for database-level idempotency
       }
     );
 
@@ -86,8 +89,7 @@ export async function POST(request: NextRequest) {
     console.error('[Basic Scan API] Error:', error);
     return NextResponse.json(
       { 
-        error: error.message || 'Scan failed',
-        details: error.stack 
+        error: 'Scan failed. Please try again.'
       },
       { status: 500 }
     );

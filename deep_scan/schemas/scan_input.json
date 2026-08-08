@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeepScanInput",
+  "type": "object",
+  "properties": {
+    "token_address": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{40}$|^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+      "description": "The hexadecimal contract address for EVM chains or Base58 address for Solana"
+    },
+    "network": {
+      "type": "string",
+      "enum": [
+        "ethereum",
+        "arbitrum",
+        "base",
+        "optimism",
+        "polygon",
+        "bsc",
+        "solana"
+      ],
+      "description": "Target blockchain network"
+    },
+    "simulated_position_sizes": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "default": [1000, 5000, 10000, 25000, 50000, 100000],
+      "description": "USD values for simulating slippage and execution price impact"
+    },
+    "timeframe": {
+      "type": "string",
+      "enum": ["5m", "15m", "1h", "4h", "24h", "7d", "30d"],
+      "default": "24h",
+      "description": "Lookback time window for trend calculations"
+    },
+    "use_cache": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use stored historical results if available"
+    }
+  },
+  "required": ["token_address", "network"]
+}

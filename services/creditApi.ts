@@ -88,13 +88,13 @@ export async function getCreditHistory(query?: CreditHistoryQuery): Promise<Cred
 /**
  * Check if user has sufficient credits for a scan
  */
-export async function checkSufficientCredits(scanType: 'BASIC' | 'ELEVATOR'): Promise<{
+export async function checkSufficientCredits(scanType: 'BASIC' | 'ELEVATOR' | 'DEEP'): Promise<{
   sufficient: boolean;
   required: number;
   current: number;
   shortage: number;
 }> {
-  const SCAN_COSTS = { BASIC: 2, ELEVATOR: 10 };
+  const SCAN_COSTS = { BASIC: 2, ELEVATOR: 10, DEEP: 15 };
   const balance = await getCreditBalance();
   const required = SCAN_COSTS[scanType];
   const sufficient = balance.balance >= required;

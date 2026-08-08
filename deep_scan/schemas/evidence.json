@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvidenceNode",
+  "type": "object",
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "description": "Unique identifier for reference"
+    },
+    "fact": {
+      "type": "string",
+      "description": "The raw immutable event or observation"
+    },
+    "metric": {
+      "type": "string",
+      "description": "The calculated mathematical representation of significance"
+    },
+    "pattern": {
+      "type": "string",
+      "description": "Comparison against baseline and historically observed habits"
+    },
+    "signal": {
+      "type": "string",
+      "description": "Inferred market indicator"
+    },
+    "trader_impact": {
+      "type": "string",
+      "description": "Relevance to current or potential positions"
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Transaction hashes, block numbers, or API endpoints used to verify the fact"
+    }
+  },
+  "required": ["evidence_id", "fact", "metric", "signal", "trader_impact", "confidence"]
+}

@@ -27,13 +27,14 @@ export interface CreditTransaction {
 }
 
 export interface ScanCostInfo {
-  scanType: 'BASIC' | 'ELEVATOR';
+  scanType: 'BASIC' | 'ELEVATOR' | 'DEEP';
   cost: number;
 }
 
-export const SCAN_COSTS: Record<'BASIC' | 'ELEVATOR', number> = {
+export const SCAN_COSTS: Record<'BASIC' | 'ELEVATOR' | 'DEEP', number> = {
   BASIC: 2,
   ELEVATOR: 10,
+  DEEP: 15,
 };
 
 export interface CreditHistoryQuery {

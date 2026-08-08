@@ -15,6 +15,7 @@ import { estimateTransactionFees } from '@/lib/fees/feeEstimator';
 import { verifyTransactions } from '@/lib/verification/verifyTransactions';
 import { detectWashTrading } from '@/lib/elevator/washTradingDetector';
 import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
+import crypto from 'crypto';
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
   let creditsDeducted = false;
   let creditsSpentVal = 10;
   let tokenAddr = '';
+  let refundIssued = false;           // P2-3: prevents double-refund locally
+  const scanId = crypto.randomUUID(); // P0: unique identifier for database-level idempotency
 
   try {
     // 1. Authenticate user from Authorization header
@@ -152,6 +155,7 @@ export async function POST(request: NextRequest) {
         p_amount: creditsSpent,
         p_scan_type: 'ELEVATOR',
         p_token_address: address,
+        p_scan_id: scanId, // Pass scanId for database-level idempotency
       }
     );
 
@@ -354,7 +358,8 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    if (creditsDeducted && userId) {
+    if (creditsDeducted && userId && !refundIssued) {
+      refundIssued = true;
       console.log(`[API] Attempting credit refund of ${creditsSpentVal} for user ${userId} due to scan failure...`);
       try {
         const { error: refundError } = await supabase.rpc('refund_credits_for_scan', {
@@ -362,6 +367,7 @@ export async function POST(request: NextRequest) {
           p_amount: creditsSpentVal,
           p_scan_type: 'ELEVATOR',
           p_token_address: tokenAddr,
+          p_scan_id: scanId, // Pass scanId for database-level idempotency
         });
         if (refundError) {
           console.error('[API] Credit refund RPC failed:', refundError);
@@ -376,8 +382,7 @@ export async function POST(request: NextRequest) {
     console.error('[API] Elevator scan error:', error);
     return NextResponse.json(
       { 
-        error: error.message || 'Elevator scan failed',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        error: 'Elevator scan failed. Please try again.'
       },
       { status: 500 }
     );

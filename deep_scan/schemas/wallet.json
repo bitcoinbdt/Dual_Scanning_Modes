@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WalletProfile",
+  "type": "object",
+  "properties": {
+    "address": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{40}$|^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+    },
+    "balance": {
+      "type": "string",
+      "description": "Decimal string representation of current token balance"
+    },
+    "balance_usd": {
+      "type": "number"
+    },
+    "wallet_age_seconds": {
+      "type": "integer"
+    },
+    "funding_source": {
+      "type": "string",
+      "description": "Origin address or exchange identifier that funded this wallet with native token for gas"
+    },
+    "total_tx_count": {
+      "type": "integer"
+    },
+    "is_sniper": {
+      "type": "boolean"
+    },
+    "is_whale": {
+      "type": "boolean"
+    },
+    "is_smart_money": {
+      "type": "boolean"
+    },
+    "pnl_usd": {
+      "type": "number",
+      "description": "Realized profits or losses tracked historically across DeFi swaps"
+    },
+    "win_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "related_wallets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "string" },
+          "relationship_type": { "type": "string", "enum": ["shared_funding", "coordinated_timing", "direct_transfer"] },
+          "evidence_id": { "type": "string" }
+        },
+        "required": ["address", "relationship_type"]
+      }
+    }
+  },
+  "required": ["address", "balance", "total_tx_count"]
+}

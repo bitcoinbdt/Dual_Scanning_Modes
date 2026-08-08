@@ -8,7 +8,7 @@ interface InsufficientCreditsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBuyCredits: () => void;
-  scanType: 'BASIC' | 'ELEVATOR';
+  scanType: 'BASIC' | 'ELEVATOR' | 'DEEP';
   currentBalance: number;
 }
 
@@ -19,7 +19,7 @@ export function InsufficientCreditsModal({
   scanType,
   currentBalance,
 }: InsufficientCreditsModalProps) {
-  const required = SCAN_COSTS[scanType];
+  const required = scanType === 'ELEVATOR' ? (SCAN_COSTS.ELEVATOR ?? 5) : SCAN_COSTS[scanType];
   const shortage = required - currentBalance;
 
   if (!isOpen) return null;
@@ -75,7 +75,7 @@ export function InsufficientCreditsModal({
               <div className="flex justify-between items-center">
                 <span className="text-slate-400 text-sm">Scan Type:</span>
                 <span className="text-white font-bold">
-                  {scanType === 'BASIC' ? 'Basic Scan' : 'Elevator Deep Scan'}
+                  {scanType === 'BASIC' ? 'Basic Scan' : scanType === 'ELEVATOR' ? 'Elevator Scan' : 'Deep Intelligence Scan'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -105,7 +105,7 @@ export function InsufficientCreditsModal({
               <h4 className="text-sm font-bold text-blue-400 mb-2">💡 Recommended Package</h4>
               <p className="text-slate-300 text-xs">
                 The <span className="font-bold text-white">Starter Package (100 credits for $4.99)</span> would give you{' '}
-                {Math.floor(100 / SCAN_COSTS[scanType])} {scanType === 'BASIC' ? 'Basic' : 'Elevator'} scans
+                {Math.floor(100 / required)} {scanType === 'BASIC' ? 'Basic' : scanType === 'ELEVATOR' ? 'Elevator' : 'Deep Intelligence'} scans
               </p>
             </div>
 
