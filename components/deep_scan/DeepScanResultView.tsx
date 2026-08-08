@@ -125,6 +125,10 @@ type TabId = typeof TABS[number]['id'];
 
 function IntelligencePanel({ data }: { data: DeepScanResult }) {
   const intel = data.traderIntelligence;
+  if (!intel) return (
+    <div className="text-center py-8 text-white/40 text-sm">Intelligence report unavailable for this scan.</div>
+  );
+
   const sections = [
     { label: 'Market Regime',        text: intel.regimeNarrative },
     { label: 'Execution Conditions', text: intel.executionConditions },
@@ -182,6 +186,9 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
 
 function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
   const rs = data.riskScore;
+  if (!rs) return (
+    <div className="text-center py-8 text-white/40 text-sm">Risk score unavailable for this scan.</div>
+  );
   const sorted = [...(rs.subScores || [])].sort((a, b) => b.weightedContribution - a.weightedContribution);
 
   return (
@@ -242,6 +249,10 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
   const wh = data.whaleBehavior;
   const vc = data.volumeConcentration;
   const bq = data.buyerQuality;
+
+  if (!wh || !vc || !bq) return (
+    <div className="text-center py-8 text-white/40 text-sm">Whale and cohort data unavailable for this scan.</div>
+  );
 
   const phaseIcon =
     wh.phase === 'accumulation' ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> :
@@ -335,6 +346,10 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
   const amm = data.ammSlippage;
   const cap = data.capitalEfficiency;
   const wx  = data.whaleExit;
+
+  if (!cap) return (
+    <div className="text-center py-8 text-white/40 text-sm">Liquidity data unavailable for this scan.</div>
+  );
 
   return (
     <div className="space-y-4">
@@ -443,7 +458,8 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
   const rs     = result.riskScore;
   const meta   = result.tokenMetadata;
   const market = result.marketSummary;
-  const rc     = riskColor(rs.riskLevel);
+  // Defensive: riskScore may be absent on partial_failure scans
+  const rc     = rs?.riskLevel ? riskColor(rs.riskLevel) : riskColor('medium' as RiskLevel);
 
   return (
     <motion.div
@@ -465,19 +481,19 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
               <span className="text-xs font-bold uppercase tracking-widest text-purple-400">Deep Intelligence Report</span>
             </div>
             <h2 className="text-2xl font-black text-white">
-              {meta.name} <span className="text-white/40">/</span> <span className="font-mono text-lg text-white/70">{meta.symbol}</span>
+              {meta?.name ?? '—'} <span className="text-white/40">/</span> <span className="font-mono text-lg text-white/70">{meta?.symbol ?? '—'}</span>
             </h2>
             <p className="text-xs font-mono text-white/30 mt-0.5 truncate max-w-xs">{tokenAddress}</p>
             <div className="flex flex-wrap gap-3 mt-3">
               <div className="text-xs">
                 <span className="text-white/40">Price </span>
-                <span className="font-mono font-bold text-white">${market.priceUsd != null ? market.priceUsd.toFixed(8) : 'N/A'}</span>
+                <span className="font-mono font-bold text-white">${market?.priceUsd != null ? market.priceUsd.toFixed(8) : 'N/A'}</span>
               </div>
               <div className="text-xs">
                 <span className="text-white/40">FDV </span>
-                <span className="font-mono font-bold text-white">{fmtUsd(market.fdvUsd)}</span>
+                <span className="font-mono font-bold text-white">{fmtUsd(market?.fdvUsd)}</span>
               </div>
-              {market.volume24hUsd != null && (
+              {market?.volume24hUsd != null && (
                 <div className="text-xs">
                   <span className="text-white/40">24h Vol </span>
                   <span className="font-mono font-bold text-white">{fmtUsd(market.volume24hUsd)}</span>
@@ -485,28 +501,28 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
               )}
               <div className="text-xs">
                 <span className="text-white/40">Regime </span>
-                <span className="font-mono font-bold text-cyan-400">{market.marketRegime}</span>
+                <span className="font-mono font-bold text-cyan-400">{market?.marketRegime ?? 'N/A'}</span>
               </div>
             </div>
           </div>
           <div className="sm:shrink-0">
-            {rs.sufficientData ? (
+            {rs?.sufficientData ? (
               <RiskGauge score={rs.overallRiskScore} level={rs.riskLevel} />
             ) : (
               <div className="text-center p-4">
-                <p className="text-xs text-amber-400">Insufficient data</p>
+                <p className="text-xs text-amber-400">{rs ? 'Insufficient data' : 'Risk score unavailable'}</p>
                 <p className="text-[10px] text-white/30 mt-1">Score unavailable</p>
               </div>
             )}
           </div>
         </div>
         <div className="relative mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-4 text-[10px] text-white/30">
-          <span>Txns: <span className="text-white/60">{result.dataQuality.transactionCount}</span></span>
-          <span>Candles: <span className="text-white/60">{result.dataQuality.ohlcvCandleCount}</span></span>
-          <span>Confidence: <span className="text-white/60">{fmtPct(result.overallConfidence * 100, 0)}</span></span>
-          <span>Duration: <span className="text-white/60">{(result.scanDurationMs / 1000).toFixed(1)}s</span></span>
-          {result.dataQuality.elevatorDataReused && <span className="text-cyan-400/60">↺ Elevator data reused</span>}
-          {result.dataQuality.staleDataWarning   && <span className="text-amber-400/70">⚠ Stale data</span>}
+          <span>Txns: <span className="text-white/60">{result.dataQuality?.transactionCount ?? 'N/A'}</span></span>
+          <span>Candles: <span className="text-white/60">{result.dataQuality?.ohlcvCandleCount ?? 'N/A'}</span></span>
+          <span>Confidence: <span className="text-white/60">{fmtPct((result.overallConfidence ?? 0) * 100, 0)}</span></span>
+          <span>Duration: <span className="text-white/60">{result.scanDurationMs ? (result.scanDurationMs / 1000).toFixed(1) + 's' : 'N/A'}</span></span>
+          {result.dataQuality?.elevatorDataReused && <span className="text-cyan-400/60">↺ Elevator data reused</span>}
+          {result.dataQuality?.staleDataWarning   && <span className="text-amber-400/70">⚠ Stale data</span>}
         </div>
       </div>
 
