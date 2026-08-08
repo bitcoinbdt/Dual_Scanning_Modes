@@ -187,14 +187,24 @@ export class SolanaCollector implements IBlockchainCollector {
 
     try {
       // Step 1: Fetch OHLCV
-      console.log('[STEP 1/4] Fetching OHLCV from Birdeye...');
-      const ohlcv = await this.fetchOHLCV(address);
-      console.log(`✅ Fetched ${ohlcv.length} OHLCV candles`);
+      let ohlcv: OHLCVCandle[] = [];
+      try {
+        console.log('[STEP 1/4] Fetching OHLCV from Birdeye...');
+        ohlcv = await this.fetchOHLCV(address);
+        console.log(`✅ Fetched ${ohlcv.length} OHLCV candles`);
+      } catch (err: any) {
+        console.warn(`[SolanaCollector] OHLCV fetch failed: ${err.message}`);
+      }
 
       // Step 2: Fetch transactions
-      console.log('[STEP 2/4] Fetching transactions from Helius...');
-      const heliusTxs = await this.fetchTransactions(address, maxTransactions);
-      console.log(`✅ Fetched ${heliusTxs.length} Helius transactions`);
+      let heliusTxs: UniversalTransaction[] = [];
+      try {
+        console.log('[STEP 2/4] Fetching transactions from Helius...');
+        heliusTxs = await this.fetchTransactions(address, maxTransactions);
+        console.log(`✅ Fetched ${heliusTxs.length} Helius transactions`);
+      } catch (err: any) {
+        console.warn(`[SolanaCollector] Helius transactions fetch failed: ${err.message}`);
+      }
 
       // Fetch DEX trades from GeckoTerminal Solana pools (Feature 5/6)
       console.log('[STEP 2b/4] Fetching DEX trades from GeckoTerminal...');
@@ -255,7 +265,7 @@ export class SolanaCollector implements IBlockchainCollector {
       const transactions = finalTransactions.slice(0, maxTransactions);
 
       if (transactions.length === 0) {
-        throw new Error('No transactions found for this token');
+        console.warn('[SolanaCollector] Warning: No transactions found for this token');
       }
 
       // Step 3: Build wallet data

@@ -16,9 +16,21 @@ const PUBLIC_RPCS = [
   'https://solana-rpc.publicnode.com'
 ];
 
-function getConnection(): Connection {
-  const rpc = PUBLIC_RPCS[Math.floor(Math.random() * PUBLIC_RPCS.length)];
-  return new Connection(rpc, 'confirmed');
+async function getActiveConnection(): Promise<Connection> {
+  let lastError: Error | null = null;
+  for (const rpc of PUBLIC_RPCS) {
+    try {
+      console.log(`[SOLANA] Probing RPC node: ${rpc}`);
+      const conn = new Connection(rpc, 'confirmed');
+      await conn.getSlot(); // lightweight probe call
+      console.log(`[SOLANA] Active RPC node selected: ${rpc}`);
+      return conn;
+    } catch (err: any) {
+      console.warn(`[SOLANA] RPC node probe failed: ${rpc} - ${err.message}`);
+      lastError = err;
+    }
+  }
+  throw new Error(`All public Solana RPC nodes failed. Last error: ${lastError?.message}`);
 }
 
 /**
@@ -27,7 +39,7 @@ function getConnection(): Connection {
 export async function scanSolanaToken(address: string): Promise<OnChainData> {
   console.log(`[SOLANA] 🔍 Scanning token ${address} via Public RPCs...`);
   
-  const connection = getConnection();
+  const connection = await getActiveConnection();
   let pubkey: PublicKey;
   
   try {

@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse request payload
     const body = await request.json().catch(() => ({}));
-    const { address, preferredChain, elevatorResult, tokenMetadata } = body;
+    const { address, preferredChain, chain, elevatorResult, tokenMetadata } = body;
+    const resolvedChain = preferredChain || chain;
     tokenAddr = address;
 
     if (!address) {
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Chain detection
-    let detection = detectChain(address, preferredChain);
+    let detection = detectChain(address, resolvedChain);
     if (!detection.isValid && detection.reason === 'ambiguous_evm') {
       try {
         const chainId = await autoDetectChainId(address);

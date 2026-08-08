@@ -148,7 +148,7 @@ export async function getDeepScan(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ address, chain }),
+    body: JSON.stringify({ address, preferredChain: chain }),
   });
 
   if (!res.ok) {
@@ -160,5 +160,6 @@ export async function getDeepScan(
     throw error;
   }
 
-  return res.json() as Promise<DeepScanResult>;
+  const data = await res.json();
+  return data.result as DeepScanResult;
 }

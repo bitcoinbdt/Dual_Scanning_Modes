@@ -134,17 +134,27 @@ export class EthCollector implements IBlockchainCollector {
 
     try {
       // Step 1: OHLCV
-      console.log('[STEP 1/4] Fetching OHLCV from Birdeye...');
-      const ohlcv = await this.fetchOHLCV(address);
-      console.log(`✅ Fetched ${ohlcv.length} OHLCV candles`);
+      let ohlcv: OHLCVCandle[] = [];
+      try {
+        console.log('[STEP 1/4] Fetching OHLCV from Birdeye...');
+        ohlcv = await this.fetchOHLCV(address);
+        console.log(`✅ Fetched ${ohlcv.length} OHLCV candles`);
+      } catch (err: any) {
+        console.warn(`[EthCollector] OHLCV fetch failed: ${err.message}`);
+      }
 
       // Step 2: Swap trades (GeckoTerminal → Birdeye)
-      console.log('[STEP 2/4] Fetching swap transactions...');
-      const transactions = await this.fetchTransactions(address, maxTransactions);
-      console.log(`✅ Fetched ${transactions.length} transactions`);
+      let transactions: UniversalTransaction[] = [];
+      try {
+        console.log('[STEP 2/4] Fetching swap transactions...');
+        transactions = await this.fetchTransactions(address, maxTransactions);
+        console.log(`✅ Fetched ${transactions.length} transactions`);
+      } catch (err: any) {
+        console.warn(`[EthCollector] Swap transactions fetch failed: ${err.message}`);
+      }
 
       if (transactions.length === 0) {
-        throw new Error('No swap transactions found for this token on Ethereum');
+        console.warn('[EthCollector] Warning: No swap transactions found for this token on Ethereum');
       }
 
       // Step 3: Wallet data

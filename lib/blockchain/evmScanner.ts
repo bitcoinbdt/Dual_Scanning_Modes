@@ -89,14 +89,18 @@ export async function autoDetectChainId(address: string): Promise<string> {
   const chains = Object.keys(PUBLIC_RPCS);
   const results = await Promise.all(
     chains.map(async (chainId) => {
-      try {
-        const provider = getProvider(chainId);
-        const code = await provider.getCode(address);
-        if (code && code !== '0x' && code !== '0x0') {
-          return chainId;
+      const rpcs = PUBLIC_RPCS[chainId] || [];
+      for (const rpc of rpcs) {
+        try {
+          const provider = new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
+          const code = await provider.getCode(address);
+          if (code && code !== '0x' && code !== '0x0') {
+            return chainId;
+          }
+          break; // Succeeded to query but returned no bytecode, this is correct chain but no token contract
+        } catch (e) {
+          // ignore and try next RPC in this chain
         }
-      } catch (e) {
-        // ignore connection or RPC errors
       }
       return null;
     })
@@ -123,8 +127,33 @@ export async function scanEVMToken(
 
   console.log(`[EVM] 🔍 Scanning token ${address} via Public RPCs (Resolved chain: ${chainId})...`);
   
-  const provider = getProvider(chainId);
-  const contract = new ethers.Contract(address, ERC20_ABI, provider);
+  const rpcs = PUBLIC_RPCS[chainId] || [];
+  if (rpcs.length === 0) {
+    throw new Error(`Unsupported chain ID for public RPC: ${chainId}`);
+  }
+
+  let provider: ethers.JsonRpcProvider | null = null;
+  let contract: ethers.Contract | null = null;
+  let lastError: Error | null = null;
+
+  for (const rpcUrl of rpcs) {
+    try {
+      console.log(`[EVM] Probing RPC node: ${rpcUrl}`);
+      const tempProvider = new ethers.JsonRpcProvider(rpcUrl, undefined, { staticNetwork: true });
+      await tempProvider.getBlockNumber(); // lightweight probe
+      provider = tempProvider;
+      contract = new ethers.Contract(address, ERC20_ABI, provider);
+      console.log(`[EVM] Active RPC node selected: ${rpcUrl}`);
+      break;
+    } catch (err: any) {
+      console.warn(`[EVM] RPC node probe failed: ${rpcUrl} - ${err.message}`);
+      lastError = err;
+    }
+  }
+
+  if (!provider || !contract) {
+    throw new Error(`All public RPC nodes failed for chain ${chainId}. Last error: ${lastError?.message}`);
+  }
 
   // Step 1: Check cache for static data
   let staticData: StaticData | null = null;
