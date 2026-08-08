@@ -519,7 +519,7 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
         <div className="relative mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-4 text-[10px] text-white/30">
           <span>Txns: <span className="text-white/60">{result.dataQuality?.transactionCount ?? 'N/A'}</span></span>
           <span>Candles: <span className="text-white/60">{result.dataQuality?.ohlcvCandleCount ?? 'N/A'}</span></span>
-          <span>Confidence: <span className="text-white/60">{fmtPct((result.overallConfidence ?? 0) * 100, 0)}</span></span>
+          <span>Confidence: <span className="text-white/60">{fmtPct(result.overallConfidence ?? 0, 0)}</span></span>
           <span>Duration: <span className="text-white/60">{result.scanDurationMs ? (result.scanDurationMs / 1000).toFixed(1) + 's' : 'N/A'}</span></span>
           {result.dataQuality?.elevatorDataReused && <span className="text-cyan-400/60">↺ Elevator data reused</span>}
           {result.dataQuality?.staleDataWarning   && <span className="text-amber-400/70">⚠ Stale data</span>}
