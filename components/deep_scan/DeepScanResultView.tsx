@@ -13,13 +13,16 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  FileText,
 } from 'lucide-react';
 import type {
   DeepScanResult,
+  EvidenceNode,
   RiskLevel,
   SubScore,
   PositionSizeResult,
   WhaleExitScenario,
+  WhaleEntry,
 } from '@/lib/deep_scan/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -39,6 +42,12 @@ function fmtPct(v: number | null | undefined, decimals = 2): string {
 function fmtNum(v: number | null | undefined, decimals = 2): string {
   if (v == null || !isFinite(v)) return 'N/A';
   return v.toLocaleString('en-US', { maximumFractionDigits: decimals });
+}
+
+/** Shorten a wallet/contract address to first-6 … last-4 chars. */
+function fmtAddr(addr: string): string {
+  if (!addr || addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 const RISK_COLORS: Record<RiskLevel, { text: string; bg: string; border: string; hex: string }> = {
@@ -117,6 +126,7 @@ const TABS = [
   { id: 'risk',      label: 'Risk Breakdown',  icon: BarChart2 },
   { id: 'whales',    label: 'Whale & Cohorts', icon: Users     },
   { id: 'liquidity', label: 'Liquidity',       icon: Droplets  },
+  { id: 'evidence',  label: 'Evidence',        icon: FileText  },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -229,15 +239,15 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
                   style={{ background: barColor, boxShadow: `0 0 6px ${barColor}` }}
                 />
               </div>
-              {s.confidence < 0.5 && (
-                <p className="text-[9px] text-amber-400/60 mt-1">Low confidence ({fmtPct(s.confidence * 100, 0)})</p>
+              {s.confidence < 50 && (
+                <p className="text-[9px] text-amber-400/60 mt-1">Low confidence ({fmtPct(s.confidence, 0)})</p>
               )}
             </div>
           );
         })}
       </div>
       <div className="text-right">
-        <span className="text-[10px] text-white/30">Overall model confidence: {fmtPct(rs.confidence * 100, 0)}</span>
+        <span className="text-[10px] text-white/30">Overall model confidence: {fmtPct(rs.confidence, 0)}</span>
       </div>
     </div>
   );
@@ -246,6 +256,7 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
 // ─── Panel: Whale & Cohorts ────────────────────────────────────────────────────
 
 function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
+  const [showWhaleDetail, setShowWhaleDetail] = useState(false);
   const wh = data.whaleBehavior;
   const vc = data.volumeConcentration;
   const bq = data.buyerQuality;
@@ -289,10 +300,73 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* G-1: Individual whale wallet detail — collapsible */}
+      {wh.whales && wh.whales.length > 0 && (
+        <div className="rounded-xl border border-white/[0.08] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <button
+            onClick={() => setShowWhaleDetail((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-xs text-white/40 hover:text-white/60 transition"
+          >
+            <span className="font-bold uppercase tracking-widest">Whale Wallets ({wh.whales.length})</span>
+            {showWhaleDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          <AnimatePresence>
+            {showWhaleDetail && (
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="px-3 pb-3 space-y-1.5 border-t border-white/[0.06]">
+                  {wh.whales.map((whale: WhaleEntry, i: number) => {
+                    const flowColor = whale.netFlow > 0 ? 'text-emerald-400' : whale.netFlow < 0 ? 'text-red-400' : 'text-white/40';
+                    const flowSign  = whale.netFlow > 0 ? '+' : '';
+                    return (
+                      <div
+                        key={i}
+                        className="rounded-lg p-2.5 border border-white/[0.06] mt-1.5"
+                        style={{ background: 'rgba(255,255,255,0.015)' }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p
+                            className="text-[10px] font-mono text-white/60 truncate flex-1 min-w-0"
+                            title={whale.wallet}
+                          >
+                            {fmtAddr(whale.wallet)}
+                          </p>
+                          <span className={`text-[10px] font-mono font-bold shrink-0 ${flowColor}`}>
+                            {flowSign}{fmtNum(whale.netFlow, 0)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-[9px] text-white/30">
+                            {fmtNum(whale.observedBatchBalance, 0)} tokens
+                          </span>
+                          <span className="text-[9px] text-white/30">
+                            {fmtPct(whale.supplySharePct)} supply
+                          </span>
+                          <span className="text-[9px] text-white/20">
+                            {whale.txCount} txs
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-[9px] text-white/20 pt-1">Balances are local batch observations — not authoritative on-chain state.</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* G-3: 3-column HHI grid — buyer / seller / combined */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {([
-          { label: 'Buyer HHI', hhi: vc.buyerHHI },
-          { label: 'Seller HHI', hhi: vc.sellerHHI },
+          { label: 'Buyer HHI',    hhi: vc.buyerHHI },
+          { label: 'Seller HHI',   hhi: vc.sellerHHI },
+          { label: 'Combined HHI', hhi: vc.totalVolumeHHI },
         ] as Array<{ label: string; hhi: typeof vc.buyerHHI }>).map(({ label, hhi }) => (
           <div key={label} className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08]">
             <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{label}</p>
@@ -444,6 +518,118 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
   );
 }
 
+// ─── Panel: Evidence ──────────────────────────────────────────────────────────
+
+function EvidenceNodeCard({ node }: { node: EvidenceNode }) {
+  const [open, setOpen] = useState(false);
+  const confidenceColor =
+    node.confidence >= 70 ? 'text-emerald-400' :
+    node.confidence >= 40 ? 'text-amber-400' : 'text-red-400';
+
+  return (
+    <div className="rounded-xl border border-white/[0.08] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+      {/* Header row — always visible */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-start justify-between gap-3 px-4 py-3 text-left hover:bg-white/[0.03] transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 mb-0.5">{node.evidenceId}</p>
+          <p className="text-xs text-white/80 leading-snug">{node.fact}</p>
+          {node.signal && (
+            <p className="text-[10px] text-cyan-400/80 mt-1">{node.signal}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`text-[10px] font-mono font-bold ${confidenceColor}`}>{node.confidence}%</span>
+          {open ? <ChevronUp className="w-3.5 h-3.5 text-white/30" /> : <ChevronDown className="w-3.5 h-3.5 text-white/30" />}
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: 'auto' }}
+            exit={{ height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-3 border-t border-white/[0.06] pt-3">
+              {node.metric && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Metric</p>
+                  <p className="text-xs font-mono text-purple-300">{node.metric}</p>
+                </div>
+              )}
+              {node.pattern && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Pattern vs Baseline</p>
+                  <p className="text-xs text-white/70">{node.pattern}</p>
+                </div>
+              )}
+              {node.traderImpact && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-white/30 mb-0.5">Trader Impact</p>
+                  <p className="text-xs text-amber-200/80 leading-relaxed">{node.traderImpact}</p>
+                </div>
+              )}
+              {node.sources && node.sources.length > 0 && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest text-white/30 mb-1">Sources ({node.sources.length})</p>
+                  <ul className="space-y-0.5 max-h-28 overflow-y-auto">
+                    {node.sources.map((src, i) => (
+                      <li key={i} className="text-[10px] font-mono text-white/40 truncate">• {src}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-[9px] text-white/20">
+                Generated {new Date(node.generatedAt * 1000).toISOString().replace('T', ' ').slice(0, 19)} UTC
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function EvidencePanel({ data }: { data: DeepScanResult }) {
+  const nodes = data.evidence;
+
+  if (!nodes || nodes.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <FileText className="w-8 h-8 text-white/10 mx-auto mb-3" />
+        <p className="text-sm text-white/30">No evidence nodes collected for this scan.</p>
+        <p className="text-[10px] text-white/20 mt-1">Evidence is generated when modules produce sufficient on-chain data.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
+          Evidence Nodes — {nodes.length} collected
+        </p>
+        <p className="text-[9px] text-white/20">Click any node to expand</p>
+      </div>
+      <div className="space-y-2">
+        {nodes.map((node) => (
+          <EvidenceNodeCard key={node.evidenceId} node={node} />
+        ))}
+      </div>
+      <p className="text-[9px] text-white/20 leading-relaxed">
+        Evidence nodes are structured observations generated by individual scan modules.
+        They represent raw on-chain facts, derived metrics, and cross-module signals used to
+        justify risk scores and trader intelligence conclusions.
+      </p>
+    </div>
+  );
+}
+
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 interface DeepScanResultViewProps {
@@ -503,6 +689,18 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
                 <span className="text-white/40">Regime </span>
                 <span className="font-mono font-bold text-cyan-400">{market?.marketRegime ?? 'N/A'}</span>
               </div>
+              {/* G-2: Creator / deployer address */}
+              {meta?.creatorAddress && (
+                <div className="text-xs">
+                  <span className="text-white/40">Deployer </span>
+                  <span
+                    className="font-mono font-bold text-white/70"
+                    title={meta.creatorAddress}
+                  >
+                    {fmtAddr(meta.creatorAddress)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <div className="sm:shrink-0">
@@ -556,6 +754,7 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
           {activeTab === 'risk'      && <RiskBreakdownPanel data={result} />}
           {activeTab === 'whales'    && <WhaleCohortPanel   data={result} />}
           {activeTab === 'liquidity' && <LiquidityPanel     data={result} />}
+          {activeTab === 'evidence'  && <EvidencePanel      data={result} />}
         </motion.div>
       </AnimatePresence>
 

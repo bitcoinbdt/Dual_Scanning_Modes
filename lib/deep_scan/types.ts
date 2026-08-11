@@ -482,6 +482,7 @@ export interface DeepScanInput {
     fdvUsd?: number;
     spotPriceUsd?: number;
     totalLiquidityUsd?: number;
+    volume24hUsd?: number | null;
     mainPools?: import('../blockchain/types').LiquidityPool[];
     creatorAddress?: string;
     securityFlags?: {

@@ -35,6 +35,7 @@ export interface LiquidityInfo {
   symbolOverride?: string | null;
   fdv?: number | null;
   basePriceUsd?: number;
+  volume24hUsd?: number | null;
   source?: 'dexscreener' | 'geckoterminal' | 'defillama' | 'fallback';
 }
 
@@ -186,6 +187,9 @@ export interface DexScreenerPair {
   };
   fdv?: number;
   marketCap?: number;
+  volume?: {
+    h24?: number;
+  };
 }
 
 export interface DexScreenerResponse {

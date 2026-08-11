@@ -109,6 +109,7 @@ export class DeepScanService {
           fdvUsd: basicScanData.liquidityInfo?.fdv ?? null,
           spotPriceUsd: basicScanData.liquidityInfo?.basePriceUsd ?? 0,
           totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
+          volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
           mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
           creatorAddress: basicScanData.securityInfo?.creatorAddress ?? undefined,
           securityFlags: {
@@ -404,7 +405,7 @@ export class DeepScanService {
       },
       marketSummary: {
         priceUsd: finalSpotPrice,
-        volume24hUsd: null, // Not collected from data source — expose null so UI can render "N/A" instead of $0
+        volume24hUsd: meta?.volume24hUsd ?? null,
         fdvUsd: finalFdv,
         marketRegime: regimeResult.regime,
         totalLiquidityUsd: finalLiquidity,

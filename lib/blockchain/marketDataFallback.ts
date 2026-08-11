@@ -95,6 +95,7 @@ async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
         symbolOverride: exactMatch ? mainPair.baseToken.symbol : null,
         fdv: mainPair.fdv || mainPair.marketCap || null,
         basePriceUsd: parseFloat(mainPair.priceUsd || "0"),
+        volume24hUsd: mainPair.volume?.h24 || null,
         source: 'dexscreener'
       };
     }
@@ -148,9 +149,15 @@ async function fetchGeckoTerminal(address: string, chainId: string = '1'): Promi
         priceUsd: parseFloat(pool.attributes.token_price_usd || 0)
       }));
       
+      const mainPool = pools[0];
+      const volume24hUsd = mainPool?.attributes?.volume_usd?.h24 
+        ? parseFloat(mainPool.attributes.volume_usd.h24) 
+        : null;
+      
       return {
         totalLiquidityUsd: totalLiquidity,
         mainPools,
+        volume24hUsd,
         source: 'geckoterminal'
       };
     }
@@ -205,6 +212,7 @@ async function fetchDefiLlama(address: string, chainId: string = '1'): Promise<L
             liquidityUsd: 0,
             priceUsd: coinData.price || 0
           }],
+          volume24hUsd: null,
           source: 'defillama'
         };
       }
