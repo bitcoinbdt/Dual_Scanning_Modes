@@ -21,10 +21,11 @@ import {
   ModuleStatus,
   normalizeAddress,
 } from '../types';
-import { UniversalTransaction, HolderInfo } from '../../elevator/collectors/types';
+import { UniversalTransaction, HolderInfo, HolderDataset } from '../../elevator/collectors/types';
+import { DEEP_SCAN_CONFIG } from '../config';
 
-const SUPPLY_THRESHOLD_PCT = 1.0;    // 1%
-const LIQUIDITY_THRESHOLD_PCT = 5.0; // 5%
+const SUPPLY_THRESHOLD_PCT = DEEP_SCAN_CONFIG.whaleBehavior.supplyThresholdPct;
+const LIQUIDITY_THRESHOLD_PCT = DEEP_SCAN_CONFIG.whaleBehavior.liquidityThresholdPct;
 
 const DATA_SEMANTIC_WARNING =
   'Whale balances are derived from the local transaction batch window only. ' +
@@ -45,6 +46,10 @@ function round(n: number, dp = 4): number {
  * @param spotPriceUsd        - Spot price in USD (from shared data layer)
  * @param cexWallets          - CEX wallets to exclude (reused from Elevator)
  * @param contractWallets     - Contract/system wallets to exclude (reused from Elevator)
+ * @param holdersStatus       - Explicit availability status from the collector.
+ *                              'unavailable' = EVM holder provider not integrated; must NOT be treated as empty-but-valid.
+ *                              'available' or undefined = use batchHolders as-is.
+ *                              'insufficient_data' = provider queried but result below threshold.
  */
 export function analyzeWhaleBehavior(
   transactions: UniversalTransaction[],
@@ -53,9 +58,35 @@ export function analyzeWhaleBehavior(
   totalLiquidityUsd: number,
   spotPriceUsd: number,
   cexWallets: Set<string> = new Set(),
-  contractWallets: Set<string> = new Set()
+  contractWallets: Set<string> = new Set(),
+  holdersStatus: HolderDataset['status'] = 'available'
 ): WhaleBehaviorResult {
   // ── Validation ──
+
+  // Guard: holder data explicitly declared unavailable (e.g. EVM chains without holder API).
+  // IMPORTANT: Do NOT treat 'unavailable' as an empty-but-valid snapshot.
+  // Returning insufficient_data here is correct and intentional.
+  if (holdersStatus === 'unavailable') {
+    return {
+      status: 'insufficient_data',
+      reason:
+        'Whale behavior analysis requires an on-chain holder snapshot. ' +
+        'Holder data collection is not implemented for this chain. ' +
+        'When an EVM holder provider is integrated, set holdersStatus to \'available\'.',
+      dataSemanticWarning: DATA_SEMANTIC_WARNING,
+      supplyThresholdPct: SUPPLY_THRESHOLD_PCT,
+      liquidityThresholdPct: LIQUIDITY_THRESHOLD_PCT,
+      whales: [],
+      activeWhaleCount: 0,
+      totalWhaleSupplySharePct: 0,
+      whaleNetInflow: 0,
+      whaleNetOutflow: 0,
+      phase: 'insufficient_data',
+      isDistributionRisk: false,
+      evidenceIds: [],
+    };
+  }
+
   if (!batchHolders || batchHolders.length === 0) {
     return {
       status: 'insufficient_data',
@@ -177,17 +208,18 @@ export function analyzeWhaleBehavior(
 
   // ── Phase classification ──
   let phase: WhalePhase;
+  const ratioLimit = DEEP_SCAN_CONFIG.whaleBehavior.flowRatioThreshold;
   if (whales.length === 0) {
     phase = 'insufficient_data';
-  } else if (whaleNetInflow > whaleNetOutflow * 1.2) {
+  } else if (whaleNetInflow > whaleNetOutflow * ratioLimit) {
     phase = 'accumulation';
-  } else if (whaleNetOutflow > whaleNetInflow * 1.2) {
+  } else if (whaleNetOutflow > whaleNetInflow * ratioLimit) {
     phase = 'distribution';
   } else {
     phase = 'neutral';
   }
 
-  const isDistributionRisk = phase === 'distribution' && totalWhaleSupplySharePct > 15;
+  const isDistributionRisk = phase === 'distribution' && totalWhaleSupplySharePct > DEEP_SCAN_CONFIG.whaleBehavior.distributionRiskShareThreshold;
 
   return {
     status: 'ok',

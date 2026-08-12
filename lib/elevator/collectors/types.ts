@@ -81,14 +81,33 @@ export interface CollectorResult {
   transactions: UniversalTransaction[];
   wallets: Record<string, WalletBalance>;
   holders: HolderInfo[];
+  holdersStatus?: 'available' | 'unavailable' | 'insufficient_data';
   wallet_metrics: WalletMetrics;
   metrics: CalculatedMetrics;
   blockchain: 'solana' | 'bsc' | 'eth';
   collectionTime: number;  // Time taken to collect (ms)
+  collectedAt?: number;    // Unix timestamp of when the collection occurred (seconds)
   holder_spike?: boolean;
   spike_percentage?: number;
   new_holders_24h?: number;
   total_holders_before_24h?: number;
+  washTrading?: {
+    totalWashWallets: number;
+    totalRoundTrips: number;
+    washWallets: string[];
+  };
+  wash_trading?: {
+    detected: boolean;
+    total_wash_wallets: number;
+    total_round_trips: number;
+    wash_wallets: string[];
+  };
+}
+
+export interface HolderDataset {
+  status: 'available' | 'unavailable' | 'insufficient_data';
+  holders: HolderInfo[];
+  reason?: string;
 }
 
 // ============================================================================
@@ -176,7 +195,7 @@ export interface IBlockchainCollector {
    * @param maxTransactions - Maximum number of transactions to fetch
    * @returns Complete collector result
    */
-  collect(address: string, maxTransactions: number): Promise<CollectorResult>;
+  collect(address: string, maxTransactions: number, tokenDecimals?: number): Promise<CollectorResult>;
 
   /**
    * Get the blockchain type this collector handles

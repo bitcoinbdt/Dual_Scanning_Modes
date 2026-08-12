@@ -60,6 +60,50 @@ export async function fetchMarketDataWithFallback(
 }
 
 /**
+ * Infer pool AMM type from the DEX identifier string.
+ *
+ * WHY: The V2 constant-product reserve formula is only valid for balanced 50/50
+ * pools. Applying it to concentrated-liquidity (V3/CLMM) pools produces grossly
+ * inaccurate slippage estimates. We record what is inferable from the provider name
+ * so the AMM simulator can refuse rather than fabricate.
+ *
+ * This is inference only — providers do not always expose pool type directly.
+ * Pools whose type cannot be determined safely are marked 'unknown'.
+ *
+ * A future implementation can replace this with explicit on-chain lookup once
+ * pool-type metadata is integrated.
+ */
+function inferPoolType(dexId: string): 'constant-product' | 'concentrated-liquidity' | 'unknown' {
+  const d = (dexId || '').toLowerCase();
+  // Known concentrated-liquidity (V3/CLMM) DEXes — checked first to prevent overlap
+  if (
+    d.includes('uniswap-v3') || d.includes('uniswapv3') ||
+    d.includes('pancakeswap-v3') || d.includes('pancakeswapv3') ||
+    d.includes('raydium-clmm') || d.includes('orca-whirlpool') ||
+    d.includes('meteora') || d.includes('dlmm') ||
+    d.includes('algebra') || d.includes('kyber') ||
+    d.includes('thena-v3') || d.includes('camelot-v3') ||
+    d.includes('quickswap-v3') || d.includes('aerodrome-cl') ||
+    d.includes('velodrome-cl') || d.includes('slipstream')
+  ) {
+    return 'concentrated-liquidity';
+  }
+  // Known constant-product (V2-style) DEXes
+  if (
+    d.includes('uniswap-v2') || d.includes('uniswapv2') ||
+    d.includes('pancakeswap-v2') || d.includes('pancakeswapv2') ||
+    d.includes('sushiswap') || d.includes('apeswap') ||
+    d.includes('raydium-legacy') || d.includes('orca-legacy') ||
+    d.includes('biswap') || d.includes('mdex') ||
+    d.includes('babyswap') || d.includes('spookyswap') ||
+    d === 'raydium' || d === 'orca'
+  ) {
+    return 'constant-product';
+  }
+  return 'unknown';
+}
+
+/**
  * Fetch market data from DexScreener
  */
 async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
@@ -82,7 +126,8 @@ async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
         pair: `${pair.baseToken.symbol}/${pair.quoteToken.symbol}`,
         dex: pair.dexId || 'Unknown',
         liquidityUsd: pair.liquidity?.usd || 0,
-        priceUsd: parseFloat(pair.priceUsd || "0")
+        priceUsd: parseFloat(pair.priceUsd || "0"),
+        type: inferPoolType(pair.dexId || '')
       }));
       
       const mainPair = sortedPairs[0];
@@ -146,7 +191,8 @@ async function fetchGeckoTerminal(address: string, chainId: string = '1'): Promi
         pair: pool.attributes.name || 'Unknown',
         dex: pool.attributes.dex_id || 'Unknown',
         liquidityUsd: parseFloat(pool.attributes.reserve_in_usd || 0),
-        priceUsd: parseFloat(pool.attributes.token_price_usd || 0)
+        priceUsd: parseFloat(pool.attributes.token_price_usd || 0),
+        type: inferPoolType(pool.attributes.dex_id || '')
       }));
       
       const mainPool = pools[0];
@@ -213,7 +259,8 @@ async function fetchDefiLlama(address: string, chainId: string = '1'): Promise<L
             priceUsd: coinData.price || 0
           }],
           volume24hUsd: null,
-          source: 'defillama'
+          source: 'defillama',
+          timestamp: coinData.timestamp // DefiLlama price snapshot timestamp (seconds)
         };
       }
     }

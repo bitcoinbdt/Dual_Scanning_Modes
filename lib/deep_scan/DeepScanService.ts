@@ -5,7 +5,7 @@
  * Reuses Elevator and Basic scan caches.
  */
 
-import { DeepScanInput, DeepScanResult, EvidenceNode, normalizeAddress } from './types';
+import { DeepScanInput, DeepScanResult, EvidenceNode, DataFreshnessStatus, normalizeAddress } from './types';
 import { simulateAmmSlippage } from './engines/AmmSlippageSimulator';
 import { analyzeVolumeConcentration } from './engines/VolumeConcentrationAnalyzer';
 import { analyzeWhaleBehavior } from './engines/WhaleBehaviorAnalyzer';
@@ -16,16 +16,21 @@ import { analyzeCapitalEfficiency } from './engines/CapitalEfficiencyAnalyzer';
 import { calculateRiskScore } from './engines/RiskScoringEngine';
 import { generateTraderIntelligenceReport } from './engines/TraderIntelligenceGenerator';
 import * as EvidenceMapper from './engines/EvidenceMapper';
+import { enrichPoolsWithAlchemyReserves, enrichClmmPoolsWithSlot0 } from './poolEnrichment';
+import { NormalizedPoolState, LiquidityPool } from '../blockchain/types';
+import { enrichWhaleWallets, WALLET_INTELLIGENCE_LOOKBACK_DAYS } from './walletIntelligence';
 
 import { CollectorFactory, SupportedBlockchain } from '../elevator/collectors/CollectorFactory';
+import { HolderDataset } from '../elevator/collectors/types';
 import { scanEVMToken } from '../blockchain/evmScanner';
 import { scanSolanaToken } from '../blockchain/solanaScanner';
 import { detectWashTrading } from '../elevator/washTradingDetector';
+import { DEEP_SCAN_CONFIG } from './config';
 
 // ── Session cache with TTL eviction ──
 // Key = 'deep:<userId>:<network>:<normalizedAddress>' — scoped per user and network to prevent leaks.
 // Entries expire after CACHE_TTL_MS. If userId is absent, caching is skipped entirely.
-const CACHE_TTL_MS = 60_000; // 60 seconds
+const CACHE_TTL_MS = DEEP_SCAN_CONFIG.cache.ttlMs;
 export const sessionCache = new Map<string, { result: DeepScanResult; expiresAt: number }>();
 
 export function cleanExpiredEntries(): void {
@@ -45,12 +50,78 @@ export function getCachedResult(key: string): DeepScanResult | null {
     sessionCache.delete(key);
     return null;
   }
-  return entry.result;
+
+  const result = entry.result;
+  const freshness = result.dataQuality?.freshness;
+
+  // Fix C: If the cached result had known-fresh data at scan time, re-evaluate whether
+  // that data has since exceeded freshness thresholds relative to the current wall clock.
+  // We do NOT contact external providers — only compare stored provider timestamps to now.
+  // If the underlying data has gone stale since caching, invalidate the entry so the
+  // caller gets a fresh scan. Cached stale/unknown results are preserved as-is.
+  if (freshness) {
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    if (freshness.marketDataFreshness === 'fresh' && freshness.marketDataTimestamp !== undefined) {
+      if (nowSec - freshness.marketDataTimestamp > FRESHNESS_THRESHOLDS.MARKET_DATA) {
+        console.log(`[DEEP CACHE] Invalidating: market data (timestamp ${freshness.marketDataTimestamp}) has become stale since caching.`);
+        sessionCache.delete(key);
+        return null;
+      }
+    }
+
+    if (freshness.ohlcvFreshness === 'fresh' && freshness.ohlcvTimestamp !== undefined) {
+      if (nowSec - freshness.ohlcvTimestamp > FRESHNESS_THRESHOLDS.OHLCV) {
+        console.log(`[DEEP CACHE] Invalidating: OHLCV data (timestamp ${freshness.ohlcvTimestamp}) has become stale since caching.`);
+        sessionCache.delete(key);
+        return null;
+      }
+    }
+
+    if (freshness.transactionFreshness === 'fresh' && freshness.transactionTimestamp !== undefined) {
+      if (nowSec - freshness.transactionTimestamp > FRESHNESS_THRESHOLDS.TRANSACTIONS) {
+        console.log(`[DEEP CACHE] Invalidating: transaction data (timestamp ${freshness.transactionTimestamp}) has become stale since caching.`);
+        sessionCache.delete(key);
+        return null;
+      }
+    }
+
+    // Update cacheAgeSeconds dynamically so the consumer always sees the true elapsed time
+    const cacheAgeSeconds = Math.max(0, nowSec - freshness.scanTime);
+    return {
+      ...result,
+      dataQuality: {
+        ...result.dataQuality,
+        freshness: { ...freshness, cacheAgeSeconds },
+      },
+    };
+  }
+
+  return result;
 }
 
 export function setCachedResult(key: string, result: DeepScanResult): void {
   cleanExpiredEntries(); // Bounded inline cleanup
   sessionCache.set(key, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+// Centralized freshness thresholds (in seconds)
+export const FRESHNESS_THRESHOLDS = {
+  MARKET_DATA: DEEP_SCAN_CONFIG.freshnessThresholds.marketData,
+  OHLCV: DEEP_SCAN_CONFIG.freshnessThresholds.ohlcv,
+  TRANSACTIONS: DEEP_SCAN_CONFIG.freshnessThresholds.transactions,
+};
+
+function isSameTransactionWindow(txs1: any[], txs2: any[]): boolean {
+  if (!txs1 || !txs2) return false;
+  if (txs1.length !== txs2.length) return false;
+  if (txs1.length === 0) return true;
+  const mid = Math.floor(txs1.length / 2);
+  return (
+    txs1[0]?.hash === txs2[0]?.hash &&
+    txs1[mid]?.hash === txs2[mid]?.hash &&
+    txs1[txs1.length - 1]?.hash === txs2[txs2.length - 1]?.hash
+  );
 }
 
 export class DeepScanService {
@@ -60,6 +131,10 @@ export class DeepScanService {
   static async runScan(input: DeepScanInput): Promise<DeepScanResult> {
     const startTime = Date.now();
     const scanId = input.sessionId || `deep-scan-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    // Reset the evidence ID counter so every scan produces deterministic, consecutive IDs
+    // starting at 1. This prevents ID drift and makes evidence references predictable.
+    EvidenceMapper.resetEvidenceCounter();
 
     let network = input.network.toLowerCase();
     const address = input.tokenAddress;
@@ -116,7 +191,9 @@ export class DeepScanService {
             isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
             hasMintFunction: basicScanData.mintFunction === 'Enabled',
             canBePaused: basicScanData.freezable === 'Yes',
-          }
+          },
+          timestamp: basicScanData.liquidityInfo?.timestamp,
+          source: basicScanData.liquidityInfo?.source,
         };
       } catch (err: any) {
         console.error(`[DEEP SERVICE] Basic metadata scan failed:`, err.message);
@@ -129,8 +206,19 @@ export class DeepScanService {
     const finalSpotPrice = meta?.spotPriceUsd ?? 0;
     const finalFdv = meta?.fdvUsd ?? (finalTotalSupply * finalSpotPrice);
     const finalLiquidity = meta?.totalLiquidityUsd ?? 0;
-    const finalPools = meta?.mainPools ?? [];
+    const initialPools = meta?.mainPools ?? [];
     const isHoneypot = meta?.securityFlags?.isHoneypot ?? false;
+
+    // Step 1b: Enrich pools with V2 reserves and V3 slot0
+    const enrichedPools = await enrichPoolsWithAlchemyReserves(
+      initialPools,
+      address,
+      finalDecimals,
+      finalSpotPrice,
+      network
+    );
+    const fullyEnrichedPools = await enrichClmmPoolsWithSlot0(enrichedPools, network);
+    const finalPools: (NormalizedPoolState | LiquidityPool)[] = fullyEnrichedPools;
 
     // ─────────────────────────────────────────────
     // Step 2: Resolve Elevator Data (Scenario A/B)
@@ -152,7 +240,7 @@ export class DeepScanService {
 
       try {
         const collector = CollectorFactory.create(chain, apiKeys);
-        elevatorResult = await collector.collect(address, maxTx);
+        elevatorResult = await collector.collect(address, maxTx, finalDecimals);
       } catch (err: any) {
         console.error(`[DEEP SERVICE] Ingesting transaction batch failed:`, err.message);
       }
@@ -163,7 +251,31 @@ export class DeepScanService {
     const maxTxCap = input.maxTransactions ?? 100;
     const txs = (elevatorResult?.transactions ?? []).slice(0, maxTxCap);
     const ohlcv = elevatorResult?.ohlcv ?? [];
-    const batchHolders = elevatorResult?.holders ?? [];
+
+    // ── Holder Dataset: Explicit availability contract ──
+    // holdersStatus is set by each collector:
+    //   'available'         → provider was queried; holders array reflects actual result (may be empty if token has no holders).
+    //   'unavailable'       → provider was NOT queried for this chain; whale analysis MUST be skipped, not silently treated as empty.
+    //   'insufficient_data' → provider was queried but returned usable output below minimum threshold.
+    //   undefined           → legacy path (caller injected elevatorResult without status); treat as 'available' for backward compat.
+    const rawHoldersStatus = elevatorResult?.holdersStatus;
+    const holdersStatusResolved: HolderDataset['status'] =
+      rawHoldersStatus === 'unavailable' ? 'unavailable'
+      : rawHoldersStatus === 'insufficient_data' ? 'insufficient_data'
+      : 'available'; // 'available' or legacy undefined both map to available
+
+    const holderDataset: HolderDataset = {
+      status: holdersStatusResolved,
+      holders: holdersStatusResolved === 'unavailable' ? [] : (elevatorResult?.holders ?? []),
+      reason:
+        holdersStatusResolved === 'unavailable'
+          ? `Holder data is not collected for ${network.toUpperCase()} tokens. ` +
+            'Whale behavior and exit analysis are unavailable until an EVM holder provider is integrated.'
+          : holdersStatusResolved === 'insufficient_data'
+          ? 'Holder provider returned insufficient data for reliable whale analysis.'
+          : undefined,
+    };
+    const batchHolders = holderDataset.holders;
 
     // ── Build contract/CEX exclusion sets ──
     // F-12: Use actual pool pair addresses and token address rather than heuristic string matching.
@@ -176,7 +288,8 @@ export class DeepScanService {
 
     // Exclude known LP pair addresses from pool metadata
     for (const pool of finalPools) {
-      if (pool.pair) contractWallets.add(normalizeAddress(pool.pair));
+      const pair = 'poolIdentifier' in pool ? pool.poolIdentifier : pool.pair;
+      if (pair) contractWallets.add(normalizeAddress(pair));
     }
 
     // Exclude known CEX wallets from transaction metadata
@@ -197,10 +310,33 @@ export class DeepScanService {
     // ─────────────────────────────────────────────
     const washTraderWallets = new Set<string>();
     if (txs.length > 0) {
-      // Run wash trading detector to reuse the wash trading flags
-      const washResult = detectWashTrading(txs);
-      for (const addr of washResult.summary.washWallets) {
-        washTraderWallets.add(normalizeAddress(addr));
+      const hasWashTradingField = elevatorResult && (elevatorResult.washTrading || elevatorResult.wash_trading);
+      const canReuseWash = hasWashTradingField && elevatorResult && isSameTransactionWindow(txs, elevatorResult.transactions);
+
+      if (canReuseWash && elevatorResult) {
+        console.log('[DEEP SERVICE] Reusing existing wash-trading analysis from Elevator...');
+        const wallets = elevatorResult.washTrading?.washWallets || elevatorResult.wash_trading?.wash_wallets || [];
+        for (const addr of wallets) {
+          washTraderWallets.add(normalizeAddress(addr));
+        }
+
+        // Tag transactions in txs as wash trades if their wallet is in washTraderWallets
+        for (const tx of txs) {
+          const walletNormalized = tx.wallet ? normalizeAddress(tx.wallet) : '';
+          const isWash = walletNormalized && washTraderWallets.has(walletNormalized);
+          tx.isWashTrader = !!isWash;
+          if (isWash) {
+            tx.roundTrips = tx.roundTrips || 1;
+          } else {
+            tx.roundTrips = 0;
+          }
+        }
+      } else {
+        console.log('[DEEP SERVICE] Running wash trading detector fallback...');
+        const washResult = detectWashTrading(txs);
+        for (const addr of washResult.summary.washWallets) {
+          washTraderWallets.add(normalizeAddress(addr));
+        }
       }
     }
 
@@ -209,7 +345,7 @@ export class DeepScanService {
     // ─────────────────────────────────────────────
     
     // 1. AMM Slippage
-    const posSizes = input.simulatedPositionSizes || [1000, 5000, 10000, 25000, 50000, 100000];
+    const posSizes = input.simulatedPositionSizes || DEEP_SCAN_CONFIG.amm.defaultPositionSizesUsd;
     const ammResult = simulateAmmSlippage(finalPools, finalSpotPrice, posSizes);
 
     // 2. Volume HHI — now excludes CEX and contract wallets from HHI computation
@@ -223,8 +359,25 @@ export class DeepScanService {
       finalLiquidity,
       finalSpotPrice,
       cexWallets,
-      contractWallets
+      contractWallets,
+      holderDataset.status
     );
+
+    // Phase 3: Bitquery wallet intelligence enrichment for top whale wallets
+    if (whaleResult.status === 'ok' && whaleResult.whales.length > 0) {
+      const activeWhales = whaleResult.whales.filter(w => !w.isFiltered);
+      const topWhales = activeWhales
+        .sort((a, b) => b.observedBatchBalance - a.observedBatchBalance)
+        .map(w => w.wallet);
+
+      const lookbackMs = WALLET_INTELLIGENCE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+      const sinceIso = new Date(Date.now() - lookbackMs).toISOString();
+
+      const intelligence = await enrichWhaleWallets(topWhales, sinceIso);
+      if (intelligence.recordCount > 0) {
+        whaleResult.walletIntelligence = intelligence;
+      }
+    }
 
     // 4. Whale Exit Simulation
     const whaleExitResult = simulateWhaleExit(
@@ -248,106 +401,151 @@ export class DeepScanService {
     // ─────────────────────────────────────────────
     const evidenceNodes: EvidenceNode[] = [];
 
+    // ── Evidence identity contract ──
+    // EvidenceMapper.build*() is the sole owner of evidence IDs.
+    // After each node is built, its .evidenceId is written back into the
+    // corresponding engine result's .evidenceIds[] so that:
+    //   SubScore.evidenceIds → RiskSignal.evidenceIds → compiledEvidence[]
+    // all resolve to the same EvidenceNode without any static string mismatch.
+
     if (ammResult.status === 'ok') {
       const sim1k = ammResult.simulations.find(s => s.positionSizeUsd === 1000);
       const sim50k = ammResult.simulations.find(s => s.positionSizeUsd === 50000);
-      evidenceNodes.push(
-        EvidenceMapper.buildAmmPoolEvidence({
-          poolAddress: ammResult.poolAddress || 'unknown',
-          liquidityUsd: finalLiquidity,
-          spotPriceUsd: finalSpotPrice,
-          swapFee: 0.003,
-          snapshotAt: ammResult.poolSnapshotAt || Math.floor(Date.now() / 1000),
-          impactAt1k: sim1k?.priceImpactPct ?? 0,
-          impactAt50k: sim50k?.priceImpactPct ?? 0,
-        })
-      );
+      const ammNode = EvidenceMapper.buildAmmPoolEvidence({
+        poolAddress: ammResult.poolAddress || 'unknown',
+        liquidityUsd: finalLiquidity,
+        spotPriceUsd: finalSpotPrice,
+        // Use the fee that was actually applied in the simulation.
+        // swapFeeUsed is always set by the simulator; fall back to V2 default only as a safety net.
+        swapFee: ammResult.swapFeeUsed ?? 0.003,
+        snapshotAt: ammResult.poolSnapshotAt || Math.floor(Date.now() / 1000),
+        impactAt1k: sim1k?.priceImpactPct ?? 0,
+        impactAt50k: sim50k?.priceImpactPct ?? 0,
+      });
+      evidenceNodes.push(ammNode);
+      // Write canonical ID back into the engine result
+      ammResult.evidenceIds = [ammNode.evidenceId];
+    } else {
+      ammResult.evidenceIds = [];
     }
 
     if (whaleExitResult.status === 'ok') {
       const scenario50 = whaleExitResult.scenarios.find(s => s.label === '50%');
       if (scenario50 && scenario50.status === 'ok') {
-        evidenceNodes.push(
-          EvidenceMapper.buildWhaleExitEvidence({
-            targetWallets: whaleExitResult.targetWallets,
-            combinedBalance: whaleExitResult.combinedObservedBalance,
-            scenario: '50%',
-            priceDeltaPct: scenario50.priceDeltaPct,
-            isSimulated: true,
-          })
-        );
+        const exitNode = EvidenceMapper.buildWhaleExitEvidence({
+          targetWallets: whaleExitResult.targetWallets,
+          combinedBalance: whaleExitResult.combinedObservedBalance,
+          scenario: '50%',
+          priceDeltaPct: scenario50.priceDeltaPct,
+          isSimulated: true,
+        });
+        evidenceNodes.push(exitNode);
+        // Write canonical ID back into the engine result
+        whaleExitResult.evidenceIds = [exitNode.evidenceId];
+      } else {
+        whaleExitResult.evidenceIds = [];
       }
+    } else {
+      whaleExitResult.evidenceIds = [];
     }
 
     if (hhiResult.status === 'ok') {
       const topBuyer = hhiResult.buyerHHI.topWallets[0];
-      evidenceNodes.push(
-        EvidenceMapper.buildVolumeHHIEvidence({
-          buyerHHI: hhiResult.buyerHHI.hhi,
-          sellerHHI: hhiResult.sellerHHI.hhi,
-          uniqueBuyers: hhiResult.uniqueBuyers,
-          uniqueSellers: hhiResult.uniqueSellers,
-          totalVolumeUsd: hhiResult.totalBuyVolumeUsd + hhiResult.totalSellVolumeUsd,
-          washVolumeRatio: hhiResult.washVolumeRatio,
-          topBuyerWallet: topBuyer?.wallet,
-          topBuyerSharePct: topBuyer ? topBuyer.shareOfTotal * 100 : undefined,
-        })
-      );
+      const hhiNode = EvidenceMapper.buildVolumeHHIEvidence({
+        buyerHHI: hhiResult.buyerHHI.hhi,
+        sellerHHI: hhiResult.sellerHHI.hhi,
+        uniqueBuyers: hhiResult.uniqueBuyers,
+        uniqueSellers: hhiResult.uniqueSellers,
+        totalVolumeUsd: hhiResult.totalBuyVolumeUsd + hhiResult.totalSellVolumeUsd,
+        washVolumeRatio: hhiResult.washVolumeRatio,
+        topBuyerWallet: topBuyer?.wallet,
+        topBuyerSharePct: topBuyer ? topBuyer.shareOfTotal * 100 : undefined,
+      });
+      evidenceNodes.push(hhiNode);
+      // Write canonical ID back into the engine result
+      hhiResult.evidenceIds = [hhiNode.evidenceId];
+    } else {
+      hhiResult.evidenceIds = [];
     }
 
     if (whaleResult.status === 'ok' && whaleResult.activeWhaleCount > 0) {
-      evidenceNodes.push(
-        EvidenceMapper.buildWhaleBehaviorEvidence({
-          whaleCount: whaleResult.activeWhaleCount,
-          totalWhaleSupplySharePct: whaleResult.totalWhaleSupplySharePct,
-          netInflowTokens: whaleResult.whaleNetInflow,
-          netOutflowTokens: whaleResult.whaleNetOutflow,
-          phase: whaleResult.phase,
-        })
-      );
+      const whaleNode = EvidenceMapper.buildWhaleBehaviorEvidence({
+        whaleCount: whaleResult.activeWhaleCount,
+        totalWhaleSupplySharePct: whaleResult.totalWhaleSupplySharePct,
+        netInflowTokens: whaleResult.whaleNetInflow,
+        netOutflowTokens: whaleResult.whaleNetOutflow,
+        phase: whaleResult.phase,
+      });
+      evidenceNodes.push(whaleNode);
+      // Write canonical ID back into the engine result
+      whaleResult.evidenceIds = [whaleNode.evidenceId];
+    } else {
+      whaleResult.evidenceIds = [];
     }
 
     if (regimeResult.status === 'ok') {
-      evidenceNodes.push(
-        EvidenceMapper.buildMarketRegimeEvidence({
-          regime: regimeResult.regime,
-          candleCount: regimeResult.stats?.candleCount ?? 0,
-          priceSlopePct: regimeResult.stats?.priceSlopePerCandle ?? 0,
-          volumeSlope: regimeResult.stats?.volumeSlopePerCandle ?? 0,
-          priceVolatility: regimeResult.stats?.priceVolatility ?? 0,
-          totalPriceChangePct: regimeResult.stats?.totalPriceChangePct ?? 0,
-          confidence: regimeResult.confidence,
-        })
-      );
+      const regimeNode = EvidenceMapper.buildMarketRegimeEvidence({
+        regime: regimeResult.regime,
+        candleCount: regimeResult.stats?.candleCount ?? 0,
+        priceSlopePct: regimeResult.stats?.priceSlopePerCandle ?? 0,
+        volumeSlope: regimeResult.stats?.volumeSlopePerCandle ?? 0,
+        priceVolatility: regimeResult.stats?.priceVolatility ?? 0,
+        totalPriceChangePct: regimeResult.stats?.totalPriceChangePct ?? 0,
+        confidence: regimeResult.confidence,
+      });
+      evidenceNodes.push(regimeNode);
+      // Market regime is not a direct scoring module — no evidenceIds writeback needed
     }
 
     if (capitalResult.status === 'ok') {
-      evidenceNodes.push(
-        EvidenceMapper.buildCapitalEfficiencyEvidence({
-          fdvUsd: finalFdv,
-          liquidityUsd: finalLiquidity,
-          ratio: capitalResult.fdvToLiquidityRatio,
-          sensitivity: capitalResult.sensitivity,
-          multiplier: capitalResult.capitalSensitivityMultiplier,
-        })
-      );
+      const capNode = EvidenceMapper.buildCapitalEfficiencyEvidence({
+        fdvUsd: finalFdv,
+        liquidityUsd: finalLiquidity,
+        ratio: capitalResult.fdvToLiquidityRatio,
+        sensitivity: capitalResult.sensitivity,
+        multiplier: capitalResult.capitalSensitivityMultiplier,
+      });
+      evidenceNodes.push(capNode);
+      // Write canonical ID back into the engine result
+      capitalResult.evidenceIds = [capNode.evidenceId];
+    } else {
+      capitalResult.evidenceIds = [];
     }
 
     if (buyerQualityResult.status === 'ok' || buyerQualityResult.status === 'partial') {
-      evidenceNodes.push(
-        EvidenceMapper.buildBuyerQualityEvidence({
-          score: buyerQualityResult.buyerQualityScore,
-          totalBuyers: buyerQualityResult.cohortMetrics.totalBuyers,
-          returningBuyerRatio: buyerQualityResult.cohortMetrics.returningBuyerRatio,
-          capitalDiversityIndex: buyerQualityResult.cohortMetrics.capitalDiversityIndex,
-          unavailableMetrics: buyerQualityResult.unavailableMetrics,
-        })
+      const buyerNode = EvidenceMapper.buildBuyerQualityEvidence({
+        score: buyerQualityResult.buyerQualityScore,
+        totalBuyers: buyerQualityResult.cohortMetrics.totalBuyers,
+        returningBuyerRatio: buyerQualityResult.cohortMetrics.returningBuyerRatio,
+        capitalDiversityIndex: buyerQualityResult.cohortMetrics.capitalDiversityIndex,
+        unavailableMetrics: buyerQualityResult.unavailableMetrics,
+      });
+      evidenceNodes.push(buyerNode);
+      // Write canonical ID back into the engine result
+      buyerQualityResult.evidenceIds = [buyerNode.evidenceId];
+    } else {
+      buyerQualityResult.evidenceIds = [];
+    }
+
+    // ── Build limitations array: merge engine-level unavailable metrics with holder availability status ──
+    const limitations: string[] = [...(buyerQualityResult.unavailableMetrics ?? [])];
+    if (holderDataset.status === 'unavailable') {
+      limitations.push(
+        `Whale behavior analysis is unavailable for ${network.toUpperCase()} tokens: ` +
+        'on-chain holder snapshot provider is not yet integrated. ' +
+        'Risk score whale sub-scores use default fallback values.'
+      );
+    } else if (holderDataset.status === 'insufficient_data') {
+      limitations.push(
+        'Holder provider returned insufficient data. Whale behavior confidence is reduced.'
       );
     }
 
     const compiledEvidence = EvidenceMapper.collectEvidence(evidenceNodes);
 
     // Calculate aggregated risk score
+    // NOTE: Evidence IDs in engine results were written back from EvidenceMapper above,
+    // so SubScore.evidenceIds and RiskSignal.evidenceIds now carry the real node IDs.
     const riskScoreResult = calculateRiskScore({
       ammSlippage: ammResult,
       volumeConcentration: hhiResult,
@@ -357,6 +555,118 @@ export class DeepScanService {
       capitalEfficiency: capitalResult,
       isHoneypot,
     });
+
+    // ── Evidence ID integrity validation ──
+    // Verify every risk signal and subscore evidenceId resolves to an actual EvidenceNode.
+    // Broken references are surfaced as warnings so they are caught during development/testing.
+    if (process.env.NODE_ENV !== 'production') {
+      const packagedIds = new Set(compiledEvidence.map(n => n.evidenceId));
+      const broken: string[] = [];
+      for (const signal of riskScoreResult.topRisks) {
+        for (const id of signal.evidenceIds) {
+          if (id && !packagedIds.has(id)) broken.push(`RiskSignal[${signal.riskId}] → "${id}"`);
+        }
+      }
+      for (const sub of riskScoreResult.subScores) {
+        for (const id of sub.evidenceIds) {
+          if (id && !packagedIds.has(id)) broken.push(`SubScore[${sub.module}] → "${id}"`);
+        }
+      }
+      if (broken.length > 0) {
+        console.warn(
+          `[DEEP SERVICE] ⚠ Evidence ID integrity check FAILED — ${broken.length} unresolvable reference(s):\n` +
+          broken.map(b => `  • ${b}`).join('\n') +
+          '\n  Ensure EvidenceMapper.build*() is called before calculateRiskScore() and IDs are written back.'
+        );
+      }
+    }
+
+    // ── Calculate Data Freshness (Fix B) ──
+    //
+    // Three explicit states per dataset:
+    //   'fresh'   – valid provider timestamp within threshold
+    //   'stale'   – valid provider timestamp but exceeds threshold
+    //   'unknown' – no usable timestamp (provider failed, no data, empty dataset)
+    //
+    // isXStale is true for BOTH 'stale' and 'unknown' — provider failure must never
+    // resolve as 'not stale' (i.e. false). This drives staleDataWarning correctly.
+    const scanTime = Math.floor(Date.now() / 1000);
+
+    // Cache Age (Elevator scan cache age)
+    const cacheAgeSeconds = elevatorResult?.collectedAt ? (scanTime - elevatorResult.collectedAt) : undefined;
+
+    // ── Market Data Freshness ──
+    const marketDataTimestamp = meta?.timestamp;
+    let marketDataFreshness: DataFreshnessStatus;
+    let marketDataAgeSeconds: number | undefined;
+    if (marketDataTimestamp !== undefined && marketDataTimestamp > 0) {
+      marketDataAgeSeconds = scanTime - marketDataTimestamp;
+      marketDataFreshness = marketDataAgeSeconds > FRESHNESS_THRESHOLDS.MARKET_DATA ? 'stale' : 'fresh';
+    } else if (meta?.source && meta.source !== 'fallback' && meta.source !== '') {
+      // Provider succeeded but returned no explicit timestamp (e.g. DexScreener, GeckoTerminal).
+      // The data was collected during this scan run, so it is known fresh.
+      marketDataAgeSeconds = undefined;
+      marketDataFreshness = 'fresh';
+    } else {
+      // No usable timestamp and no live provider — freshness is unknown.
+      marketDataAgeSeconds = undefined;
+      marketDataFreshness = 'unknown';
+    }
+    const isMarketDataStale = marketDataFreshness !== 'fresh';
+
+    // ── OHLCV Freshness ──
+    const latestCandle = ohlcv && ohlcv.length > 0
+      ? ohlcv.reduce((latest, candle) => candle.timestamp > latest.timestamp ? candle : latest, ohlcv[0])
+      : null;
+    const ohlcvTimestamp = latestCandle?.timestamp;
+    let ohlcvFreshness: DataFreshnessStatus;
+    let ohlcvAgeSeconds: number | undefined;
+    if (ohlcvTimestamp !== undefined) {
+      ohlcvAgeSeconds = scanTime - ohlcvTimestamp;
+      ohlcvFreshness = ohlcvAgeSeconds > FRESHNESS_THRESHOLDS.OHLCV ? 'stale' : 'fresh';
+    } else {
+      ohlcvAgeSeconds = undefined;
+      ohlcvFreshness = 'unknown';
+    }
+    const isOhlcvStale = ohlcvFreshness !== 'fresh';
+
+    // ── Transaction Freshness ──
+    const latestTx = txs && txs.length > 0
+      ? txs.reduce((latest, tx) => tx.timestamp > latest.timestamp ? tx : latest, txs[0])
+      : null;
+    const transactionTimestamp = latestTx?.timestamp;
+    let transactionFreshness: DataFreshnessStatus;
+    let transactionAgeSeconds: number | undefined;
+    if (transactionTimestamp !== undefined) {
+      transactionAgeSeconds = scanTime - transactionTimestamp;
+      transactionFreshness = transactionAgeSeconds > FRESHNESS_THRESHOLDS.TRANSACTIONS ? 'stale' : 'fresh';
+    } else {
+      transactionAgeSeconds = undefined;
+      transactionFreshness = 'unknown';
+    }
+    const isTransactionStale = transactionFreshness !== 'fresh';
+
+    // Aggregate warning: fires when ≥2 datasets are not fresh (stale OR unknown).
+    // unknown ≠ fresh — provider failure must not silence the warning.
+    const nonFreshCount = (isMarketDataStale ? 1 : 0) + (isOhlcvStale ? 1 : 0) + (isTransactionStale ? 1 : 0);
+    const staleDataWarning = nonFreshCount >= 2;
+
+    const freshness = {
+      scanTime,
+      cacheAgeSeconds,
+      marketDataTimestamp,
+      marketDataAgeSeconds,
+      marketDataFreshness,
+      isMarketDataStale,
+      ohlcvTimestamp,
+      ohlcvAgeSeconds,
+      ohlcvFreshness,
+      isOhlcvStale,
+      transactionTimestamp,
+      transactionAgeSeconds,
+      transactionFreshness,
+      isTransactionStale,
+    };
 
     // ─────────────────────────────────────────────
     // Step 6: Generate Trader Intelligence Report
@@ -376,15 +686,41 @@ export class DeepScanService {
       riskScore: riskScoreResult,
       evidence: compiledEvidence,
       dataQuality: {
-        staleDataWarning: false,
+        staleDataWarning,
         elevatorDataReused: elevatorReused,
         transactionCount: txs.length,
         ohlcvCandleCount: ohlcv.length,
       },
-      limitations: buyerQualityResult.unavailableMetrics,
+      limitations,
       scanId,
       timestamp: Date.now(),
     });
+
+    // ── Determine Scan Outcome ──
+    let outcome: 'SUCCESS' | 'PARTIAL_SUCCESS' | 'INSUFFICIENT_DATA' | 'FAILED' = 'SUCCESS';
+
+    const allModulesOkOrPartial =
+      ammResult.status !== 'insufficient_data' &&
+      hhiResult.status !== 'insufficient_data' &&
+      whaleResult.status !== 'insufficient_data' &&
+      whaleExitResult.status !== 'insufficient_data' &&
+      buyerQualityResult.status !== 'insufficient_data' &&
+      regimeResult.status !== 'insufficient_data' &&
+      capitalResult.status !== 'insufficient_data';
+
+    if (!riskScoreResult.sufficientData) {
+      outcome = 'INSUFFICIENT_DATA';
+    } else if (network !== 'solana') {
+      // For EVM network, holders are unavailable, so it is always at best PARTIAL_SUCCESS
+      outcome = 'PARTIAL_SUCCESS';
+    } else if (!allModulesOkOrPartial) {
+      outcome = 'PARTIAL_SUCCESS';
+    }
+
+    const finalStatus: 'success' | 'partial_failure' | 'failure' =
+      outcome === 'SUCCESS' ? 'success'
+      : outcome === 'PARTIAL_SUCCESS' ? 'partial_failure'
+      : 'failure';
 
     // ─────────────────────────────────────────────
     // Step 7: Package Final Result
@@ -392,7 +728,8 @@ export class DeepScanService {
     const scanDurationMs = Date.now() - startTime;
 
     const result: DeepScanResult = {
-      status: 'success',
+      status: finalStatus,
+      outcome,
       scanId,
       timestamp: Date.now(),
       tokenMetadata: {
@@ -422,12 +759,13 @@ export class DeepScanService {
       evidence: compiledEvidence,
       traderIntelligence: reportResult,
       dataQuality: {
-        staleDataWarning: false,
+        staleDataWarning,
         elevatorDataReused: elevatorReused,
         transactionCount: txs.length,
         ohlcvCandleCount: ohlcv.length,
+        freshness,
       },
-      limitations: buyerQualityResult.unavailableMetrics,
+      limitations,
       overallConfidence: riskScoreResult.confidence,
       scanDurationMs,
     };

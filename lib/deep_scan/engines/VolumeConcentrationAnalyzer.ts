@@ -21,6 +21,7 @@ import {
   normalizeAddress,
 } from '../types';
 import { UniversalTransaction } from '../../elevator/collectors/types';
+import { DEEP_SCAN_CONFIG } from '../config';
 
 function round(n: number, dp = 4): number {
   const factor = Math.pow(10, dp);
@@ -56,10 +57,11 @@ function computeHHI(
   walletEntries.sort((a, b) => b.volumeUsd - a.volumeUsd);
   const topWallets = walletEntries.slice(0, 5);
 
+  const hhiThresholds = DEEP_SCAN_CONFIG.volumeHhi.thresholds;
   const concentrationLevel =
-    hhi < 0.10 ? 'low' :
-    hhi < 0.18 ? 'moderate' :
-    hhi < 0.35 ? 'high' : 'extreme';
+    hhi < hhiThresholds.low ? 'low' :
+    hhi < hhiThresholds.moderate ? 'moderate' :
+    hhi < hhiThresholds.high ? 'high' : 'extreme';
 
   return {
     hhi: round(hhi, 6),
@@ -233,18 +235,20 @@ export function analyzeVolumeConcentration(
   const washVolumeRatio =
     totalVolumeUsd > 0 ? round(elevatorWashVolumeUsd / totalVolumeUsd, 4) : 0;
 
-  // Simple proxy for volume-price divergence: 
+  // Simple proxy for volume-price divergence:
   // High buyer concentration + very skewed buy/sell ratio
+  const divCfg = DEEP_SCAN_CONFIG.volumeHhi.divergence;
   const volumePriceDivergence =
-    buyerHHI.hhi > 0.5 && buySellRatio > 2.0;
+    buyerHHI.hhi > divCfg.buyerHhiLimit && buySellRatio > divCfg.buySellRatioLimit;
 
   // ── Organic score: higher = more organic ──
   // Penalize: high buyer HHI, high wash volume, high seller HHI
+  const organicWeights = DEEP_SCAN_CONFIG.volumeHhi.organicWeights;
   const rawScore =
     100 -
-    buyerHHI.hhi * 40 -
-    washVolumeRatio * 30 -
-    sellerHHI.hhi * 30;
+    buyerHHI.hhi * organicWeights.buyerHhi -
+    washVolumeRatio * organicWeights.washRatio -
+    sellerHHI.hhi * organicWeights.sellerHhi;
   const organicScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
   return {

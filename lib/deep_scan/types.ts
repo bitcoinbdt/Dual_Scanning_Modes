@@ -11,6 +11,7 @@
  *   SIGNAL         — detected condition / threshold breach
  *   DECISION_SUPPORT — trader-oriented implication
  */
+import type { WalletHistoryRecord } from '../providers/adapter-types';
 
 // ─────────────────────────────────────────────
 // 1. Status / quality sentinels
@@ -89,8 +90,25 @@ export interface PositionSizeResult {
   poolLiquidityUsd: number;
   /** SIGNAL: Execution risk classification */
   exitRiskLevel: RiskLevel;
-  /** DATA: Swap fee applied (e.g. 0.003 = 0.3%) */
+  /**
+   * DATA: Swap fee rate applied to this simulation (e.g. 0.003 = 0.3%).
+   * Read swapFeeKnown to determine whether this was observed or assumed.
+   */
   swapFee: number;
+  /**
+   * DATA: Whether the swap fee was obtained from pool metadata (true)
+   * or is a hardcoded default assumption (false).
+   * When false, simulation accuracy depends on the pool actually using the
+   * assumed fee, which may not be the case for non-standard AMMs.
+   */
+  swapFeeKnown: boolean;
+  /**
+   * DATA: How the token/quote reserves used for this simulation were obtained.
+   * - 'derived'  : Virtual reserves calculated from liquidityUsd and spotPrice
+   *                using the balanced 50/50 assumption. Not directly observed.
+   * - 'observed' : Reserves were read directly from an on-chain source (future).
+   */
+  reserveProvenance: 'derived' | 'observed';
   /** Whether simulation was possible */
   status: ModuleStatus;
   /** If status ≠ 'ok', why */
@@ -100,7 +118,7 @@ export interface PositionSizeResult {
 export interface AmmSlippageResult {
   status: ModuleStatus;
   reason?: string;
-  /** Pool address used for the simulation */
+  /** Pool identifier (address or provider label) used for the simulation */
   poolAddress?: string;
   /** Pool liquidity snapshot timestamp */
   poolSnapshotAt?: number;
@@ -108,6 +126,29 @@ export interface AmmSlippageResult {
   spotPriceUsd?: number;
   /** Total pool liquidity */
   poolLiquidityUsd?: number;
+  /**
+   * The AMM model applied for this simulation.
+   * - 'constant-product' : V2-style x*y=k model was used (reliable)
+   * - 'concentrated-liquidity' : Pool is CLMM/V3 — simulation was skipped (not yet supported)
+   * - 'unknown' : Pool type could not be determined — V2 model applied with warning
+   */
+  poolModel?: 'constant-product' | 'concentrated-liquidity' | 'unknown';
+  /**
+   * The swap fee rate that was applied across all position simulations.
+   * Check swapFeeKnown to know whether this was observed or assumed.
+   */
+  swapFeeUsed?: number;
+  /**
+   * Whether swapFeeUsed came from pool metadata (true) or was a default assumption (false).
+   * When false, read result.reason for the assumption disclosure.
+   */
+  swapFeeKnown?: boolean;
+  /**
+   * How reserves used for this simulation were obtained.
+   * - 'observed': token reserve read from on-chain and quote reserve derived from it
+   * - 'derived' : both reserves derived using the 50/50 virtual approximation
+   */
+  reserveProvenance?: 'derived' | 'observed';
   /** One entry per position size */
   simulations: PositionSizeResult[];
   /** The minimum liquidity required to execute $1K with <10% impact */
@@ -116,6 +157,7 @@ export interface AmmSlippageResult {
   isThinLiquidity: boolean;
   evidenceIds: string[];
 }
+
 
 // ─────────────────────────────────────────────
 // 5. Volume Concentration / HHI (Module 2)
@@ -222,6 +264,15 @@ export interface WhaleBehaviorResult {
   /** SIGNAL: Is whale distribution dominant? */
   isDistributionRisk: boolean;
   evidenceIds: string[];
+  /** Phase 3 additive: wallet history intelligence from Bitquery */
+  walletIntelligence?: WalletIntelligenceSummary;
+}
+
+export interface WalletIntelligenceSummary {
+  recordCount: number;
+  available: number;
+  unavailable: number;
+  records: WalletHistoryRecord[];
 }
 
 // ─────────────────────────────────────────────
@@ -391,13 +442,19 @@ export interface CapitalEfficiencyResult {
 export interface SubScore {
   module: string;
   label: string;
-  /** Raw score 0–100 where higher = more risk */
+  /** Raw score 0–100 where higher = more risk. Only valid when dataAvailability === 'measured'. */
   score: number;
   weight: number;
-  /** score * weight */
+  /** score * weight. Zero when dataAvailability !== 'measured' so no synthetic contribution. */
   weightedContribution: number;
   confidence: number;
   evidenceIds: string[];
+  /**
+   * 'measured'           – module ran successfully and produced a real score.
+   * 'insufficient_data'  – module ran but lacked sufficient data to score reliably.
+   * 'unavailable'        – module could not run at all (e.g. EVM holder data not collected).
+   */
+  dataAvailability: 'measured' | 'insufficient_data' | 'unavailable';
 }
 
 export interface RiskMitigator {
@@ -409,7 +466,7 @@ export interface RiskMitigator {
 
 export interface ExplainableRiskScore {
   status: ModuleStatus;
-  /** 0–100: weighted aggregate risk score */
+  /** 0–100: weighted aggregate risk score (normalized over available modules only). */
   overallRiskScore: number;
   riskLevel: RiskLevel;
   subScores: SubScore[];
@@ -418,11 +475,20 @@ export interface ExplainableRiskScore {
   confidence: number;
   evidenceIds: string[];
   /**
-   * false when ALL input modules returned insufficient_data.
-   * In this case overallRiskScore is based entirely on defaults and
-   * MUST NOT be presented to the trader as a meaningful risk assessment.
+   * false when ALL input modules returned insufficient_data or unavailable.
+   * In this case overallRiskScore is 0 and MUST NOT be presented as a meaningful risk assessment.
    */
   sufficientData: boolean;
+  /**
+   * 'complete'           – all modules produced measured scores.
+   * 'partial'            – at least one module measured; one or more unavailable/insufficient.
+   * 'insufficient_data'  – no module produced a measured score.
+   */
+  scoreCompleteness: 'complete' | 'partial' | 'insufficient_data';
+  /** How many of the total modules produced a measured score. */
+  availableModuleCount: number;
+  /** Total number of scoring modules. */
+  totalModuleCount: number;
 }
 
 // ─────────────────────────────────────────────
@@ -490,6 +556,8 @@ export interface DeepScanInput {
       hasMintFunction?: boolean;
       canBePaused?: boolean;
     };
+    timestamp?: number; // Unix timestamp of when the metadata/market data was retrieved (seconds)
+    source?: string; // Provider source (e.g. 'dexscreener', 'geckoterminal', 'fallback')
   };
   /** Custom position sizes for AMM simulation (USD). Defaults to [1000,5000,10000,25000,50000,100000] */
   simulatedPositionSizes?: number[];
@@ -505,13 +573,18 @@ export interface DeepScanInput {
   userId?: string;
 }
 
+export type ScanOutcome = 'SUCCESS' | 'PARTIAL_SUCCESS' | 'INSUFFICIENT_DATA' | 'FAILED';
+
 // ─────────────────────────────────────────────
 // 14. Deep Scan Output (matches scan_output.json schema)
 // ─────────────────────────────────────────────
 
+export type DataFreshnessStatus = 'fresh' | 'stale' | 'unknown';
+
 export interface DeepScanResult {
   /** 'success' | 'partial_failure' | 'failure' */
   status: 'success' | 'partial_failure' | 'failure';
+  outcome?: ScanOutcome;
   scanId: string;
   timestamp: number;
   tokenMetadata: {
@@ -549,6 +622,22 @@ export interface DeepScanResult {
     elevatorDataReused: boolean;
     transactionCount: number;
     ohlcvCandleCount: number;
+    freshness?: {
+      scanTime: number;
+      cacheAgeSeconds?: number;
+      marketDataTimestamp?: number;
+      marketDataAgeSeconds?: number;
+      marketDataFreshness: DataFreshnessStatus;
+      isMarketDataStale: boolean;
+      ohlcvTimestamp?: number;
+      ohlcvAgeSeconds?: number;
+      ohlcvFreshness: DataFreshnessStatus;
+      isOhlcvStale: boolean;
+      transactionTimestamp?: number;
+      transactionAgeSeconds?: number;
+      transactionFreshness: DataFreshnessStatus;
+      isTransactionStale: boolean;
+    };
   };
   limitations: string[];
   /** Overall confidence across all modules */

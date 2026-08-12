@@ -10,6 +10,7 @@
  *   Results must never be presented as facts about past or future events.
  *
  * Uses the same constant-product AMM formula as AmmSlippageSimulator.
+ * Pool selection follows the same priority: constant-product > unknown > clmm.
  */
 
 import {
@@ -19,19 +20,40 @@ import {
   SeverityLevel,
   ModuleStatus,
 } from '../types';
-import { LiquidityPool } from '../../blockchain/types';
+import {
+  LiquidityPool,
+  NormalizedPoolState,
+  toNormalizedPoolState,
+} from '../../blockchain/types';
+import { DEEP_SCAN_CONFIG } from '../config';
 
 const SIMULATION_DISCLAIMER =
   'These are SIMULATED scenarios based on local batch balance observations. ' +
   'They represent what WOULD happen mathematically if these wallets liquidated — ' +
   'they are NOT actual transactions.';
 
-const DEFAULT_SWAP_FEE = 0.003;
-const FRACTIONS: Array<{ fraction: number; label: '10%' | '25%' | '50%' }> = [
-  { fraction: 0.10, label: '10%' },
-  { fraction: 0.25, label: '25%' },
-  { fraction: 0.50, label: '50%' },
-];
+/**
+ * Canonical V2 default fee applied when pool fee is unknown.
+ * See AmmSlippageSimulator for the full rationale.
+ */
+const V2_DEFAULT_SWAP_FEE = DEEP_SCAN_CONFIG.amm.defaultSwapFee;
+
+const FRACTIONS = DEEP_SCAN_CONFIG.whaleExit.liquidationFractions;
+
+/**
+ * Select the best pool for whale exit simulation.
+ * Mirrors AmmSlippageSimulator.selectPool priority:
+ *   constant-product > unknown > concentrated-liquidity
+ */
+function selectExitPool(pools: NormalizedPoolState[]): NormalizedPoolState | null {
+  if (!pools || pools.length === 0) return null;
+  const sorted = [...pools].sort((a, b) => b.liquidityUsd - a.liquidityUsd);
+  const cpPool = sorted.find(p => p.poolType === 'constant-product');
+  if (cpPool) return cpPool;
+  const unknownPool = sorted.find(p => p.poolType === 'unknown');
+  if (unknownPool) return unknownPool;
+  return sorted[0]; // all CLMM — return for explicit refusal
+}
 
 function round(n: number, dp = 4): number {
   const factor = Math.pow(10, dp);
@@ -39,9 +61,10 @@ function round(n: number, dp = 4): number {
 }
 
 function classifySeverity(priceDeltaPct: number): SeverityLevel {
-  if (priceDeltaPct < 5) return 'low';
-  if (priceDeltaPct < 15) return 'medium';
-  if (priceDeltaPct < 30) return 'high';
+  const limits = DEEP_SCAN_CONFIG.whaleExit.severityLimits;
+  if (priceDeltaPct < limits.low) return 'low';
+  if (priceDeltaPct < limits.medium) return 'medium';
+  if (priceDeltaPct < limits.high) return 'high';
   return 'critical';
 }
 
@@ -55,10 +78,14 @@ function classifySeverity(priceDeltaPct: number): SeverityLevel {
  */
 export function simulateWhaleExit(
   whales: WhaleEntry[],
-  pools: LiquidityPool[],
+  pools: (NormalizedPoolState | LiquidityPool)[],
   spotPriceUsd: number,
   totalSupply: number
 ): WhaleExitResult {
+  // Normalize to NormalizedPoolState[]
+  const normalizedPools: NormalizedPoolState[] = pools.map(p =>
+    'poolType' in p ? p : toNormalizedPoolState(p)
+  );
   // ── Validation ──
   if (!whales || whales.length === 0) {
     return {
@@ -73,7 +100,7 @@ export function simulateWhaleExit(
     };
   }
 
-  if (!pools || pools.length === 0 || spotPriceUsd <= 0) {
+  if (!normalizedPools || normalizedPools.length === 0 || spotPriceUsd <= 0) {
     return {
       status: 'insufficient_data',
       reason: 'Missing pool data or spot price — cannot run AMM exit simulation.',
@@ -98,14 +125,12 @@ export function simulateWhaleExit(
     0
   );
 
-  // ── Select largest pool for simulation ──
-  const largestPool = [...pools].sort((a, b) => b.liquidityUsd - a.liquidityUsd)[0];
-  const poolLiquidityUsd = largestPool.liquidityUsd;
-
-  if (poolLiquidityUsd <= 0) {
+  // ── Select pool for simulation (mirrors AmmSlippageSimulator pool-type priority) ──
+  const selectedPool = selectExitPool(normalizedPools);
+  if (!selectedPool) {
     return {
       status: 'insufficient_data',
-      reason: 'Largest pool has zero liquidity.',
+      reason: 'No usable pool found for whale exit simulation.',
       simulationDisclaimer: SIMULATION_DISCLAIMER,
       targetWallets,
       combinedObservedBalance: round(combinedObservedBalance, 4),
@@ -115,7 +140,43 @@ export function simulateWhaleExit(
     };
   }
 
+  // ── Pool type gate: refuse CLMM pools ──
+  if (selectedPool.poolType === 'concentrated-liquidity') {
+    return {
+      status: 'insufficient_data',
+      reason:
+        'The primary pool uses concentrated liquidity (V3/CLMM). ' +
+        'The constant-product exit simulation model is not applicable to this pool type.',
+      simulationDisclaimer: SIMULATION_DISCLAIMER,
+      targetWallets,
+      combinedObservedBalance: round(combinedObservedBalance, 4),
+      scenarios: [],
+      maxSeverity: 'low',
+      evidenceIds: [],
+    };
+  }
+
+  const poolLiquidityUsd = selectedPool.liquidityUsd;
+
+  if (poolLiquidityUsd <= 0) {
+    return {
+      status: 'insufficient_data',
+      reason: 'Selected pool has zero liquidity.',
+      simulationDisclaimer: SIMULATION_DISCLAIMER,
+      targetWallets,
+      combinedObservedBalance: round(combinedObservedBalance, 4),
+      scenarios: [],
+      maxSeverity: 'low',
+      evidenceIds: [],
+    };
+  }
+
+  // ── Resolve swap fee ──
+  // If pool fee is known, use it. Otherwise apply V2 default.
+  const swapFee = selectedPool.fee.known ? selectedPool.fee.feeRate : V2_DEFAULT_SWAP_FEE;
+
   // ── Derive AMM virtual reserves ──
+  // PROVENANCE: DERIVED — balanced 50/50 assumption; not observed on-chain.
   const tokenReserve = poolLiquidityUsd / 2 / spotPriceUsd;
   const quoteReserve = poolLiquidityUsd / 2;
   const k = tokenReserve * quoteReserve;
@@ -145,7 +206,7 @@ export function simulateWhaleExit(
       continue;
     }
 
-    const tokensAdj = tokensSold * (1 - DEFAULT_SWAP_FEE);
+    const tokensAdj = tokensSold * (1 - swapFee);
     const newTokenReserve = tokenReserve + tokensAdj;
 
     // Check if this drains the pool

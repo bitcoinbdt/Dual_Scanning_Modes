@@ -6,6 +6,7 @@
  */
 
 import { CapitalEfficiencyResult, CapitalSensitivity, ModuleStatus } from '../types';
+import { DEEP_SCAN_CONFIG } from '../config';
 
 function round(n: number, dp = 2): number {
   return Math.round(n * Math.pow(10, dp)) / Math.pow(10, dp);
@@ -40,10 +41,11 @@ export function analyzeCapitalEfficiency(
   const marketCapToLiquidityRatio = fdvUsd / totalLiquidityUsd;
   const capitalSensitivityMultiplier = marketCapToLiquidityRatio; // Standard approximation
 
+  const capCfg = DEEP_SCAN_CONFIG.capitalEfficiency;
   let sensitivity: CapitalSensitivity = 'medium';
-  if (marketCapToLiquidityRatio < 10) {
+  if (marketCapToLiquidityRatio < capCfg.lowThreshold) {
     sensitivity = 'low';
-  } else if (marketCapToLiquidityRatio >= 50) {
+  } else if (marketCapToLiquidityRatio >= capCfg.highThreshold) {
     sensitivity = 'high';
   }
 

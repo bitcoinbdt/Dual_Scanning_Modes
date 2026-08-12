@@ -127,6 +127,37 @@ export async function POST(request: NextRequest) {
       userId: user.id,  // P1-1: scope cache per authenticated user to prevent cross-user collisions
     });
 
+    const isUnusable = result.outcome === 'INSUFFICIENT_DATA' || result.outcome === 'FAILED';
+
+    if (isUnusable) {
+      // Unusable scan -> refund credits
+      if (userId && creditsDeducted && !refundIssued) {
+        refundIssued = true;
+        console.log(`[DEEP API] Scan produced unusable result (${result.outcome}). Refunding ${creditsSpentVal} credits to ${userId}...`);
+        try {
+          await supabase.rpc('refund_credits_for_scan', {
+            p_user_id: userId,
+            p_amount: creditsSpentVal,
+            p_scan_type: 'DEEP',
+            p_token_address: tokenAddr,
+            p_scan_id: scanId, // Pass scanId for database-level idempotency
+          });
+        } catch (refundErr) {
+          console.error('[DEEP API] Credit refund failed:', refundErr);
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: `The scan completed but could not obtain sufficient on-chain data (outcome: ${result.outcome}). Your credits have been refunded.`,
+          code: 'INSUFFICIENT_DATA',
+          result,
+        },
+        { status: 422 }
+      );
+    }
+
     // F-9: Mark scan as completed BEFORE building the response.
     // If NextResponse.json() throws (e.g. serialization error),
     // the catch block will NOT refund credits since the scan succeeded.

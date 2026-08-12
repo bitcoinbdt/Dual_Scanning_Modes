@@ -14,10 +14,27 @@ import { EvidenceNode } from '../types';
 
 let _evidenceCounter = 0;
 
+/**
+ * Generate a scan-scoped deterministic evidence ID.
+ * Format: `<prefix>-<n>` where n is a monotonically increasing counter reset
+ * at the start of each scan via resetEvidenceCounter().
+ *
+ * WHY: Runtime timestamp IDs (e.g. `amm-pool-1735000000000-1`) can never be
+ * referenced by static strings in engine results. All ID ownership belongs
+ * exclusively to EvidenceMapper; engines must receive IDs back from the mapper.
+ */
 function makeId(prefix: string): string {
   _evidenceCounter += 1;
-  // Use a simple deterministic ID (no uuid dependency needed)
-  return `${prefix}-${Date.now()}-${_evidenceCounter}`;
+  return `${prefix}-${_evidenceCounter}`;
+}
+
+/**
+ * Reset the scan-scoped evidence counter.
+ * Must be called once at the start of each scan in DeepScanService to
+ * ensure IDs are deterministic and do not leak across scan invocations.
+ */
+export function resetEvidenceCounter(): void {
+  _evidenceCounter = 0;
 }
 
 // ─────────────────────────────────────────────

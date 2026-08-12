@@ -199,10 +199,29 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
   if (!rs) return (
     <div className="text-center py-8 text-white/40 text-sm">Risk score unavailable for this scan.</div>
   );
-  const sorted = [...(rs.subScores || [])].sort((a, b) => b.weightedContribution - a.weightedContribution);
+  // Sort: measured modules first (by contribution desc), then unavailable modules
+  const sorted = [...(rs.subScores || [])].sort((a, b) => {
+    if (a.dataAvailability === 'measured' && b.dataAvailability !== 'measured') return -1;
+    if (a.dataAvailability !== 'measured' && b.dataAvailability === 'measured') return 1;
+    return b.weightedContribution - a.weightedContribution;
+  });
 
   return (
     <div className="space-y-4">
+      {rs.scoreCompleteness === 'partial' && (
+        <div className="rounded-lg px-3 py-2 border border-amber-500/30" style={{ background: 'rgba(245,158,11,0.06)' }}>
+          <p className="text-[10px] text-amber-400/80">
+            ⚠ Partial score — {rs.availableModuleCount}/{rs.totalModuleCount} modules measured.
+            Unavailable modules are excluded from the weighted average.
+          </p>
+        </div>
+      )}
+      {rs.scoreCompleteness === 'insufficient_data' && (
+        <div className="rounded-lg px-3 py-2 border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <p className="text-[10px] text-white/40">No module produced sufficient data to compute a risk score.</p>
+        </div>
+      )}
+
       {rs.mitigators && rs.mitigators.length > 0 && (
         <div className="rounded-xl p-4 border border-emerald-500/20" style={{ background: 'rgba(16,185,129,0.06)' }}>
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-400 mb-3">✓ Mitigating Factors</p>
@@ -219,7 +238,8 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
 
       <div className="space-y-3">
         {sorted.map((s: SubScore) => {
-          const barWidth = Math.min(100, s.score);
+          const isMeasured = s.dataAvailability === 'measured';
+          const barWidth = isMeasured ? Math.min(100, s.score) : 0;
           const barColor = s.score < 30 ? '#10b981' : s.score < 55 ? '#f59e0b' : s.score < 75 ? '#f97316' : '#ef4444';
           return (
             <div key={s.module} className="rounded-lg p-3 border border-white/[0.08]" style={{ background: 'rgba(255,255,255,0.03)' }}>
@@ -227,20 +247,32 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
                 <span className="text-xs font-semibold text-white/80">{s.label}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-white/40">w={fmtPct(s.weight * 100, 0)}</span>
-                  <span className="text-xs font-mono font-bold" style={{ color: barColor }}>{s.score.toFixed(0)}</span>
+                  {isMeasured ? (
+                    <span className="text-xs font-mono font-bold" style={{ color: barColor }}>{s.score.toFixed(0)}</span>
+                  ) : (
+                    <span className="text-[10px] text-white/30 italic">
+                      {s.dataAvailability === 'unavailable' ? 'Unavailable' : 'Insufficient data'}
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${barWidth}%` }}
-                  transition={{ duration: 0.8, ease: 'easeOut' }}
-                  className="h-full rounded-full"
-                  style={{ background: barColor, boxShadow: `0 0 6px ${barColor}` }}
-                />
-              </div>
-              {s.confidence < 50 && (
-                <p className="text-[9px] text-amber-400/60 mt-1">Low confidence ({fmtPct(s.confidence, 0)})</p>
+              {isMeasured ? (
+                <>
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${barWidth}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ background: barColor, boxShadow: `0 0 6px ${barColor}` }}
+                    />
+                  </div>
+                  {s.confidence < 50 && (
+                    <p className="text-[9px] text-amber-400/60 mt-1">Low confidence ({fmtPct(s.confidence, 0)})</p>
+                  )}
+                </>
+              ) : (
+                <div className="h-1.5 rounded-full bg-white/[0.04]" />
               )}
             </div>
           );
@@ -252,6 +284,7 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
     </div>
   );
 }
+
 
 // ─── Panel: Whale & Cohorts ────────────────────────────────────────────────────
 
@@ -265,6 +298,10 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
     <div className="text-center py-8 text-white/40 text-sm">Whale and cohort data unavailable for this scan.</div>
   );
 
+  const isWhaleAvailable = wh.status === 'ok';
+  const isVolumeAvailable = vc.status === 'ok';
+  const isBuyerAvailable = bq.status === 'ok' || bq.status === 'partial';
+
   const phaseIcon =
     wh.phase === 'accumulation' ? <ArrowUpRight className="w-4 h-4 text-emerald-400" /> :
     wh.phase === 'distribution' ? <ArrowDownRight className="w-4 h-4 text-red-400" /> :
@@ -272,143 +309,195 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {([
-          { label: 'Active Whales',     value: wh.activeWhaleCount?.toString() ?? 'N/A' },
-          { label: 'Supply Share',      value: fmtPct(wh.totalWhaleSupplySharePct) },
-          { label: 'Phase',             value: wh.phase ?? '—', extra: phaseIcon },
-          { label: 'Net Inflow',        value: fmtNum(wh.whaleNetInflow, 0), positive: true },
-          { label: 'Net Outflow',       value: fmtNum(wh.whaleNetOutflow, 0), positive: false },
-          { label: 'Distribution Risk', value: wh.isDistributionRisk ? 'YES' : 'NO', warn: wh.isDistributionRisk },
-        ] as Array<{ label: string; value: string; extra?: React.ReactNode; positive?: boolean; warn?: boolean }>).map((item) => (
-          <div key={item.label} className="rounded-lg p-3 bg-white/5 border border-white/[0.08] flex flex-col gap-1">
-            <span className="text-[10px] text-white/40 uppercase tracking-widest">{item.label}</span>
-            <span className={`text-sm font-bold font-mono flex items-center gap-1 ${
-              item.warn ? 'text-red-400' :
-              item.positive === true  ? 'text-emerald-400' :
-              item.positive === false ? 'text-red-400' : 'text-white/90'
-            }`}>
-              {item.extra}{item.value}
-            </span>
+      {/* Whale Behavior Section */}
+      <div className="rounded-xl border border-white/[0.08] p-4 bg-white/[0.015] space-y-3">
+        <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Whale Behavior Analysis</p>
+        
+        {!isWhaleAvailable ? (
+          <div className="rounded-lg p-3 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Whale Analysis Unavailable
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              {wh.reason || 'Whale behavior and exit analysis are unavailable due to insufficient data or lack of holder snapshot data for this network.'}
+            </p>
           </div>
-        ))}
-      </div>
-
-      {wh.dataSemanticWarning && (
-        <div className="rounded-lg p-2.5 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
-          <p className="text-[10px] text-amber-300/70">{wh.dataSemanticWarning}</p>
-        </div>
-      )}
-
-      {/* G-1: Individual whale wallet detail — collapsible */}
-      {wh.whales && wh.whales.length > 0 && (
-        <div className="rounded-xl border border-white/[0.08] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
-          <button
-            onClick={() => setShowWhaleDetail((o) => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-xs text-white/40 hover:text-white/60 transition"
-          >
-            <span className="font-bold uppercase tracking-widest">Whale Wallets ({wh.whales.length})</span>
-            {showWhaleDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-          <AnimatePresence>
-            {showWhaleDetail && (
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: 'auto' }}
-                exit={{ height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="px-3 pb-3 space-y-1.5 border-t border-white/[0.06]">
-                  {wh.whales.map((whale: WhaleEntry, i: number) => {
-                    const flowColor = whale.netFlow > 0 ? 'text-emerald-400' : whale.netFlow < 0 ? 'text-red-400' : 'text-white/40';
-                    const flowSign  = whale.netFlow > 0 ? '+' : '';
-                    return (
-                      <div
-                        key={i}
-                        className="rounded-lg p-2.5 border border-white/[0.06] mt-1.5"
-                        style={{ background: 'rgba(255,255,255,0.015)' }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p
-                            className="text-[10px] font-mono text-white/60 truncate flex-1 min-w-0"
-                            title={whale.wallet}
-                          >
-                            {fmtAddr(whale.wallet)}
-                          </p>
-                          <span className={`text-[10px] font-mono font-bold shrink-0 ${flowColor}`}>
-                            {flowSign}{fmtNum(whale.netFlow, 0)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-[9px] text-white/30">
-                            {fmtNum(whale.observedBatchBalance, 0)} tokens
-                          </span>
-                          <span className="text-[9px] text-white/30">
-                            {fmtPct(whale.supplySharePct)} supply
-                          </span>
-                          <span className="text-[9px] text-white/20">
-                            {whale.txCount} txs
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <p className="text-[9px] text-white/20 pt-1">Balances are local batch observations — not authoritative on-chain state.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {([
+                { label: 'Active Whales',     value: wh.activeWhaleCount?.toString() ?? 'N/A' },
+                { label: 'Supply Share',      value: fmtPct(wh.totalWhaleSupplySharePct) },
+                { label: 'Phase',             value: wh.phase ?? '—', extra: phaseIcon },
+                { label: 'Net Inflow',        value: fmtNum(wh.whaleNetInflow, 0), positive: true },
+                { label: 'Net Outflow',       value: fmtNum(wh.whaleNetOutflow, 0), positive: false },
+                { label: 'Distribution Risk', value: wh.isDistributionRisk ? 'YES' : 'NO', warn: wh.isDistributionRisk },
+              ] as Array<{ label: string; value: string; extra?: React.ReactNode; positive?: boolean; warn?: boolean }>).map((item) => (
+                <div key={item.label} className="rounded-lg p-3 bg-white/5 border border-white/[0.08] flex flex-col gap-1">
+                  <span className="text-[10px] text-white/40 uppercase tracking-widest">{item.label}</span>
+                  <span className={`text-sm font-bold font-mono flex items-center gap-1 ${
+                    item.warn ? 'text-red-400' :
+                    item.positive === true  ? 'text-emerald-400' :
+                    item.positive === false ? 'text-red-400' : 'text-white/90'
+                  }`}>
+                    {item.extra}{item.value}
+                  </span>
                 </div>
-              </motion.div>
+              ))}
+            </div>
+
+            {wh.dataSemanticWarning && (
+              <div className="rounded-lg p-2.5 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
+                <p className="text-[10px] text-amber-300/70">{wh.dataSemanticWarning}</p>
+              </div>
             )}
-          </AnimatePresence>
-        </div>
-      )}
 
-      {/* G-3: 3-column HHI grid — buyer / seller / combined */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {([
-          { label: 'Buyer HHI',    hhi: vc.buyerHHI },
-          { label: 'Seller HHI',   hhi: vc.sellerHHI },
-          { label: 'Combined HHI', hhi: vc.totalVolumeHHI },
-        ] as Array<{ label: string; hhi: typeof vc.buyerHHI }>).map(({ label, hhi }) => (
-          <div key={label} className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08]">
-            <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{label}</p>
-            <p className="text-2xl font-mono font-bold text-white">{hhi?.hhi?.toFixed(4) ?? 'N/A'}</p>
-            <p className={`text-xs mt-1 capitalize ${
-              hhi?.concentrationLevel === 'extreme'  ? 'text-red-400'    :
-              hhi?.concentrationLevel === 'high'     ? 'text-orange-400' :
-              hhi?.concentrationLevel === 'moderate' ? 'text-amber-400'  : 'text-emerald-400'
-            }`}>{hhi?.concentrationLevel ?? '—'}</p>
-          </div>
-        ))}
+            {/* G-1: Individual whale wallet detail — collapsible */}
+            {wh.whales && wh.whales.length > 0 && (
+              <div className="rounded-xl border border-white/[0.08] overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <button
+                  onClick={() => setShowWhaleDetail((o) => !o)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-xs text-white/40 hover:text-white/60 transition"
+                >
+                  <span className="font-bold uppercase tracking-widest">Whale Wallets ({wh.whales.length})</span>
+                  {showWhaleDetail ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                <AnimatePresence>
+                  {showWhaleDetail && (
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-3 pb-3 space-y-1.5 border-t border-white/[0.06]">
+                        {wh.whales.map((whale: WhaleEntry, i: number) => {
+                          const flowColor = whale.netFlow > 0 ? 'text-emerald-400' : whale.netFlow < 0 ? 'text-red-400' : 'text-white/40';
+                          const flowSign  = whale.netFlow > 0 ? '+' : '';
+                          return (
+                            <div
+                              key={i}
+                              className="rounded-lg p-2.5 border border-white/[0.06] mt-1.5"
+                              style={{ background: 'rgba(255,255,255,0.015)' }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p
+                                  className="text-[10px] font-mono text-white/60 truncate flex-1 min-w-0"
+                                  title={whale.wallet}
+                                >
+                                  {fmtAddr(whale.wallet)}
+                                </p>
+                                <span className={`text-[10px] font-mono font-bold shrink-0 ${flowColor}`}>
+                                  {flowSign}{fmtNum(whale.netFlow, 0)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-[9px] text-white/30">
+                                  {fmtNum(whale.observedBatchBalance, 0)} tokens
+                                </span>
+                                <span className="text-[9px] text-white/30">
+                                  {fmtPct(whale.supplySharePct)} supply
+                                </span>
+                                <span className="text-[9px] text-white/20">
+                                  {whale.txCount} txs
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <p className="text-[9px] text-white/20 pt-1">Balances are local batch observations — not authoritative on-chain state.</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
-        <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Volume Concentration</p>
-        {([
-          { label: 'Buy Volume',          value: fmtUsd(vc.totalBuyVolumeUsd),                  color: 'text-emerald-400' },
-          { label: 'Sell Volume',         value: fmtUsd(vc.totalSellVolumeUsd),                 color: 'text-red-400'     },
-          { label: 'Buy/Sell Ratio',      value: vc.buySellRatio?.toFixed(2) ?? 'N/A',          color: 'text-white/90'    },
-          { label: 'Organic Score',       value: fmtPct(vc.organicScore),                        color: 'text-purple-400' },
-          { label: 'Wash Vol (Elevator)', value: fmtPct((vc.washVolumeRatio ?? 0) * 100),       color: 'text-amber-400'   },
-        ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
-          <div key={label} className="flex justify-between text-xs">
-            <span className="text-white/60">{label}</span>
-            <span className={`font-mono ${color}`}>{value}</span>
+      {/* Volume Concentration Section */}
+      <div className="rounded-xl border border-white/[0.08] p-4 bg-white/[0.015] space-y-3">
+        <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Volume Concentration Analysis</p>
+
+        {!isVolumeAvailable ? (
+          <div className="rounded-lg p-3 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Volume HHI Metrics Unavailable
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              {vc.reason || 'Volume concentration metrics are unavailable due to insufficient transaction data in this scanned window.'}
+            </p>
           </div>
-        ))}
+        ) : (
+          <>
+            {/* G-3: 3-column HHI grid — buyer / seller / combined */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {([
+                { label: 'Buyer HHI',    hhi: vc.buyerHHI },
+                { label: 'Seller HHI',   hhi: vc.sellerHHI },
+                { label: 'Combined HHI', hhi: vc.totalVolumeHHI },
+              ] as Array<{ label: string; hhi: typeof vc.buyerHHI }>).map(({ label, hhi }) => (
+                <div key={label} className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08]">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{label}</p>
+                  <p className="text-2xl font-mono font-bold text-white">{hhi?.hhi?.toFixed(4) ?? 'N/A'}</p>
+                  <p className={`text-xs mt-1 capitalize ${
+                    hhi?.concentrationLevel === 'extreme'  ? 'text-red-400'    :
+                    hhi?.concentrationLevel === 'high'     ? 'text-orange-400' :
+                    hhi?.concentrationLevel === 'moderate' ? 'text-amber-400'  : 'text-emerald-400'
+                  }`}>{hhi?.concentrationLevel ?? '—'}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
+              <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Volume Metrics Summary</p>
+              {([
+                { label: 'Buy Volume',          value: fmtUsd(vc.totalBuyVolumeUsd),                  color: 'text-emerald-400' },
+                { label: 'Sell Volume',         value: fmtUsd(vc.totalSellVolumeUsd),                 color: 'text-red-400'     },
+                { label: 'Buy/Sell Ratio',      value: vc.buySellRatio?.toFixed(2) ?? 'N/A',          color: 'text-white/90'    },
+                { label: 'Organic Score',       value: fmtPct(vc.organicScore),                        color: 'text-purple-400' },
+                { label: 'Wash Vol (Elevator)', value: fmtPct((vc.washVolumeRatio ?? 0) * 100),       color: 'text-amber-400'   },
+              ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
+                <div key={label} className="flex justify-between text-xs">
+                  <span className="text-white/60">{label}</span>
+                  <span className={`font-mono ${color}`}>{value}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
-        <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Buyer Cohort Quality</p>
-        {([
-          { label: 'Quality Score',    value: `${bq.buyerQualityScore?.toFixed(0) ?? 'N/A'} / 100`, color: 'text-purple-400' },
-          { label: 'Unique Buyers',    value: bq.cohortMetrics?.totalBuyers?.toString() ?? 'N/A',      color: 'text-white/80'   },
-          { label: 'Returning Buyers', value: fmtPct((bq.cohortMetrics?.returningBuyerRatio ?? 0) * 100), color: 'text-white/80' },
-          { label: 'Avg Buy Size',     value: fmtUsd(bq.cohortMetrics?.avgBuyValueUsd),               color: 'text-white/80'   },
-        ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
-          <div key={label} className="flex justify-between text-xs">
-            <span className="text-white/60">{label}</span>
-            <span className={`font-mono font-bold ${color}`}>{value}</span>
+      {/* Buyer Quality Section */}
+      <div className="rounded-xl border border-white/[0.08] p-4 bg-white/[0.015] space-y-3">
+        <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Buyer Quality Metrics</p>
+
+        {!isBuyerAvailable ? (
+          <div className="rounded-lg p-3 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Buyer Quality Unavailable
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              {bq.reason || 'Buyer quality and cohort metrics are unavailable due to insufficient buyer data.'}
+            </p>
           </div>
-        ))}
+        ) : (
+          <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Buyer Cohort Summary</p>
+            {([
+              { label: 'Quality Score',    value: `${bq.buyerQualityScore?.toFixed(0) ?? 'N/A'} / 100`, color: 'text-purple-400' },
+              { label: 'Unique Buyers',    value: bq.cohortMetrics?.totalBuyers?.toString() ?? 'N/A',      color: 'text-white/80'   },
+              { label: 'Returning Buyers', value: fmtPct((bq.cohortMetrics?.returningBuyerRatio ?? 0) * 100), color: 'text-white/80' },
+              { label: 'Avg Buy Size',     value: fmtUsd(bq.cohortMetrics?.avgBuyValueUsd),               color: 'text-white/80'   },
+            ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
+              <div key={label} className="flex justify-between text-xs">
+                <span className="text-white/60">{label}</span>
+                <span className={`font-mono font-bold ${color}`}>{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -441,7 +530,7 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
         ))}
       </div>
 
-      {amm.status !== 'insufficient_data' && amm.simulations && amm.simulations.length > 0 && (
+      {amm.status !== 'insufficient_data' && amm.simulations && amm.simulations.length > 0 ? (
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">AMM Constant-Product Simulation</p>
           <div className="overflow-x-auto">
@@ -489,9 +578,22 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
             </p>
           )}
         </div>
+      ) : (
+        <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/40">AMM Constant-Product Simulation</p>
+          <div className="rounded-lg p-3 border border-amber-500/20 bg-amber-500/5">
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> AMM Simulation Unavailable
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              {amm.reason || 'Slippage simulation is unavailable. This typically occurs when there is no constant-product pool or spot price data.'}
+            </p>
+          </div>
+        </div>
       )}
-
-      {wx.status !== 'insufficient_data' && wx.scenarios && wx.scenarios.length > 0 && (
+      
+      {/* Whale Exit Simulation */}
+      {wx.status !== 'insufficient_data' && wx.scenarios && wx.scenarios.length > 0 ? (
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-1">Whale Exit Impact Scenarios</p>
           <p className="text-[10px] text-white/30 mb-3">{wx.simulationDisclaimer}</p>
@@ -511,6 +613,18 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/40">Whale Exit Impact Scenarios</p>
+          <div className="rounded-lg p-3 border border-amber-500/20 bg-amber-500/5">
+            <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" /> Exit Simulation Unavailable
+            </p>
+            <p className="text-xs text-white/60 leading-relaxed">
+              {wx.reason || 'Whale liquidation scenarios cannot be simulated due to insufficient whale data or missing pools.'}
+            </p>
           </div>
         </div>
       )}
@@ -704,12 +818,24 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
             </div>
           </div>
           <div className="sm:shrink-0">
-            {rs?.sufficientData ? (
-              <RiskGauge score={rs.overallRiskScore} level={rs.riskLevel} />
+            {rs && rs.sufficientData ? (
+              <div className="flex flex-col items-center gap-1">
+                <RiskGauge score={rs.overallRiskScore} level={rs.riskLevel} />
+                {rs.scoreCompleteness === 'partial' ? (
+                  <span className="text-[9px] text-amber-400/70 mt-0.5 font-semibold" title="Not all modules could be measured. Unavailable modules are excluded from the score calculation.">
+                    Partial ({rs.availableModuleCount}/{rs.totalModuleCount} modules)
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-emerald-400/70 mt-0.5 font-semibold">
+                    Complete ({rs.availableModuleCount}/{rs.totalModuleCount} modules)
+                  </span>
+                )}
+              </div>
             ) : (
-              <div className="text-center p-4">
-                <p className="text-xs text-amber-400">{rs ? 'Insufficient data' : 'Risk score unavailable'}</p>
-                <p className="text-[10px] text-white/30 mt-1">Score unavailable</p>
+              <div className="text-center p-4 border border-white/5 bg-white/[0.02] rounded-xl min-w-[128px] flex flex-col items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-amber-500/80 mb-1" />
+                <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wide">Insufficient Data</p>
+                <p className="text-[9px] text-white/30 mt-0.5">Risk Score N/A</p>
               </div>
             )}
           </div>
@@ -720,9 +846,25 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
           <span>Confidence: <span className="text-white/60">{fmtPct(result.overallConfidence ?? 0, 0)}</span></span>
           <span>Duration: <span className="text-white/60">{result.scanDurationMs ? (result.scanDurationMs / 1000).toFixed(1) + 's' : 'N/A'}</span></span>
           {result.dataQuality?.elevatorDataReused && <span className="text-cyan-400/60">↺ Elevator data reused</span>}
-          {result.dataQuality?.staleDataWarning   && <span className="text-amber-400/70">⚠ Stale data</span>}
+          {result.dataQuality?.staleDataWarning   && <span className="text-amber-400/70" title="Multiple data sources are stale">⚠ Stale data</span>}
+          {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isMarketDataStale && <span className="text-amber-400/50" title="Market price/liquidity data is older than threshold">⚠ Stale price</span>}
+          {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isOhlcvStale && <span className="text-amber-400/50" title="OHLCV candles are older than threshold">⚠ Stale candles</span>}
+          {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isTransactionStale && <span className="text-amber-400/50" title="Recent transactions are older than threshold">⚠ Stale txs</span>}
         </div>
       </div>
+
+      {result.dataQuality?.staleDataWarning && (
+        <div className="rounded-xl p-3 border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-bold text-amber-400 uppercase tracking-wide">Stale Data Warning</p>
+            <p className="text-xs text-white/70 leading-relaxed mt-0.5">
+              Some of the scanned data sources are stale (older than the allowed freshness thresholds).
+              Risk scores and simulations might be based on outdated information. Check data freshness indicators in the footer.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex gap-1 p-1 glass rounded-xl">

@@ -10,8 +10,9 @@
 
 import { MarketRegimeResult, RegimeLabel, OHLCVStats, ModuleStatus } from '../types';
 import { OHLCVCandle } from '../../elevator/collectors/types';
+import { DEEP_SCAN_CONFIG } from '../config';
 
-const MIN_CANDLES = 8;
+const MIN_CANDLES = DEEP_SCAN_CONFIG.marketRegime.minCandles;
 const PREDICTION_DISCLAIMER =
   'This classification describes CURRENT market behavior based on observed price and volume patterns. ' +
   'It does NOT predict future price direction.';
@@ -138,16 +139,17 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
 
   // ── Classification Logic ──
   const normalizedPriceSlope = firstPrice > 0 ? priceSlope / firstPrice : 0;
-  
-  const priceUp = normalizedPriceSlope > 0.005;   // >0.5% gain per candle
-  const priceDown = normalizedPriceSlope < -0.005; // >0.5% drop per candle
+  const cfg = DEEP_SCAN_CONFIG.marketRegime;
+
+  const priceUp = normalizedPriceSlope > cfg.trendLimit;
+  const priceDown = normalizedPriceSlope < -cfg.trendLimit;
   const volumeUp = volumeSlope > 0;
-  const highVolatility = priceVolatility > 0.05;   // 5% standard deviation of change per candle
+  const highVolatility = priceVolatility > cfg.volatilityLimit;
   
   let regime: RegimeLabel = 'ACCUMULATION';
   let regimeDescription = 'Price is consolidating on stable or rising volume, suggesting steady accumulation.';
 
-  if (priceDown && totalPriceChangePct < -50 && volumeZScore < -1.0) {
+  if (priceDown && totalPriceChangePct < cfg.deadDrawdownLimit && volumeZScore < cfg.deadVolumeZScoreLimit) {
     regime = 'DEAD';
     regimeDescription = 'Token trading activity has halted or collapsed alongside massive price drawdowns.';
   } else if (priceDown && volumeUp) {
@@ -159,7 +161,7 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   } else if (priceUp && !volumeUp) {
     regime = 'DISTRIBUTION';
     regimeDescription = 'Price is rising but trade volume is contracting, indicating low-liquidity squeeze or distribution.';
-  } else if (priceUp && (priceVolatility > 0.08 || totalPriceChangePct < -20)) {
+  } else if (priceUp && (priceVolatility > cfg.recoveryVolatilityLimit || totalPriceChangePct < cfg.drawdownLimit)) {
     regime = 'RECOVERY';
     regimeDescription = 'Token is recovering from a steep sell-off, showing heightened price volatility.';
   } else if (priceDown && !volumeUp) {
@@ -168,9 +170,14 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   }
 
   // ── Confidence Score ──
-  let confidence = n >= 48 ? 85 : n >= 24 ? 75 : 55;
-  if (Math.abs(priceVolumeCorrelation) > 0.6) {
-    confidence += 10;
+  const confLevels = [...cfg.confidenceLevels].sort((a, b) => b.minCandles - a.minCandles);
+  let confidence = confLevels[confLevels.length - 1].confidence; // fallback to lowest if nothing matches
+  const matchedLevel = confLevels.find(level => n >= level.minCandles);
+  if (matchedLevel) {
+    confidence = matchedLevel.confidence;
+  }
+  if (Math.abs(priceVolumeCorrelation) > cfg.correlationLimit) {
+    confidence += cfg.correlationBonus;
   }
   confidence = Math.min(100, Math.max(0, confidence));
 

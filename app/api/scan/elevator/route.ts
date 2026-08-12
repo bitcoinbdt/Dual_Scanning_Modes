@@ -223,6 +223,17 @@ export async function POST(request: NextRequest) {
     // NEW: Wash trading detection (batch-only, no external calls)
     const washResult = detectWashTrading(rawData.transactions);
     rawData.transactions = washResult.transactions;
+    rawData.washTrading = {
+      totalWashWallets: washResult.summary.totalWashWallets,
+      totalRoundTrips: washResult.summary.totalRoundTrips,
+      washWallets: washResult.summary.washWallets,
+    };
+    rawData.wash_trading = {
+      detected: washResult.summary.totalWashWallets > 0,
+      total_wash_wallets: washResult.summary.totalWashWallets,
+      total_round_trips: washResult.summary.totalRoundTrips,
+      wash_wallets: washResult.summary.washWallets,
+    };
     
         // Tag exchanges and calculate flow metrics (Feature 10)
         const exchangeResult = tagAndComputeExchangeFlow(rawData.transactions, rawData.blockchain);
@@ -339,6 +350,11 @@ export async function POST(request: NextRequest) {
               total_wash_wallets: washResult.summary.totalWashWallets,
               total_round_trips: washResult.summary.totalRoundTrips,
               wash_wallets: washResult.summary.washWallets,
+            },
+            washTrading: {
+              totalWashWallets: washResult.summary.totalWashWallets,
+              totalRoundTrips: washResult.summary.totalRoundTrips,
+              washWallets: washResult.summary.washWallets,
             }
           },
       metadata: {

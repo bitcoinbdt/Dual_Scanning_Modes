@@ -177,7 +177,7 @@ export class SolanaCollector implements IBlockchainCollector {
   /**
    * Collect all data for a Solana token
    */
-  async collect(address: string, maxTransactions: number): Promise<CollectorResult> {
+  async collect(address: string, maxTransactions: number, tokenDecimals?: number): Promise<CollectorResult> {
     const startTime = Date.now();
 
     console.log(`\n${'='.repeat(60)}`);
@@ -285,10 +285,12 @@ export class SolanaCollector implements IBlockchainCollector {
         transactions,
         wallets: walletData.wallets,
         holders: walletData.holders,
+        holdersStatus: 'available',
         wallet_metrics: walletData.metrics,
         metrics,
         blockchain: 'solana',
-        collectionTime
+        collectionTime,
+        collectedAt: Math.floor(Date.now() / 1000)
       };
 
       // Apply Holder Spike Detection (Feature 1)

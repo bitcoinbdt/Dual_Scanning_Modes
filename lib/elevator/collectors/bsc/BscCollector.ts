@@ -23,6 +23,8 @@ import { fetchBirdeyeTrades } from '../shared/birdeyeTrades';
 import { detectHolderSpike } from '../../utils/holderSpike';
 import { filterSystemAddresses } from '../../utils/addressFilter';
 import { aggregateTrades } from '../../utils/aggregateTrades';
+import { isGoldrushConfigured, fetchGoldrushTokenHolders } from '../../../providers/goldrush/client';
+import { adaptGoldrushHolders } from '../../../providers/goldrush/adapter';
 
 export class BscCollector implements IBlockchainCollector {
   private birdeyeApiKey: string;
@@ -124,7 +126,7 @@ export class BscCollector implements IBlockchainCollector {
   }
 
   /** Collect all data for a BSC token */
-  async collect(address: string, maxTransactions: number): Promise<CollectorResult> {
+  async collect(address: string, maxTransactions: number, tokenDecimals?: number): Promise<CollectorResult> {
     const startTime = Date.now();
 
     console.log(`\n${'='.repeat(60)}`);
@@ -169,15 +171,38 @@ export class BscCollector implements IBlockchainCollector {
 
       const collectionTime = Date.now() - startTime;
 
+      let holders: HolderInfo[] = [];
+      let holdersStatus: 'available' | 'unavailable' | 'insufficient_data' = 'unavailable';
+
+      if (isGoldrushConfigured()) {
+        try {
+          console.log('[BscCollector] Querying GoldRush token holders...');
+          const raw = await fetchGoldrushTokenHolders('bsc', address, 100);
+          const dataset = adaptGoldrushHolders(raw, {
+            chain: 'bsc',
+            tokenAddress: address,
+            tokenDecimals: tokenDecimals,
+            snapshotAt: Math.floor(Date.now() / 1000)
+          });
+          holders = dataset.holders;
+          holdersStatus = dataset.status;
+        } catch (err: any) {
+          console.warn(`[BscCollector] GoldRush holder fetch failed: ${err.message}`);
+          holdersStatus = 'unavailable';
+        }
+      }
+
       const result: CollectorResult = {
         ohlcv,
         transactions,
         wallets: walletData.wallets,
-        holders: walletData.holders,
+        holders,
+        holdersStatus,
         wallet_metrics: walletData.metrics,
         metrics,
         blockchain: 'bsc',
-        collectionTime
+        collectionTime,
+        collectedAt: Math.floor(Date.now() / 1000)
       };
 
       // Apply Holder Spike Detection (Feature 1)
