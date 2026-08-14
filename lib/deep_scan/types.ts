@@ -21,7 +21,9 @@ export type ModuleStatus =
   | 'ok'
   | 'partial'
   | 'insufficient_data'
-  | 'error';
+  | 'error'
+  | 'unavailable'
+  | 'pending';
 
 export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
 
@@ -234,9 +236,31 @@ export interface WhaleEntry {
   txCount: number;
   /** Whether this address was filtered as a contract/system address */
   isFiltered: boolean;
+  /**
+   * Freshness classification derived from Bitquery wallet intelligence.
+   * Window-scoped to the 90-day lookback — NOT an absolute wallet age.
+   * 'unknown' when wallet is outside the top-10 enrichment cap or data unavailable.
+   */
+  freshnessTag: WhaleFreshnessTag;
 }
 
-export type WhalePhase = 'accumulation' | 'distribution' | 'neutral' | 'insufficient_data';
+export type WhalePhase = 'accumulation' | 'distribution' | 'neutral' | 'dormant' | 'insufficient_data';
+
+/**
+ * Freshness classification for a whale wallet, based on its earliest observed
+ * activity within the Bitquery 90-day query window.
+ *
+ * IMPORTANT: 'fresh'/'recent'/'established' are window-scoped — they reflect how
+ * recently the wallet was first seen within the 90-day lookback, NOT its true
+ * on-chain age since deployment.
+ *
+ * Values:
+ *   'fresh'       — first activity within last 7 days of the scan window
+ *   'recent'      — first activity 7–30 days ago
+ *   'established' — first activity >30 days ago within the window
+ *   'unknown'     — wallet not in top-10 enrichment cap, or Bitquery data unavailable
+ */
+export type WhaleFreshnessTag = 'fresh' | 'recent' | 'established' | 'unknown';
 
 export interface WhaleBehaviorResult {
   status: ModuleStatus;
@@ -364,6 +388,109 @@ export interface BuyerQualityResult {
   unavailableMetrics: string[];
   evidenceIds: string[];
   confidence: number;
+  // Phase 5D-3 SmartMoney Integration fields
+  smartMoneyBuyerCount?: number | null;
+  smartMoneyBuyerRatio?: number | null;
+  smartMoneyBuyerConfidence?: number | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E. Smart Money Types (Phase 5D-1 & 5D-2 Infrastructure)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SmartMoneyTradeEvent {
+  walletAddress: string;
+  chain: string;
+  tokenAddress?: string | null;
+  txHash: string;
+  blockNumber: number;
+  blockHash?: string | null;
+  logIndex: number;
+  timestamp: string;
+  eventType: 'buy' | 'sell' | 'swap' | 'unknown';
+  tokenAmount?: number | null;
+  quoteAmount?: number | null;
+  quoteToken?: string | null;
+  provider: string;
+  indexedAt: string;
+}
+
+export interface SmartMoneyIndexingJob {
+  walletAddress: string;
+  chain: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  attempts: number;
+  lastError?: string | null;
+  enqueuedAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmartMoneyReputationRecord {
+  walletAddress: string;
+  chain: string;
+  tradeCount?: number | null; // Deprecated/kept for backwards compat
+  profitableTrades?: number | null; // Deprecated/kept for backwards compat
+  realizedUsdPnl?: number | null; // Deprecated/kept for backwards compat
+  distinctTokens?: number | null; // Deprecated/kept for backwards compat
+  totalIndexedEvents?: number | null;
+  recognizedSwapCount?: number | null;
+  closedTradeCount?: number | null;
+  profitableTradeCount?: number | null;
+  losingTradeCount?: number | null;
+  distinctTokensTraded?: number | null;
+  realizedPnl?: number | null;
+  realizedCostBasis?: number | null;
+  roi?: number | null;
+  winRate?: number | null;
+  openPositionCount?: number | null;
+  coverage?: 'COMPLETE' | 'CAPPED' | 'UNAVAILABLE' | null;
+  pnlStatus?: 'complete' | 'incomplete' | 'unavailable' | null;
+  confidence?: number | null;
+  status: 'pending' | 'available' | 'partial' | 'unavailable';
+  freshness: string;
+  lastUpdatedAt: string;
+  provider: string;
+}
+
+export interface SmartMoneyCohortSummary {
+  profiledWalletCount: number;
+  smartMoneyWalletCount: number;
+  smartMoneyWalletRatio: number | null;
+  smartMoneyConfidence: number;
+  incompleteProfileCount: number;
+  unavailableProfileCount: number;
+  pendingProfileCount: number;
+  staleProfileCount: number;
+}
+
+export interface SmartMoneyResult {
+  status: ModuleStatus;
+  reason?: string;
+  isSmartMoney: boolean;
+  confidence: number;
+  metrics: {
+    totalIndexedEvents: number | null;
+    recognizedSwapCount: number | null;
+    closedTradeCount: number | null;
+    profitableTradeCount: number | null;
+    losingTradeCount: number | null;
+    distinctTokensTraded: number | null;
+    realizedPnl: number | null;
+    realizedCostBasis: number | null;
+    roi: number | null;
+    winRate: number | null;
+    openPositionCount: number | null;
+    coverage: 'COMPLETE' | 'CAPPED' | 'UNAVAILABLE' | null;
+    pnlStatus: 'complete' | 'incomplete' | 'unavailable' | null;
+    tradeCount: number | null; // Backwards compatibility
+    profitableTrades: number | null; // Backwards compatibility
+    realizedUsdPnl: number | null; // Backwards compatibility
+  };
+  cohortSummary?: SmartMoneyCohortSummary;
+  evidenceIds: string[];
 }
 
 // ─────────────────────────────────────────────
@@ -373,6 +500,7 @@ export interface BuyerQualityResult {
 export type RegimeLabel =
   | 'ACCUMULATION'
   | 'MOMENTUM'
+  | 'BREAKOUT'
   | 'DISTRIBUTION'
   | 'LIQUIDITY_EXIT'
   | 'RECOVERY'
@@ -411,6 +539,43 @@ export interface MarketRegimeResult {
    * It does NOT predict future price direction.
    */
   predictionDisclaimer: string;
+  evidenceIds: string[];
+}
+
+// ─────────────────────────────────────────────
+// 9b. Liquidity Fragmentation (Phase 4)
+// ─────────────────────────────────────────────
+
+export interface PoolLiquidityShare {
+  /** Pool identifier (pair address or provider label) */
+  poolId: string;
+  /** Liquidity in this pool (USD) */
+  liquidityUsd: number;
+  /** Fraction of total liquidity in this pool (0–1) */
+  share: number;
+}
+
+export interface LiquidityFragmentationResult {
+  status: ModuleStatus;
+  reason?: string;
+  /**
+   * Herfindahl–Hirschman Index of pool liquidity distribution (0–1).
+   * 0 = perfectly distributed across pools, 1 = single-pool monopoly.
+   */
+  poolHHI: number;
+  /** HHI interpretation */
+  concentrationLevel: 'low' | 'moderate' | 'high' | 'monopoly';
+  /** Total USD liquidity across all pools */
+  totalLiquidityUsd: number;
+  /** Number of pools included in the analysis */
+  poolCount: number;
+  /** Per-pool liquidity share breakdown */
+  pools: PoolLiquidityShare[];
+  /**
+   * SIGNAL: Is a dominant fraction of liquidity concentrated in a single pool?
+   * True when the largest pool holds ≥80% of total liquidity.
+   */
+  isDominantPool: boolean;
   evidenceIds: string[];
 }
 
@@ -610,6 +775,14 @@ export interface DeepScanResult {
   buyerQuality: BuyerQualityResult;
   marketRegime: MarketRegimeResult;
   capitalEfficiency: CapitalEfficiencyResult;
+  // ── P5 Modules ──
+  smartMoney?: SmartMoneyResult;
+  // ── P4 Modules ──
+  /** Multi-pool liquidity fragmentation analysis (Phase 4) */
+  liquidityFragmentation?: LiquidityFragmentationResult;
+  // ── P5D-6 Modules ──
+  /** Liquidity / Slippage / Stress Analysis (Phase 5D-6) */
+  liquidityStress?: LiquidityStressReport;
   riskScore: ExplainableRiskScore;
   // ── Synthesis ──
   topRisks: RiskSignal[];
@@ -646,6 +819,21 @@ export interface DeepScanResult {
   scanDurationMs: number;
 }
 
+export interface HistoricalPoolStateResult {
+  status: 'available' | 'unavailable' | 'error';
+  freshness: 'LIVE' | 'UNAVAILABLE';
+  chain: string;
+  poolAddress: string;
+  blockNumber: number;
+  blockHash: string | null;
+  timestamp: string | null;
+  reserve0: string | null;
+  reserve1: string | null;
+  provider: string;
+  fetchedAt: string;
+  errorCode?: string;
+}
+
 /**
  * Normalizes a blockchain address to guarantee case-insensitive comparison for EVM,
  * while preserving base58 casing for Solana.
@@ -658,4 +846,214 @@ export function normalizeAddress(address: string | undefined | null): string {
     return trimmed.toLowerCase();
   }
   return trimmed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 5D-6: Liquidity / Slippage / Stress Analysis Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A single point on the slippage curve: a position size and its resulting
+ * price impact from the constant-product AMM formula.
+ * All values are exact — never fabricated or interpolated.
+ */
+export interface SlippagePoint {
+  /** Position size in USD */
+  positionSizeUsd: number;
+  /** Number of tokens involved in the swap */
+  tokensIn: number;
+  /** USD received from the swap */
+  quoteOut: number;
+  /** Effective execution price (USD per token) */
+  executionPriceUsd: number;
+  /** Spot price at time of simulation (USD per token) */
+  spotPriceUsd: number;
+  /** Price impact as a percentage (0–100) */
+  priceImpactPct: number;
+  /** Fraction of reserve0 consumed by this trade (0–1) */
+  reserveUtilization: number;
+  /** Swap fee applied (as a decimal fraction, e.g. 0.003) */
+  feeRate: number;
+  /** Whether the reserves used were observed on-chain (true) or derived from TVL (false) */
+  observedReserves: boolean;
+  /** 'ok' if simulation succeeded; 'exceeds_pool' if trade larger than pool; 'invalid_input' if inputs bad */
+  status: 'ok' | 'exceeds_pool' | 'invalid_input';
+  reason?: string;
+}
+
+/**
+ * Result of computing the maximum executable input amount for a given
+ * price impact threshold. Uses an exact analytical formula — no search loops.
+ */
+export interface ExecutableLiquidityResult {
+  /** Price impact threshold used (e.g. 0.01 = 1%) */
+  impactThreshold: number;
+  /** Human-readable label (e.g. '1%') */
+  impactThresholdLabel: string;
+  /** Maximum USD input before impact exceeds threshold; null when infeasible */
+  maxInputUsd: number | null;
+  /** Maximum token input before impact exceeds threshold; null when infeasible */
+  maxInputTokens: number | null;
+  /** Expected USD output at the boundary */
+  expectedOutputUsd: number | null;
+  /** Reserve utilization at the boundary (0–1) */
+  reserveUtilization: number | null;
+  /** 'ok' | 'infeasible' (fee >= threshold) | 'invalid' (bad reserves) */
+  status: 'ok' | 'infeasible' | 'invalid';
+  reason?: string;
+}
+
+/** Deterministic severity classification for stress scenarios */
+export type StressSeverity = 'negligible' | 'low' | 'moderate' | 'high' | 'critical';
+
+/**
+ * A single deterministic stress scenario result. All values computed
+ * from the constant-product AMM formula — never fabricated.
+ */
+export interface LiquidityStressScenario {
+  /** Identifier for this scenario (e.g. 'large_buy', 'top_holder_exit') */
+  scenarioId: string;
+  /** Human-readable label */
+  label: string;
+  /** Description of what this scenario simulates */
+  description: string;
+  /** Input amount simulated in USD */
+  simulatedInputUsd: number;
+  /** Token amount simulated */
+  simulatedInputTokens: number;
+  /** Expected USD output */
+  simulatedOutputUsd: number;
+  /** Execution price at this stress level */
+  executionPriceUsd: number;
+  /** Price impact percentage */
+  priceImpactPct: number;
+  /** Post-trade reserve0 (in raw token units, as string to preserve uint112 precision) */
+  postTradeReserve0: string;
+  /** Post-trade reserve1 (in raw quote units, as string) */
+  postTradeReserve1: string;
+  /** Fraction of reserve consumed (0–1) */
+  reserveUtilization: number;
+  /** Remaining executable liquidity at 1% impact after this stress */
+  remainingExecutableUsd: number | null;
+  /** Deterministic severity classification */
+  severity: StressSeverity;
+  /** 'ok' | 'exceeds_pool' | 'invalid' | 'unsupported' */
+  status: 'ok' | 'exceeds_pool' | 'invalid' | 'unsupported';
+  reason?: string;
+}
+
+/** A detected historical liquidity shock event */
+export interface LiquidityShock {
+  /** Block number where the shock was detected */
+  blockNumber: number;
+  /** Estimated UTC timestamp of the shock */
+  blockTimestamp: string | null;
+  /** Target token reserve before the shock */
+  targetReserveBefore: string;
+  /** Target token reserve after the shock */
+  targetReserveAfter: string;
+  /** Percentage change in target reserve (negative = withdrawal) */
+  targetReserveChangePct: number;
+  /** Percentage change in liquidity USD (negative = withdrawal) */
+  liquidityChangePct: number;
+  /** Shock type classification */
+  type: 'sudden_withdrawal' | 'sudden_addition' | 'ratio_shift' | 'drain';
+  /** Severity of this shock */
+  severity: StressSeverity;
+}
+
+/** Liquidity regime classification */
+export type LiquidityRegime =
+  | 'deep'
+  | 'healthy'
+  | 'moderate'
+  | 'thin'
+  | 'critically_thin'
+  | 'deteriorating'
+  | 'recovering';
+
+/** Historical liquidity metrics computed from Phase 5D-5 snapshots */
+export interface HistoricalLiquidityMetrics {
+  /** Number of snapshots available */
+  snapshotCount: number;
+  /** Block number of oldest snapshot */
+  oldestBlock: number | null;
+  /** Block number of newest snapshot */
+  newestBlock: number | null;
+  /** Minimum target reserve observed (as string, raw units) */
+  minTargetReserve: string | null;
+  /** Maximum target reserve observed (as string, raw units) */
+  maxTargetReserve: string | null;
+  /** Minimum liquidity USD observed (from snapshots where both reserves and price are available) */
+  minLiquidityUsd: number | null;
+  /** Maximum liquidity USD observed */
+  maxLiquidityUsd: number | null;
+  /** Target reserve growth from oldest to newest snapshot (fractional, positive = growth) */
+  targetGrowthFraction: number | null;
+  /**
+   * Volatility of target reserve measured as the average absolute fractional change
+   * between consecutive snapshots. Missing gaps remain missing — no interpolation.
+   */
+  targetVolatilityAvg: number | null;
+  /** Detected liquidity shocks */
+  shocks: LiquidityShock[];
+  /** Whether the reserve trend is net-positive, net-negative, or flat */
+  trend: 'growing' | 'declining' | 'flat' | 'insufficient_data';
+  /** Whether there are missing snapshots in the expected schedule */
+  hasMissingSnapshots: boolean;
+  /** Status of historical data availability */
+  status: 'ok' | 'insufficient_data' | 'unavailable';
+}
+
+/**
+ * Complete liquidity stress report produced by the LiquidityStressAnalyzer.
+ * This is the top-level Phase 5D-6 output attached to DeepScanResult.
+ */
+export interface LiquidityStressReport {
+  /** Module status */
+  status: ModuleStatus;
+  reason?: string;
+
+  // ── Pool identification ──
+  /** Pool address used for simulation */
+  poolAddress: string | null;
+  /** Pool model used ('constant-product' | 'concentrated-liquidity' | 'unknown') */
+  poolModel: string | null;
+  /** Whether observed on-chain reserves were used (true) or derived from TVL (false) */
+  observedReserves: boolean;
+  /** Spot price used for USD conversions */
+  spotPriceUsd: number;
+  /** Current total liquidity USD */
+  totalLiquidityUsd: number;
+
+  // ── Slippage curve ──
+  /** Full slippage curve across position sizes. Monotonic by construction. */
+  slippageCurve: SlippagePoint[];
+  /** Whether the curve is monotonic (sanity check result) */
+  isCurveMonotonic: boolean;
+
+  // ── Executable liquidity ──
+  /** Executable liquidity at each configured impact threshold */
+  executableLiquidity: ExecutableLiquidityResult[];
+
+  // ── Liquidity utilization at current position sizes ──
+  /**
+   * How much of reserve0 would be consumed by a $1k trade.
+   * Provided as a convenience metric; full details are in slippageCurve.
+   */
+  utilizationAt1kUsd: number | null;
+
+  // ── Stress scenarios ──
+  scenarios: LiquidityStressScenario[];
+  /** Worst severity across all scenarios */
+  maxScenarioSeverity: StressSeverity;
+
+  // ── Historical analysis ──
+  historical: HistoricalLiquidityMetrics;
+
+  // ── Regime ──
+  /** Deterministic liquidity regime classification */
+  liquidityRegime: LiquidityRegime;
+  /** Regime reasoning (enumerated, never LLM-generated) */
+  liquidityRegimeReason: string;
 }

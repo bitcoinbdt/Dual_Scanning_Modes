@@ -61,6 +61,7 @@ export async function enrichPoolsWithAlchemyReserves(
 
         if (reserves.status === 'available' && reserves.tokenReserve !== undefined && reserves.quoteReserve !== undefined) {
           const t0 = token0Decoded.toLowerCase();
+          pool.token0 = t0;
           const scanToken = tokenAddress.toLowerCase();
 
           // Identify which reserve slot belongs to the scanned token and normalise by its decimals.

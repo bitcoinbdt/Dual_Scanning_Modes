@@ -96,3 +96,26 @@ export async function fetchGoldrushTokenHolders(
   return await queryGoldrush(endpoint);
 }
 
+/**
+ * Fetch wallet transactions from GoldRush transactions_v3.
+ * Capped up to 5 pages.
+ */
+export async function fetchGoldrushWalletTransactions(
+  chain: string,
+  address: string,
+  page = 0,
+  pageSize = 100,
+  noLogs = true
+): Promise<any> {
+  let covalentChain = chain;
+  const cLower = chain.toLowerCase();
+  if (cLower === 'eth' || cLower === 'ethereum' || cLower === '1') {
+    covalentChain = 'eth-mainnet';
+  } else if (cLower === 'bsc' || cLower === '56' || cLower === 'binance') {
+    covalentChain = 'bsc-mainnet';
+  }
+  const endpoint = `/${covalentChain}/address/${address}/transactions_v3/?no-logs=${noLogs}&page-size=${pageSize}&page-number=${page}`;
+  return await queryGoldrush(endpoint);
+}
+
+

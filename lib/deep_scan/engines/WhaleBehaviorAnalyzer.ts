@@ -18,6 +18,7 @@ import {
   WhaleBehaviorResult,
   WhaleEntry,
   WhalePhase,
+  WhaleFreshnessTag,
   ModuleStatus,
   normalizeAddress,
 } from '../types';
@@ -190,6 +191,9 @@ export function analyzeWhaleBehavior(
       netFlow: round(netFlow, 4),
       txCount: txCountByWallet.get(normalizedWallet) ?? holder.tx_count ?? 0,
       isFiltered: false,
+      // Initialized to 'unknown'; DeepScanService will overwrite this after
+      // enrichWhaleWallets() returns, for wallets within the top-10 enrichment cap.
+      freshnessTag: 'unknown' as WhaleFreshnessTag,
     });
   }
 
@@ -211,6 +215,10 @@ export function analyzeWhaleBehavior(
   const ratioLimit = DEEP_SCAN_CONFIG.whaleBehavior.flowRatioThreshold;
   if (whales.length === 0) {
     phase = 'insufficient_data';
+  } else if (whaleNetInflow === 0 && whaleNetOutflow === 0) {
+    // DORMANT: whales exist in the holder snapshot but had zero trading activity
+    // in the scanned transaction batch window.
+    phase = 'dormant';
   } else if (whaleNetInflow > whaleNetOutflow * ratioLimit) {
     phase = 'accumulation';
   } else if (whaleNetOutflow > whaleNetInflow * ratioLimit) {

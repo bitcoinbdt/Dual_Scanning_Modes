@@ -13,6 +13,14 @@ import { OHLCVCandle } from '../../elevator/collectors/types';
 import { DEEP_SCAN_CONFIG } from '../config';
 
 const MIN_CANDLES = DEEP_SCAN_CONFIG.marketRegime.minCandles;
+/** Volume Z-score threshold for BREAKOUT classification (last candle vs 24h batch mean) */
+const BREAKOUT_VOLUME_ZSCORE_THRESHOLD = 2.0;
+/**
+ * Minimum volume standard deviation noise floor.
+ * If volume standard deviation is below this threshold, trading volume is considered flat/non-volatile,
+ * and the volume Z-score defaults to 0 to prevent arbitrary micro-noise from inflating the Z-score.
+ */
+const MIN_VOLUME_STDDEV = 0.01;
 const PREDICTION_DISCLAIMER =
   'This classification describes CURRENT market behavior based on observed price and volume patterns. ' +
   'It does NOT predict future price direction.';
@@ -119,7 +127,7 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   const meanVolume = volumes.reduce((a, b) => a + b, 0) / n;
   const stdVolume = stdDev(volumes);
   const lastVolume = ohlcv[n - 1].volume;
-  const volumeZScore = stdVolume > 0 ? (lastVolume - meanVolume) / stdVolume : 0;
+  const volumeZScore = stdVolume >= MIN_VOLUME_STDDEV ? (lastVolume - meanVolume) / stdVolume : 0;
 
   // Price-Volume Correlation
   const priceVolumeCorrelation = calculateCorrelation(closes, volumes);
@@ -155,6 +163,16 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   } else if (priceDown && volumeUp) {
     regime = 'LIQUIDITY_EXIT';
     regimeDescription = 'Price is declining on rising volume, indicating aggressive selling and pool distribution.';
+  } else if (priceUp && volumeZScore >= BREAKOUT_VOLUME_ZSCORE_THRESHOLD) {
+    // BREAKOUT: price rising AND the most recent candle volume is >=2 std deviations above
+    // the 24h batch mean — a volume surge that is verifiable from available candle data.
+    // This is checked before MOMENTUM so a true volume spike is not misclassified as a
+    // gradual trend.
+    regime = 'BREAKOUT';
+    regimeDescription =
+      'Price is surging on anomalously high volume — the last candle volume is ' +
+      `${volumeZScore.toFixed(1)} standard deviations above the 24h batch mean. ` +
+      'This indicates a sharp breakout, not a gradual trend. Verify on-chain activity before acting.';
   } else if (priceUp && volumeUp && !highVolatility) {
     regime = 'MOMENTUM';
     regimeDescription = 'Price is rising on expanding volume, indicating strong breakout momentum.';

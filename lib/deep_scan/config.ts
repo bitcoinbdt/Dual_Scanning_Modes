@@ -132,6 +132,32 @@ export const DEEP_SCAN_CONFIG = {
     /** Confidence penalty when price data is missing on most trades */
     missingPricePenalty: 10,
     missingPriceThreshold: 0.5,
+    /**
+     * Maximum number of cache-miss buyer wallets to enrich synchronously
+     * per Deep Scan run. Wallets beyond this limit are enqueued for async
+     * enrichment via wallet_enrichment_jobs. (Phase 5C)
+     */
+    syncWalletLimit: 10,
+  },
+
+  // ── Smart Money Indexer Configuration (Phase 5D-1) ──
+  smartMoney: {
+    indexing: {
+      maxPages: 5,
+      pageSize: 100,
+      jobTimeoutMs: 1500,
+    },
+  },
+
+  // ── Historical Pool Reserves Indexer (Phase 5D-5) ──
+  historicalReserves: {
+    backfillDays: 30,
+    snapshotIntervalHours: 12,
+    minSchedulingGapHours: 6,
+    maxJobsPerScan: 30,
+    finalityBufferBlocks: 32,
+    maxAttempts: 3,
+    retentionDays: 30,
   },
 
   // ── Market Regime Policy ──
@@ -191,6 +217,109 @@ export const DEEP_SCAN_CONFIG = {
     },
     /** Maximum number of top prioritized risks to return in results */
     topRisksMax: 5,
+  },
+
+  // ── Liquidity Stress Analysis (Phase 5D-6) ──
+  liquidityStress: {
+    /**
+     * Price impact thresholds (decimal fractions) used to compute executable
+     * liquidity boundaries. For each threshold T, we compute: how much capital
+     * can enter/exit before price impact exceeds T?
+     * Units: decimal fraction (0.01 = 1%)
+     * Defaults: [0.5%, 1%, 2%, 5%, 10%]
+     */
+    impactThresholds: [0.005, 0.01, 0.02, 0.05, 0.10],
+
+    /**
+     * USD position sizes used for the slippage curve.
+     * Units: USD
+     * Defaults represent typical DeFi trade sizes from retail to institutional.
+     */
+    slippageCurveSizesUsd: [100, 500, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000],
+
+    /**
+     * Percentage of pool's quote reserve used for stress scenario A (large buy)
+     * and scenario B (large sell).
+     * Units: decimal fraction (0.10 = 10% of quote reserve)
+     * Default: 10% of quote reserve — a realistic large single trade.
+     */
+    stressTradeFraction: 0.10,
+
+    /**
+     * Holder exit fractions simulated for Scenario C (top-holder exit).
+     * Units: decimal fraction (0.10 = 10% of holder balance)
+     * Default: 10%, 25%, 50%, 75%, 100% liquidation scenarios.
+     */
+    holderExitFractions: [0.10, 0.25, 0.50, 0.75, 1.00],
+
+    /**
+     * Fraction of total liquidity withdrawn for Scenario E (liquidity deterioration).
+     * Units: decimal fraction (0.50 = 50% of reserves removed)
+     * Default: 50% — a plausible LP rug-pull or panic withdrawal event.
+     */
+    deteriorationFraction: 0.50,
+
+    /**
+     * Minimum percentage change in reserve0 between two consecutive snapshots
+     * that is classified as a liquidity shock event.
+     * Units: percentage (20 = 20% change)
+     * Default: 20% — a meaningful but not trivial reserve movement.
+     */
+    shockThresholdPct: 20,
+
+    /**
+     * Threshold above which the reserve0 fractional change per snapshot is
+     * classified as a "drain" rather than a "sudden_withdrawal".
+     * Units: percentage (50 = 50% drop)
+     * Default: 50% — drains are catastrophic single-interval events.
+     */
+    drainThresholdPct: 50,
+
+    /**
+     * Liquidity regime thresholds (USD). Pools are classified by their TVL.
+     * Units: USD
+     */
+    regimeThresholds: {
+      deep: 5_000_000,      // > $5M = deep
+      healthy: 1_000_000,   // > $1M = healthy
+      moderate: 250_000,    // > $250k = moderate
+      thin: 50_000,         // > $50k = thin
+                            // <= $50k = critically thin
+    },
+
+    /**
+     * Deteriorating trend threshold: if the pool's liquidity has declined by
+     * more than this fraction over the historical period, classify as 'deteriorating'.
+     * Units: decimal fraction (0.30 = 30% decline)
+     */
+    deterioratingTrendThreshold: 0.30,
+
+    /**
+     * Recovering trend threshold: if the pool's liquidity has grown by more than
+     * this fraction over the historical period (after a prior low), classify as 'recovering'.
+     * Units: decimal fraction (0.20 = 20% growth)
+     */
+    recoveringTrendThreshold: 0.20,
+
+    /**
+     * Stress severity classification by price impact percentage.
+     * Units: percentage
+     */
+    severityThresholds: {
+      negligible: 1,   // < 1% impact
+      low: 5,          // < 5%
+      moderate: 15,    // < 15%
+      high: 30,        // < 30%
+      // >= 30% = critical
+    },
+
+    /**
+     * Maximum number of historical snapshots to load per analysis run.
+     * Prevents unbounded memory usage for pools with very long histories.
+     * Units: count
+     * Default: 60 snapshots (30 days × 2 snapshots/day at 12h intervals)
+     */
+    maxHistoricalSnapshots: 60,
   },
 };
 

@@ -298,3 +298,104 @@ export interface CanonicalClmmProfile {
   /** Data provenance identifier. */
   provenance: 'uniswap-v3';
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E. GoldRush — Wallet Quality Profile (Phase 5C)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Data freshness classification for historical intelligence results.
+ *
+ *   LIVE         — just fetched synchronously from provider
+ *   FRESH_CACHE  — cached result within fresh TTL window
+ *   STALE_CACHE  — cached result past TTL, used as fallback
+ *   INDEXED      — sourced from a pre-indexed analytics layer
+ *   UNAVAILABLE  — no usable data (provider failure + no cache)
+ */
+export type IntelligenceFreshness =
+  | 'LIVE'
+  | 'FRESH_CACHE'
+  | 'STALE_CACHE'
+  | 'INDEXED'
+  | 'UNAVAILABLE';
+
+/**
+ * Canonical wallet quality profile produced by bounded GoldRush transaction-walk.
+ *
+ * COVERAGE SEMANTICS:
+ *   'complete' — history exhausted before 5-page cap; firstSeenAt is as accurate
+ *                as the provider allows within scanned pages.
+ *   'capped'   — 5-page cap was reached; firstSeenAt reflects the oldest tx found
+ *                in those 5 pages only — NOT the wallet's true genesis.
+ *
+ * NEVER FABRICATE:
+ *   If any field cannot be determined from provider data, leave it undefined/null.
+ *   Zero is only valid when the provider explicitly confirmed zero transactions.
+ */
+export interface WalletQualityProfile {
+  /** EVM/Solana wallet address (normalized — lowercase for EVM). */
+  walletAddress: string;
+
+  /** Chain slug (e.g. 'eth', 'bsc', 'solana'). */
+  chain: string;
+
+  /** ISO 8601 timestamp of the earliest known transaction within the scanned pages. */
+  firstSeenAt: string;
+
+  /**
+   * Whole days elapsed since firstSeenAt.
+   * Derived from firstSeenAt vs the scan epoch — not stored directly.
+   * Approximate when coverage === 'capped'.
+   */
+  walletAgeDays: number;
+
+  /**
+   * Count of transactions collected from scanned pages.
+   * Approximate (lower bound) when coverage === 'capped'.
+   */
+  transactionCount: number;
+
+  /** Count of distinct calendar days (UTC) that had at least one transaction. */
+  activeDaysCount: number;
+
+  /** Unix timestamp (seconds) when this profile was last updated from the provider. */
+  lastUpdated: number;
+
+  /**
+   * Indicates whether the provider history was fully scanned or capped.
+   *   'complete' — all available pages were fetched before reaching max cap.
+   *   'capped'   — max page cap was hit; earlier history may exist but was not fetched.
+   */
+  coverage: 'complete' | 'capped';
+
+  /** Data provenance identifier. */
+  provenance: 'goldrush';
+
+  /** Optional: identified primary funding source address. */
+  fundingSource?: string | null;
+
+  /** Optional: classification of the funding source. */
+  fundingSourceType?: 'cex' | 'bridge' | 'wallet' | 'contract' | 'unknown' | null;
+
+  /** Optional: tx hash of the genesis native deposit into this wallet. */
+  fundingTxHash?: string | null;
+}
+
+/**
+ * Result of a wallet quality cache lookup.
+ *
+ * STATUS SEMANTICS:
+ *   'fresh'       — profile is within the 12-day fresh window (no revalidation needed).
+ *   'swr'         — profile is in the 12–15-day SWR window; async revalidation triggered.
+ *   'stale'       — profile is older than 15 days; used as fallback only.
+ *   'miss'        — no profile found in the cache.
+ *   'unavailable' — database error prevented lookup.
+ */
+export interface WalletCacheLookupResult {
+  status: 'fresh' | 'swr' | 'stale' | 'miss' | 'unavailable';
+  freshness: IntelligenceFreshness;
+  profile: WalletQualityProfile | null;
+  cacheAgeDays?: number;
+  reason?: string;
+}
+

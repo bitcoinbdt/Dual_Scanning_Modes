@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { UniversalTransaction } from '../../elevator/collectors/types';
 import { DEEP_SCAN_CONFIG } from '../config';
+import type { WalletQualityProfile } from '../../providers/adapter-types';
 
 const UNAVAILABLE_METRICS = [
   'walletAge',
@@ -43,11 +44,14 @@ function stdDev(values: number[]): number {
  * @param transactions   - Normalized transaction batch from Elevator
  * @param cexWallets     - CEX wallets to exclude (reused from Elevator)
  * @param contractWallets - Contract wallets to exclude (reused from Elevator)
+ * @param walletProfiles  - Phase 5C: real wallet quality profiles from cache/enrichment.
+ *                          Wallets absent from this map are excluded from freshWalletRatio.
  */
 export function analyzeBuyerQuality(
   transactions: UniversalTransaction[],
   cexWallets: Set<string> = new Set(),
-  contractWallets: Set<string> = new Set()
+  contractWallets: Set<string> = new Set(),
+  walletProfiles: Map<string, WalletQualityProfile> = new Map()
 ): BuyerQualityResult {
   // ── Build normalized sets for lookup ──
   const normalizedCex = new Set<string>();
@@ -128,11 +132,38 @@ export function analyzeBuyerQuality(
     returningBuyers,
     singleUseBuyers,
     returningBuyerRatio,
-    freshWalletRatio: 0, // UNAVAILABLE — requires cross-token historical data
+    freshWalletRatio: 0, // populated below from real profiles when available
     avgBuyValueUsd,
     buyValueStdDevUsd,
     capitalDiversityIndex,
   };
+
+  // ── Phase 5C: Wallet profile freshness ratio ──
+  // Only buyers WITH a profile in the cache are included in the denominator.
+  // Buyers without profiles are excluded — never substituted with zero.
+  const FRESH_WALLET_MAX_AGE_DAYS = 7;
+  const allBuyerAddresses = [...buyerTxCounts.keys()];
+  const profiledBuyers = allBuyerAddresses.filter((addr) => walletProfiles.has(addr));
+  const missingProfileCount = allBuyerAddresses.length - profiledBuyers.length;
+  const missingProfileRatio = allBuyerAddresses.length > 0
+    ? missingProfileCount / allBuyerAddresses.length
+    : 0;
+
+  let freshWalletCount = 0;
+  for (const addr of profiledBuyers) {
+    const profile = walletProfiles.get(addr)!;
+    if (profile.walletAgeDays < FRESH_WALLET_MAX_AGE_DAYS) {
+      freshWalletCount++;
+    }
+  }
+
+  // freshWalletRatio is only meaningful when profiled buyers exist.
+  // When profiledBuyers is empty, freshWalletRatio stays 0 and walletAge
+  // remains in unavailableMetrics below.
+  const walletAgeAvailable = profiledBuyers.length > 0;
+  if (walletAgeAvailable) {
+    cohortMetrics.freshWalletRatio = round(freshWalletCount / profiledBuyers.length, 4);
+  }
 
   // ── Score calculation ──
   const bqCfg = DEEP_SCAN_CONFIG.buyerQuality;
@@ -237,6 +268,16 @@ export function analyzeBuyerQuality(
     confidence = Math.max(20, confidence - bqCfg.missingPricePenalty);
   }
 
+  // Phase 5C: Reduce confidence when majority of buyers lack wallet profiles
+  if (missingProfileRatio > 0.5) {
+    confidence = Math.max(10, confidence - 15);
+  }
+
+  // Phase 5C: Remove 'walletAge' from unavailableMetrics when real profiles are available
+  const activeUnavailableMetrics = walletAgeAvailable
+    ? UNAVAILABLE_METRICS.filter((m) => m !== 'walletAge')
+    : UNAVAILABLE_METRICS;
+
   const status: ModuleStatus = totalBuyers < bqCfg.sampleCount.insufficientLimit ? 'partial' : 'ok';
 
   return {
@@ -245,7 +286,7 @@ export function analyzeBuyerQuality(
     cohortMetrics,
     positiveFactors,
     negativeFactors,
-    unavailableMetrics: UNAVAILABLE_METRICS,
+    unavailableMetrics: activeUnavailableMetrics,
     evidenceIds: ['buyer-cohort-analysis'],
     confidence,
   };

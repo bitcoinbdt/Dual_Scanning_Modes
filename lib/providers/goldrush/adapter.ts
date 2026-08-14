@@ -24,7 +24,7 @@
  */
 
 import type { HolderInfo } from '../../elevator/collectors/types';
-import type { EvmHolderDataset } from '../adapter-types';
+import type { EvmHolderDataset, WalletQualityProfile } from '../adapter-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -278,5 +278,105 @@ export function adaptGoldrushHolders(
     tokenAddress: tokenAddressNorm,
     snapshotAt: opts.snapshotAt,
     provenance: 'goldrush',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GoldRush — Wallet Transaction History Adapter (Phase 5C)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Maximum pages to walk during bounded transaction-history scan. */
+export const GOLDRUSH_MAX_WALLET_PAGES = 5;
+
+/** Transactions per page sent to fetchGoldrushWalletTransactions. */
+export const GOLDRUSH_WALLET_PAGE_SIZE = 100;
+
+/**
+ * A single item from the GoldRush /transactions_v3/ items array.
+ * Only the fields required for WalletQualityProfile are typed.
+ */
+interface GoldrushTxItem {
+  block_signed_at?: string | null;
+  tx_hash?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Accumulated data from walking multiple pages of transactions_v3.
+ * Built incrementally by the caller (walletEnrichment.ts).
+ */
+export interface GoldrushWalletPageAccumulator {
+  /** All transaction items collected across scanned pages. */
+  items: GoldrushTxItem[];
+  /** true when the walk was stopped by the page cap, not by has_more=false. */
+  wasCapped: boolean;
+  /** Provider-reported total_count from the first page (if available). */
+  providerTotalCount?: number;
+}
+
+/**
+ * Options for the GoldRush wallet history adapter.
+ */
+export interface AdaptGoldrushWalletHistoryOpts {
+  chain: string;
+  walletAddress: string;
+  /** Unix timestamp (seconds) at which the last page was fetched. */
+  fetchedAt: number;
+}
+
+/**
+ * Transform a GoldrushWalletPageAccumulator into a WalletQualityProfile.
+ *
+ * Returns null when:
+ *   - acc.items is empty (no transaction history found)
+ *   - no valid block_signed_at timestamps can be parsed from items
+ *
+ * CALLER CONTRACT:
+ *   Walk up to GOLDRUSH_MAX_WALLET_PAGES pages using fetchGoldrushWalletTransactions,
+ *   accumulating all items. Set opts.fetchedAt = Math.floor(Date.now() / 1000).
+ *
+ * NEVER FABRICATE:
+ *   Undefined / null timestamps in items are skipped — never substituted.
+ *   Returns null rather than inventing a profile from empty data.
+ */
+export function adaptGoldrushWalletHistory(
+  acc: GoldrushWalletPageAccumulator,
+  opts: AdaptGoldrushWalletHistoryOpts
+): WalletQualityProfile | null {
+  if (!acc || !Array.isArray(acc.items) || acc.items.length === 0) return null;
+
+  const timestamps: number[] = [];
+  const activeDays = new Set<string>();
+
+  for (const item of acc.items) {
+    if (!item.block_signed_at) continue;
+    const ms = new Date(item.block_signed_at as string).getTime();
+    if (!Number.isFinite(ms) || ms <= 0) continue;
+    const sec = Math.floor(ms / 1000);
+    timestamps.push(sec);
+    // Track unique UTC calendar days for activeDaysCount
+    activeDays.add(new Date(ms).toISOString().slice(0, 10));
+  }
+
+  if (timestamps.length === 0) return null;
+
+  const minTs = Math.min(...timestamps);
+  const firstSeenAt = new Date(minTs * 1000).toISOString();
+  const ageSeconds = Math.max(0, opts.fetchedAt - minTs);
+  const walletAgeDays = Math.floor(ageSeconds / 86400);
+
+  return {
+    walletAddress: opts.walletAddress,
+    chain:         opts.chain,
+    firstSeenAt,
+    walletAgeDays,
+    transactionCount: acc.items.length,
+    activeDaysCount:  activeDays.size,
+    lastUpdated:      opts.fetchedAt,
+    coverage:         acc.wasCapped ? 'capped' : 'complete',
+    provenance:       'goldrush',
+    fundingSource:     null,
+    fundingSourceType: null,
+    fundingTxHash:     null,
   };
 }

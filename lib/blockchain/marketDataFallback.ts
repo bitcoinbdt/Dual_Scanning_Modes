@@ -124,6 +124,7 @@ async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
       
       const mainPools = sortedPairs.slice(0, 5).map(pair => ({
         pair: `${pair.baseToken.symbol}/${pair.quoteToken.symbol}`,
+        poolAddress: pair.pairAddress,
         dex: pair.dexId || 'Unknown',
         liquidityUsd: pair.liquidity?.usd || 0,
         priceUsd: parseFloat(pair.priceUsd || "0"),
@@ -189,6 +190,7 @@ async function fetchGeckoTerminal(address: string, chainId: string = '1'): Promi
       
       const mainPools = pools.slice(0, 5).map((pool: any) => ({
         pair: pool.attributes.name || 'Unknown',
+        poolAddress: pool.attributes.address,
         dex: pool.attributes.dex_id || 'Unknown',
         liquidityUsd: parseFloat(pool.attributes.reserve_in_usd || 0),
         priceUsd: parseFloat(pool.attributes.token_price_usd || 0),

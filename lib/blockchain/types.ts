@@ -164,6 +164,10 @@ export interface NormalizedPoolState {
   snapshotAtProvenance?: 'observed' | 'provider';
   /** Canonical CLMM profile from on-chain slot0() — only populated for V3 pools via Alchemy */
   clmmProfile?: CanonicalClmmProfile;
+  /** Address of token0 in the pool contract (EVM only, normalized to lowercase) */
+  token0?: string;
+  /** Address of token1 in the pool contract (EVM only, normalized to lowercase) */
+  token1?: string;
 }
 
 /**
@@ -172,6 +176,7 @@ export interface NormalizedPoolState {
  */
 export interface LiquidityPool {
   pair: string;
+  poolAddress?: string;
   dex: string;
   liquidityUsd: number;
   priceUsd?: number;
@@ -189,9 +194,10 @@ export function toNormalizedPoolState(
   pool: LiquidityPool,
   opts?: { chain?: string; snapshotAt?: number }
 ): NormalizedPoolState {
+  const isValidAddress = pool.poolAddress && /^0x[a-fA-F0-9]{40}$/i.test(pool.poolAddress);
   return {
-    poolIdentifier: pool.pair,
-    poolIdentifierType: 'label',
+    poolIdentifier: isValidAddress ? pool.poolAddress! : pool.pair,
+    poolIdentifierType: isValidAddress ? 'address' : 'label',
     chain: opts?.chain,
     dex: pool.dex,
     poolType: pool.type ?? 'unknown',
@@ -212,7 +218,8 @@ export function toNormalizedPoolState(
  */
 export function toLegacyPool(state: NormalizedPoolState): LiquidityPool {
   return {
-    pair: state.poolIdentifier,
+    pair: state.poolIdentifierType === 'address' ? 'Unknown' : state.poolIdentifier,
+    poolAddress: state.poolIdentifierType === 'address' ? state.poolIdentifier : undefined,
     dex: state.dex,
     liquidityUsd: state.liquidityUsd,
     priceUsd: state.spotPriceUsd,
@@ -363,6 +370,7 @@ export interface RetryOptions {
 // ============================================================================
 
 export interface DexScreenerPair {
+  pairAddress?: string;
   baseToken: {
     address: string;
     name: string;

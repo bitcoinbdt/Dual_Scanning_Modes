@@ -13,12 +13,23 @@ import { simulateWhaleExit } from './engines/WhaleExitSimulator';
 import { analyzeBuyerQuality } from './engines/BuyerQualityAnalyzer';
 import { analyzeMarketRegime } from './engines/MarketRegimeAnalyzer';
 import { analyzeCapitalEfficiency } from './engines/CapitalEfficiencyAnalyzer';
+import { analyzeLiquidityFragmentation } from './engines/LiquidityFragmentationAnalyzer';
 import { calculateRiskScore } from './engines/RiskScoringEngine';
 import { generateTraderIntelligenceReport } from './engines/TraderIntelligenceGenerator';
 import * as EvidenceMapper from './engines/EvidenceMapper';
 import { enrichPoolsWithAlchemyReserves, enrichClmmPoolsWithSlot0 } from './poolEnrichment';
 import { NormalizedPoolState, LiquidityPool } from '../blockchain/types';
 import { enrichWhaleWallets, WALLET_INTELLIGENCE_LOOKBACK_DAYS } from './walletIntelligence';
+import { WhaleFreshnessTag } from './types';
+// Phase 5C — WalletQuality Infrastructure
+import { lookupWalletProfile, upsertWalletProfile, enqueueWalletEnrichmentJob } from './walletQualityCache';
+import { enrichTopWalletsSync } from './walletEnrichment';
+import type { WalletQualityProfile } from '../providers/adapter-types';
+import { analyzeSmartMoney } from './engines/SmartMoneyAnalyzer';
+import { enqueueSmartMoneyIndexingJob, lookupSmartMoneyReputation } from './smartMoneyCache';
+import { queryAlchemyHistoricalRpc } from '../providers/alchemy/historicalRpc';
+import { schedulePoolReservesIndexing, queryHistoricalReserves } from './historical/HistoricalPoolReservesIndexer';
+import { analyzeLiquidityStress } from './engines/LiquidityStressAnalyzer';
 
 import { CollectorFactory, SupportedBlockchain } from '../elevator/collectors/CollectorFactory';
 import { HolderDataset } from '../elevator/collectors/types';
@@ -166,6 +177,10 @@ export class DeepScanService {
     let basicScanData: any = null;
 
     if (!meta) {
+      // ── BOUNDARY COMPATIBILITY FALLBACK: Basic Token Metadata ──
+      // This is a backward-compatibility path for Scenario B where the caller has
+      // not provided tokenMetadata from a prior Basic Scan. While the Basic Scanner
+      // owns token metadata, we invoke it here as a fallback to prevent failure.
       console.log(`[DEEP SERVICE] Basic metadata missing. Querying basic token scanner...`);
       try {
         if (network === 'solana') {
@@ -227,6 +242,10 @@ export class DeepScanService {
     let elevatorReused = true;
 
     if (!elevatorResult) {
+      // ── BOUNDARY COMPATIBILITY FALLBACK: Ingest Transaction Batch (Scenario B) ──
+      // If the caller has not run Elevator Scan first and passed in elevatorResult,
+      // we run a fallback transaction collection step. This guarantees that direct
+      // REST API calls or standalone queries remain functional.
       console.log(`[DEEP SERVICE] Elevator results missing (Scenario B). Ingesting transaction batch...`);
       elevatorReused = false;
       
@@ -278,8 +297,9 @@ export class DeepScanService {
     const batchHolders = holderDataset.holders;
 
     // ── Build contract/CEX exclusion sets ──
-    // F-12: Use actual pool pair addresses and token address rather than heuristic string matching.
-    // Pool pair contract addresses (LP positions) must be excluded from whale/buyer analysis.
+    // Passive Extraction: We build CEX and contract exclusion sets by reading CEX flags 
+    // and LP addresses returned from the Elevator/Basic collectors. No duplicate RPC 
+    // or external provider calls are introduced.
     const contractWallets = new Set<string>();
     const cexWallets = new Set<string>();
 
@@ -332,6 +352,10 @@ export class DeepScanService {
           }
         }
       } else {
+        // ── BOUNDARY COMPATIBILITY FALLBACK: Wash Trading Ingestion ──
+        // If the caller has provided transaction arrays but no pre-computed wash-trading flags,
+        // we run the Elevator wash trading detector as a fallback. This preserves correctness
+        // but represents a boundary fallback that should be avoided by callers running Elevator first.
         console.log('[DEEP SERVICE] Running wash trading detector fallback...');
         const washResult = detectWashTrading(txs);
         for (const addr of washResult.summary.washWallets) {
@@ -376,6 +400,50 @@ export class DeepScanService {
       const intelligence = await enrichWhaleWallets(topWhales, sinceIso);
       if (intelligence.recordCount > 0) {
         whaleResult.walletIntelligence = intelligence;
+
+        // ── Phase 4: Populate freshnessTag per WhaleEntry ──
+        // Build a lookup map from wallet address (lower-cased) → firstSeenTimestamp.
+        // Only wallets within the WALLET_INTELLIGENCE_MAX (top 10) cap have records;
+        // all others remain at 'unknown' (set by WhaleBehaviorAnalyzer).
+        //
+        // IMPORTANT: Use a fixed epoch reference (scanTimeMs) captured BEFORE the
+        // enrichment call to ensure deterministic tag values for each whale.
+        const scanTimeMs = Date.now();
+        const freshnessMap = new Map<string, number | undefined>();
+        for (const record of intelligence.records) {
+          freshnessMap.set(record.wallet.toLowerCase(), record.firstSeenTimestamp);
+        }
+
+        const SEVEN_DAYS_S  = 7  * 24 * 60 * 60;
+        const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
+        const scanTimeSec = Math.floor(scanTimeMs / 1000);
+
+        for (const whale of whaleResult.whales) {
+          const normalizedWallet = whale.wallet.toLowerCase();
+          if (!freshnessMap.has(normalizedWallet)) {
+            // Not in enrichment set (outside top-10 cap) — leave 'unknown'
+            continue;
+          }
+          const firstSeen = freshnessMap.get(normalizedWallet);
+          if (firstSeen === undefined || firstSeen <= 0) {
+            // Record exists but has no usable timestamp (unavailable / no_history_found)
+            whale.freshnessTag = 'unknown';
+            continue;
+          }
+          const ageSeconds = scanTimeSec - firstSeen;
+          let tag: WhaleFreshnessTag;
+          if (ageSeconds < 0) {
+            // Future timestamp: invalid/unreliable due to node clock drift. Set to 'unknown'
+            tag = 'unknown';
+          } else if (ageSeconds <= SEVEN_DAYS_S) {
+            tag = 'fresh';
+          } else if (ageSeconds <= THIRTY_DAYS_S) {
+            tag = 'recent';
+          } else {
+            tag = 'established';
+          }
+          whale.freshnessTag = tag;
+        }
       }
     }
 
@@ -387,14 +455,112 @@ export class DeepScanService {
       finalTotalSupply
     );
 
-    // 5. Buyer Quality
-    const buyerQualityResult = analyzeBuyerQuality(txs, cexWallets, contractWallets);
+    // Phase 5C: Wallet profile cache-first lookup + bounded sync enrichment for buyers
+    const SYNC_WALLET_LIMIT: number = DEEP_SCAN_CONFIG.buyerQuality.syncWalletLimit ?? 10;
+    const walletProfiles = new Map<string, WalletQualityProfile>();
+
+    // Collect unique buyer wallet addresses from the transaction batch
+    const buyerAddressSet = new Set<string>();
+    for (const tx of txs) {
+      if (tx.type === 'buy' && tx.isTrade === true && tx.to) {
+        buyerAddressSet.add(normalizeAddress(tx.to));
+      }
+    }
+    const uniqueBuyerWallets = [...buyerAddressSet];
+
+    if (uniqueBuyerWallets.length > 0) {
+      const cacheMisses: string[] = [];
+      const swrRevalidate: string[] = [];
+
+      // Cache-first lookup — parallel, failures do not block the scan
+      await Promise.allSettled(
+        uniqueBuyerWallets.map(async (addr) => {
+          const result = await lookupWalletProfile(addr, network);
+          if ((result.status === 'fresh' || result.status === 'swr' || result.status === 'stale') && result.profile) {
+            walletProfiles.set(addr, result.profile);
+            if (result.status === 'swr' || result.status === 'stale') {
+              swrRevalidate.push(addr);
+            }
+          } else if (result.status === 'miss') {
+            cacheMisses.push(addr);
+          }
+          // 'unavailable' (DB error) — treat as miss but don't add to cacheMisses
+          // to avoid hammering a failing database with enrichment requests
+        })
+      );
+
+      // Enqueue SWR revalidation (non-blocking)
+      for (const addr of swrRevalidate) {
+        enqueueWalletEnrichmentJob(addr, network).catch(() => {});
+      }
+
+      if (cacheMisses.length > 0) {
+        const topMisses   = cacheMisses.slice(0, SYNC_WALLET_LIMIT);
+        const asyncMisses = cacheMisses.slice(SYNC_WALLET_LIMIT);
+
+        // Synchronously enrich top-N wallets (parallel with per-wallet timeout)
+        if (topMisses.length > 0) {
+          console.log(`[DEEP SERVICE] Sync enriching ${topMisses.length} buyer wallet(s)...`);
+          const freshProfiles = await enrichTopWalletsSync(topMisses, network, topMisses.length);
+          for (const [addr, profile] of freshProfiles) {
+            walletProfiles.set(addr, profile);
+            upsertWalletProfile(profile).catch(() => {}); // persist non-blocking
+          }
+        }
+
+        // Enqueue remaining wallets for async enrichment
+        for (const addr of asyncMisses) {
+          enqueueWalletEnrichmentJob(addr, network).catch(() => {});
+        }
+      }
+    }
+
+    // 5. Buyer Quality — now receives real wallet profiles
+    const buyerQualityResult = analyzeBuyerQuality(txs, cexWallets, contractWallets, walletProfiles);
+
+    // ── Phase 5D-1 & 5D-3: SmartMoney Cache-First Cohort Evaluation ──
+    // Identify top buyer wallets for SmartMoney reputation lookup.
+    // We check the existing cache and enqueue misses/stale asynchronously.
+    // The scan NEVER waits for live SmartMoney indexing.
+    let smartMoneyResult;
+    try {
+      const topBuyerWallets = uniqueBuyerWallets.slice(0, 5);
+      if (topBuyerWallets.length > 0) {
+        const reputations = await Promise.allSettled(
+          topBuyerWallets.map((addr) => lookupSmartMoneyReputation(addr, network))
+        );
+        const resolvedReps = reputations.map((r) => (r.status === 'fulfilled' ? r.value : null));
+
+        for (let i = 0; i < topBuyerWallets.length; i++) {
+          const rep = resolvedReps[i];
+          if (!rep || rep.status === 'pending' || rep.freshness === 'UNAVAILABLE') {
+            // Cache miss or not indexed yet — enqueue async
+            enqueueSmartMoneyIndexingJob(topBuyerWallets[i], network).catch(() => {});
+          }
+        }
+        smartMoneyResult = analyzeSmartMoney(topBuyerWallets, network, [], resolvedReps);
+      } else {
+        smartMoneyResult = analyzeSmartMoney([], network, [], []);
+      }
+    } catch {
+      // SmartMoney must never crash the main scan
+      smartMoneyResult = analyzeSmartMoney([], network, [], []);
+    }
+
+    if (smartMoneyResult && buyerQualityResult) {
+      buyerQualityResult.smartMoneyBuyerCount = smartMoneyResult.cohortSummary?.smartMoneyWalletCount ?? null;
+      buyerQualityResult.smartMoneyBuyerRatio = smartMoneyResult.cohortSummary?.smartMoneyWalletRatio ?? null;
+      buyerQualityResult.smartMoneyBuyerConfidence = smartMoneyResult.cohortSummary?.smartMoneyConfidence ?? null;
+    }
 
     // 6. Market Regime
     const regimeResult = analyzeMarketRegime(ohlcv);
 
     // 7. Capital Efficiency
     const capitalResult = analyzeCapitalEfficiency(finalFdv, finalLiquidity, finalSpotPrice);
+
+    // 8. Liquidity Fragmentation (Phase 4)
+    const fragmentationResult = analyzeLiquidityFragmentation(finalPools);
 
     // ─────────────────────────────────────────────
     // Step 5: Evidence & Risk Score Synthesis
@@ -683,6 +849,7 @@ export class DeepScanService {
       buyerQuality: buyerQualityResult,
       marketRegime: regimeResult,
       capitalEfficiency: capitalResult,
+      liquidityFragmentation: fragmentationResult,
       riskScore: riskScoreResult,
       evidence: compiledEvidence,
       dataQuality: {
@@ -723,6 +890,55 @@ export class DeepScanService {
       : 'failure';
 
     // ─────────────────────────────────────────────
+    // Step 6B: Phase 5D-6 — Liquidity Stress Analysis
+    // ─────────────────────────────────────────────
+    let liquidityStressResult: import('./types').LiquidityStressReport | undefined;
+    try {
+      // Load historical snapshots for the primary V2 pool (non-blocking failure allowed)
+      let historicalSnapshots: { block_number: number; block_timestamp: string | null; reserve0: string; reserve1: string }[] = [];
+      const v2Pool = finalPools.find(
+        p => 'poolType' in p && p.poolType === 'constant-product' && p.poolIdentifierType === 'address'
+      ) as NormalizedPoolState | undefined;
+
+      if (v2Pool && network !== 'solana') {
+        const records = await queryHistoricalReserves(
+          network,
+          v2Pool.poolIdentifier,
+          DEEP_SCAN_CONFIG.liquidityStress.maxHistoricalSnapshots
+        );
+        // Map HistoricalReservesRecord to HistoricalReserveSnapshot
+        historicalSnapshots = records.map(r => ({
+          block_number: r.block_number,
+          block_timestamp: r.timestamp,
+          reserve0: r.reserve0,
+          reserve1: r.reserve1,
+        }));
+      }
+
+      // Top whale combined balance for holder exit scenarios
+      const whaleBalanceTokens: number | null = (() => {
+        if (whaleResult.status !== 'ok' || !whaleResult.whales.length) return null;
+        const top = [...whaleResult.whales]
+          .filter(w => !w.isFiltered)
+          .sort((a, b) => b.observedBatchBalance - a.observedBatchBalance)[0];
+        return top ? top.observedBatchBalance : null;
+      })();
+
+      liquidityStressResult = analyzeLiquidityStress({
+        pools: finalPools,
+        spotPriceUsd: finalSpotPrice,
+        historicalSnapshots,
+        whaleBalanceTokens,
+        positionSizesUsd: input.simulatedPositionSizes || DEEP_SCAN_CONFIG.liquidityStress.slippageCurveSizesUsd,
+        // Required for correct token slot selection and decimal normalization
+        tokenAddress: address,
+        tokenDecimals: finalDecimals,
+      });
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 5D-6 liquidity stress analysis failed (non-fatal):', err?.message);
+    }
+
+    // ─────────────────────────────────────────────
     // Step 7: Package Final Result
     // ─────────────────────────────────────────────
     const scanDurationMs = Date.now() - startTime;
@@ -754,6 +970,9 @@ export class DeepScanService {
       buyerQuality: buyerQualityResult,
       marketRegime: regimeResult,
       capitalEfficiency: capitalResult,
+      liquidityFragmentation: fragmentationResult,
+      smartMoney: smartMoneyResult,
+      liquidityStress: liquidityStressResult,
       riskScore: riskScoreResult,
       topRisks: riskScoreResult.topRisks,
       evidence: compiledEvidence,
@@ -769,6 +988,25 @@ export class DeepScanService {
       overallConfidence: riskScoreResult.confidence,
       scanDurationMs,
     };
+
+    // Enqueue historical pool reserve indexing asynchronously (non-blocking)
+    const primaryV2Pool = finalPools.find(
+      p => 'poolType' in p && p.poolType === 'constant-product' && p.poolIdentifierType === 'address'
+    ) as NormalizedPoolState | undefined;
+
+    if (primaryV2Pool && network !== 'solana') {
+      (async () => {
+        try {
+          const hexBlock = await queryAlchemyHistoricalRpc<string>(network, 'eth_blockNumber');
+          const latestBlock = parseInt(hexBlock, 16);
+          if (latestBlock > 0) {
+            await schedulePoolReservesIndexing(primaryV2Pool, network, latestBlock);
+          }
+        } catch (err: any) {
+          console.warn(`[DEEP SERVICE] Asynchronous historical reserves scheduling skipped/failed:`, err.message);
+        }
+      })().catch(() => {});
+    }
 
     // Store in session cache (only when userId is present — prevents cross-user key collisions)
     if (cacheKey) {
