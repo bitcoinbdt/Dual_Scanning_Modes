@@ -769,10 +769,108 @@ Based on Token Sniffer analysis, potential improvements:
 
 ---
 
-**Document Version:** 1.1  
+## Token Deployer Information Enhancement
+
+### Current Status
+**Deployer Address:** Currently shown in Deep Scan results only
+
+### Required Enhancement
+Add token deployer information to ALL scan types:
+
+#### Information to Display:
+1. **Token Deployer Address**
+   - Full address with copy button
+   - Link to block explorer
+   - ENS name resolution (if available)
+
+2. **Token Deploy Date**
+   - Exact timestamp (date + time)
+   - Relative time (e.g., "2 days ago")
+   - Age in days/hours for quick reference
+
+#### Implementation Locations:
+
+**1. Basic Scan Results**
+- Add "Deployment Info" section or card
+- Display deployer address and deploy date
+- Position: After token overview, before security checks
+
+**2. Elevator Scan Results**
+- Add to token metadata section
+- Display alongside other token details
+- Position: In the main token information card
+
+**3. Deep Scan Results**
+- Already has deployer address
+- Add deploy date/timestamp
+- Enhance existing deployment info display
+
+#### Data Sources:
+
+**For Solana Tokens:**
+```typescript
+// Get token creation transaction
+const signatures = await connection.getSignaturesForAddress(
+  tokenAddress,
+  { limit: 1000 },
+  'confirmed'
+);
+// Find mint transaction (oldest signature)
+const mintTx = signatures[signatures.length - 1];
+const deployDate = new Date(mintTx.blockTime * 1000);
+const deployerAddress = mintTx.transaction.message.accountKeys[0];
+```
+
+**For EVM Tokens:**
+```typescript
+// Get contract creation transaction
+const contract = await ethers.getContractAt('ERC20', tokenAddress);
+const deployTx = await provider.getTransaction(contract.deployTransaction.hash);
+const deployDate = new Date(block.timestamp * 1000);
+const deployerAddress = deployTx.from;
+```
+
+#### Display Format Example:
+
+```
+┌─ Deployment Information ─────────────────────────┐
+│                                                   │
+│ Deployer: 0x1234...5678  [Copy] [View Explorer]  │
+│ Deployed: Jan 15, 2026 14:32:18 UTC              │
+│ Age: 2 days ago                                   │
+│                                                   │
+└───────────────────────────────────────────────────┘
+```
+
+#### Priority: HIGH
+**Reason:** Essential information for security analysis and trust assessment
+
+#### Implementation Checklist:
+- [ ] Add deployer address extraction to Basic Scan service
+- [ ] Add deploy date/timestamp extraction to Basic Scan service
+- [ ] Add deployer address extraction to Elevator Scan service
+- [ ] Add deploy date/timestamp extraction to Elevator Scan service
+- [ ] Add deploy date to Deep Scan (already has address)
+- [ ] Update TypeScript types for all scan result interfaces
+- [ ] Create reusable DeploymentInfo component
+- [ ] Add copy-to-clipboard functionality
+- [ ] Add block explorer links (chain-specific)
+- [ ] Add relative time formatting ("2 days ago")
+- [ ] Add ENS name resolution for Ethereum deployers
+- [ ] Update API response types
+- [ ] Test with Solana tokens
+- [ ] Test with EVM tokens (BSC, Ethereum)
+- [ ] Update documentation
+
+---
+
+**Document Version:** 1.2  
 **Last Updated:** 2026-08-03  
 **Status:** Planning Phase  
 **Priority:** Medium-High (Post-Boost Feature Launch)
 
-**New Section Added:** Token Sniffer Analysis Features (Reference)  
-**Purpose:** Benchmark comparison for security analysis features
+**New Sections Added:**
+- Token Sniffer Analysis Features (Reference)
+- Token Deployer Information Enhancement (HIGH PRIORITY)
+
+**Purpose:** Benchmark comparison for security analysis features and track required enhancements
