@@ -17,6 +17,7 @@ import { isGoldrushConfigured, queryGoldrush } from './goldrush/client';
 import { isAlchemyConfigured, queryAlchemyRpc } from './alchemy/client';
 import { isUniswapConfigured, queryUniswap } from './uniswap/client';
 import { isGoplusApiKeyConfigured, queryGoplus } from './goplus/client';
+import { isHeliusConfigured } from './helius/client';
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -52,6 +53,7 @@ export async function runProviderTests(): Promise<{ passed: number; failed: numb
     BITQUERY_CLIENT_SECRET: process.env.BITQUERY_CLIENT_SECRET,
     GOPLUS_API_KEY: process.env.GOPLUS_API_KEY,
     MORALIS_API_KEY: process.env.MORALIS_API_KEY,
+    HELIUS_API_KEY: process.env.HELIUS_API_KEY,
   };
 
   // Helper to clear environment credentials for test isolation
@@ -63,12 +65,14 @@ export async function runProviderTests(): Promise<{ passed: number; failed: numb
     delete process.env.BITQUERY_CLIENT_SECRET;
     delete process.env.GOPLUS_API_KEY;
     delete process.env.MORALIS_API_KEY;
+    delete process.env.HELIUS_API_KEY;
 
     PROVIDER_CONFIG.goldrush.enabled = false;
     PROVIDER_CONFIG.alchemy.enabled = false;
     PROVIDER_CONFIG.uniswap.enabled = false;
     PROVIDER_CONFIG.bitquery.enabled = false;
     PROVIDER_CONFIG.moralis.enabled = false;
+    PROVIDER_CONFIG.helius.enabled = false;
   };
 
   // Helper to restore original environment credentials
@@ -79,6 +83,7 @@ export async function runProviderTests(): Promise<{ passed: number; failed: numb
     PROVIDER_CONFIG.uniswap.enabled = !!process.env.UNISWAP_API_KEY;
     PROVIDER_CONFIG.bitquery.enabled = !!process.env.BITQUERY_CLIENT_ID && !!process.env.BITQUERY_CLIENT_SECRET;
     PROVIDER_CONFIG.moralis.enabled = !!process.env.MORALIS_API_KEY;
+    PROVIDER_CONFIG.helius.enabled = !!process.env.HELIUS_API_KEY;
   };
 
   // Clear env variables to test "unconfigured" state safely
@@ -91,12 +96,13 @@ export async function runProviderTests(): Promise<{ passed: number; failed: numb
     assert(isUniswapConfigured() === false, 'Uniswap should be disabled when key is missing');
     assert(isBitqueryConfigured() === false, 'Bitquery should be disabled when credentials are missing');
     assert(isGoplusApiKeyConfigured() === false, 'GoPlus API key should be disabled when key is missing');
+    assert(isHeliusConfigured() === false, 'Helius should be disabled when key is missing');
   });
 
   // Test 2: Safe diagnostic reports
   await testCase('Safe diagnostic reports without secret leakage', async () => {
     const reports = getProviderDiagnostics();
-    assert(reports.length === 6, 'Diagnostics should contain all 6 providers');
+    assert(reports.length === 7, 'Diagnostics should contain all 7 providers');
     for (const report of reports) {
       assert(typeof report.provider === 'string', 'Report provider name must be string');
       assert(typeof report.configured === 'boolean', 'Report configured state must be boolean');

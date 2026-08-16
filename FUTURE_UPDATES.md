@@ -14,7 +14,6 @@ Complete framework for integrating multiple launchpad platforms into the scanner
 | **Pump.fun** | `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P` | Largest Solana memecoin launchpad, bonding curve model |
 | **Raydium LaunchLab** | `LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj` | Official Raydium launchpad, migrates to CPMM pools |
 | **Moonshot (DexScreener)** | `MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG` | DexScreener's launchpad platform |
-| **Boop.fun** | `boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4` | NFT collector Dingaling's launchpad |
 | **LetsBonk.fun** | Uses Raydium LaunchLab | BONK community-driven launchpad |
 | **Meteora DBC** | Separate Program ID | Meteora's Dynamic Bonding Curve |
 

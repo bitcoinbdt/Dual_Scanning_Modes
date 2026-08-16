@@ -303,6 +303,35 @@ export function calculateRiskScore(params: {
     dataAvailability: buyerAvail,
   });
 
+  // Phase 5D-9: Creator-Funded Buyers risk signal
+  if (buyerAvail === 'measured') {
+    const bq9Cfg = DEEP_SCAN_CONFIG.buyerQuality.phase5D9;
+    const cohortM = params.buyerQuality.cohortMetrics;
+    const cfRatio = cohortM.creatorFundedBuyerRatio;
+    const cfCount = cohortM.creatorFundedBuyerCount ?? 0;
+    const profiledCount = cohortM.profiledBuyerCount ?? 0;
+    const totalBuyers = cohortM.totalBuyers;
+    const profileCoverage = totalBuyers > 0 ? profiledCount / totalBuyers : 0;
+
+    if (
+      bq9Cfg?.enabled !== false &&
+      cfRatio !== undefined &&
+      profileCoverage >= bq9Cfg.minimumProfileCoverage &&
+      cfRatio > bq9Cfg.creatorFundingThreshold
+    ) {
+      topRisks.push({
+        riskId: 'creator-funded-buyers',
+        riskName: 'Creator-Funded Buyer Cohort Detected',
+        severity: cfRatio >= 0.50 ? 'critical' : 'high',
+        status: 'active',
+        evidenceIds: params.buyerQuality.evidenceIds || [],
+        description: `${cfCount} of ${profiledCount} profiled buyers show a direct funding-source match with the token creator address (${(cfRatio * 100).toFixed(1)}% of profiled cohort).`,
+        confidence: buyerConfidence,
+      });
+    }
+  }
+
+
   // ─────────────────────────────────────────────
   // 7. Mitigators & Critical Overrides
   // ─────────────────────────────────────────────

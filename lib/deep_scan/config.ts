@@ -15,6 +15,16 @@ export const DEEP_SCAN_CONFIG = {
     ttlMs: 60_000,
   },
 
+  // ── Live Risk Monitoring Policy (Module 10) ──
+  liveMonitoring: {
+    /** Minimum USD trade size to trigger a large sell alert ($25,000) */
+    largeTradeUsdLimit: 25_000,
+    /** Minimum percentage of supply to trigger a whale transfer alert (1.0%) */
+    whaleTransferPct: 1.0,
+    /** Minimum percentage of reserve drop in a single block (5.0%) */
+    reserveDropPct: 5.0,
+  },
+
   // ── Freshness Policy (Seconds) ──
   freshnessThresholds: {
     /** How recent the token metadata / price snapshot must be (5 minutes) */
@@ -138,6 +148,78 @@ export const DEEP_SCAN_CONFIG = {
      * enrichment via wallet_enrichment_jobs. (Phase 5C)
      */
     syncWalletLimit: 10,
+    /** Phase 5D-7 Wallet Quality & Funding Source Integration */
+    phase5D7: {
+      /** Enable funding source and activity analysis */
+      enabled: true,
+      /** Penalty points applied if funding concentration ratio exceeds threshold */
+      fundingConcentrationPenalty: 15,
+      /** Funding concentration ratio threshold (fraction of profiled wallets sharing one source) */
+      fundingConcentrationThreshold: 0.33,
+      /** Minimum profiled wallets needed to apply concentration penalties */
+      minProfiledForConcentration: 3,
+      /** Penalty points applied if the low-activity buyer ratio exceeds threshold */
+      lowActivityRatioPenalty: 10,
+      /** Low-activity ratio threshold (fraction of profiled wallets that are low-activity) */
+      lowActivityRatioThreshold: 0.50,
+      /** Lifetime transaction count threshold under which a wallet is flagged as low activity */
+      lowActivityTxCountLimit: 5,
+      /** Lifetime active days count threshold under which a wallet is flagged as low activity */
+      lowActivityDaysLimit: 2,
+      /** Penalty points applied if the fresh wallet ratio exceeds threshold */
+      freshRatioPenalty: 10,
+      /** Fresh wallet ratio threshold (fraction of profiled wallets that are fresh) */
+      freshRatioThreshold: 0.50,
+      /** Wallet age in days under which a wallet is flagged as fresh */
+      freshAgeDaysLimit: 7,
+      /** Minimum profile coverage (fraction of cohort profiled) required to apply penalties */
+      minimumProfileCoverage: 0.20,
+    },
+    /** Phase 5D-8 Cross-Token History & Historical Win Rate Cohort Integration */
+    phase5D8: {
+      /** Enable cross-token history and win-rate scoring */
+      enabled: true,
+      /**
+       * Minimum fraction of the top-buyer cohort that must have a resolved reputation record
+       * before cross-token / win-rate metrics are applied.
+       * Default: 0.20 (at least 1 of 5 top buyers must have a reputation record)
+       */
+      minimumReputationCoverage: 0.20,
+      /**
+       * Minimum fraction of reputation-profiled buyers that must have cross-token trading
+       * history (distinctTokensTraded >= 1) before a penalty is applied.
+       * If the ratio is BELOW this threshold, the penalty fires.
+       * Default: 0.30 (fewer than 30% of profiled buyers have cross-token history → penalty)
+       */
+      crossTokenThreshold: 0.30,
+      /** Penalty applied when crossTokenBuyerRatio < crossTokenThreshold */
+      crossTokenPenalty: 10,
+      /**
+       * Average cohort win rate below this threshold triggers the low win-rate penalty.
+       * Default: 0.40 (below 40% average win rate is a negative signal)
+       */
+      lowWinRateThreshold: 0.40,
+      /** Penalty applied when cohortAvgWinRate < lowWinRateThreshold */
+      lowWinRatePenalty: 8,
+      /**
+       * Average cohort win rate at or above this threshold triggers a quality bonus.
+       * Default: 0.65 (above 65% average win rate is a positive signal)
+       */
+      highWinRateThreshold: 0.65,
+      /** Bonus applied when cohortAvgWinRate >= highWinRateThreshold */
+      highWinRateBonus: 8,
+    },
+    /** Phase 5D-9 Creator-Funded Buyer Detection */
+    phase5D9: {
+      /** Enable creator funding analysis */
+      enabled: true,
+      /** Minimum profile coverage (fraction of cohort profiled) required to apply penalties */
+      minimumProfileCoverage: 0.20,
+      /** Creator-funded buyer ratio threshold (fraction of profiled wallets funded by creator) */
+      creatorFundingThreshold: 0.10,
+      /** Penalty points applied if creator-funded buyer ratio exceeds threshold */
+      creatorFundingPenalty: 15,
+    },
   },
 
   // ── Smart Money Indexer Configuration (Phase 5D-1) ──

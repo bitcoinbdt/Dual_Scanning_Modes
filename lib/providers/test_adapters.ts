@@ -19,6 +19,7 @@ import { adaptGoldrushHolders } from './goldrush/adapter';
 import { adaptAlchemyV2Reserves } from './alchemy/adapter';
 import { adaptBitqueryWalletHistory, buildWalletHistoryQuery } from './bitquery/adapter';
 import { adaptUniswapV3PoolState } from './uniswap/adapter';
+import { adaptHeliusWalletHistory } from './helius/adapter';
 import { AbiCoder } from 'ethers';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -436,6 +437,144 @@ group('Group 4: Uniswap V3 CLMM Adapter', () => {
     assert(result.currentTick === 197823, '4.7 String tick parsed to number');
     assert(result.feeTier === 500, '4.7 String fee parsed to number');
     assert(result.tickSpacing === 10, '4.7 String tickSpacing parsed to number');
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group 5: Helius Solana Wallet History Adapter
+// ─────────────────────────────────────────────────────────────────────────────
+
+group('Group 5: Helius Solana Wallet History Adapter', () => {
+  const targetWallet = 'SolanaWalletAddress11111111111111111111';
+  const BASE_OPTS = {
+    chain: 'solana',
+    walletAddress: targetWallet,
+    fetchedAt: 1700000000,
+  };
+
+  // Test 5.1: Bounded walk / complete coverage
+  {
+    const acc = {
+      items: [
+        { timestamp: 1700000000, signature: 'tx_new' },
+        { timestamp: 1699900000, signature: 'tx_old' }
+      ],
+      wasCapped: false
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result !== null, '5.1 Valid payload produces profile');
+    assert(result?.coverage === 'complete', '5.1 wasCapped = false → coverage complete');
+    assert(result?.transactionCount === 2, '5.1 transactionCount matches item length');
+    assert(result?.provenance === 'helius', '5.1 Provenance is helius');
+  }
+
+  // Test 5.2: Bounded walk / capped coverage
+  {
+    const acc = {
+      items: [
+        { timestamp: 1700000000, signature: 'tx_1' }
+      ],
+      wasCapped: true
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result?.coverage === 'capped', '5.2 wasCapped = true → coverage capped');
+  }
+
+  // Test 5.3: Wallet age calculation
+  {
+    // fetchedAt = 1700000000 (BASE_OPTS)
+    // 5 days ago = 1700000000 - 5 * 86400 = 1699568000
+    const acc = {
+      items: [
+        { timestamp: 1700000000 },
+        { timestamp: 1699568000 }
+      ],
+      wasCapped: false
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result?.walletAgeDays === 5, '5.3 Age calculation is correct');
+  }
+
+  // Test 5.4: Funding source detection (SOL native transfer)
+  {
+    const acc = {
+      items: [
+        {
+          timestamp: 1700000000,
+          signature: 'tx_new',
+          nativeTransfers: []
+        },
+        {
+          timestamp: 1699900000,
+          signature: 'funding_tx_hash',
+          nativeTransfers: [
+            {
+              fromUserAccount: 'FundingWalletAddress2222222222222222',
+              toUserAccount: targetWallet,
+              amount: 1000000000
+            }
+          ]
+        }
+      ],
+      wasCapped: false
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result?.fundingSource === 'FundingWalletAddress2222222222222222', '5.4 Funding source address detected');
+    assert(result?.fundingTxHash === 'funding_tx_hash', '5.4 Funding transaction hash detected');
+    assert(result?.fundingSourceType === 'wallet', '5.4 Funding source type classified as wallet');
+  }
+
+  // Test 5.5: Funding source detection (Token transfer)
+  {
+    const acc = {
+      items: [
+        {
+          timestamp: 1699900000,
+          signature: 'token_funding_tx',
+          tokenTransfers: [
+            {
+              fromUserAccount: 'TokenFundingWalletAddress333333333',
+              toUserAccount: targetWallet,
+              tokenAmount: 50.0,
+              mint: 'TokenMintAddress'
+            }
+          ]
+        }
+      ],
+      wasCapped: false
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result?.fundingSource === 'TokenFundingWalletAddress333333333', '5.5 Token funding source address detected');
+    assert(result?.fundingSourceType === 'wallet', '5.5 Token funding type classified as wallet');
+  }
+
+  // Test 5.6: Funding source classification (known CEX)
+  {
+    // 5zpyutJu9ee6jFymDGoK7F6S5Kczqtc9FomP3ueKuyA9 is Binance in cex-addresses.json
+    const acc = {
+      items: [
+        {
+          timestamp: 1699900000,
+          signature: 'cex_tx',
+          nativeTransfers: [
+            {
+              fromUserAccount: '5zpyutJu9ee6jFymDGoK7F6S5Kczqtc9FomP3ueKuyA9',
+              toUserAccount: targetWallet,
+              amount: 5000000000
+            }
+          ]
+        }
+      ],
+      wasCapped: false
+    };
+    const result = adaptHeliusWalletHistory(acc, BASE_OPTS);
+    assert(result?.fundingSourceType === 'cex', '5.6 Funding source from known address classified as cex');
+  }
+
+  // Test 5.7: Empty transaction list
+  {
+    const result = adaptHeliusWalletHistory({ items: [], wasCapped: false }, BASE_OPTS);
+    assert(result === null, '5.7 Empty items list → returns null');
   }
 });
 

@@ -163,6 +163,31 @@ export function generateTraderIntelligenceReport(params: {
   let buyerQualityAssessment = `Buyer Quality Score: ${params.buyerQuality.buyerQualityScore}/100. `;
   if (params.buyerQuality.status === 'ok') {
     buyerQualityAssessment += `${(params.buyerQuality.cohortMetrics.returningBuyerRatio * 100).toFixed(1)}% returning buyers, with capital diversity rating ${params.buyerQuality.cohortMetrics.capitalDiversityIndex.toFixed(3)}.`;
+    const m = params.buyerQuality.cohortMetrics;
+    if (m.profiledBuyerCount !== undefined && m.profiledBuyerCount > 0) {
+      buyerQualityAssessment += ` Profiled ${m.profiledBuyerCount} buyer(s).`;
+      if (m.largestFundingSourceBuyerRatio !== undefined && m.largestFundingSourceBuyerRatio > 0.33) {
+        buyerQualityAssessment += ` Elevated funding concentration detected among profiled buyers: ${(m.largestFundingSourceBuyerRatio * 100).toFixed(1)}% share a single funding origin.`;
+      }
+      if (m.lowActivityBuyerRatio !== undefined && m.lowActivityBuyerRatio > 0.5) {
+        buyerQualityAssessment += ` Warning: ${(m.lowActivityBuyerRatio * 100).toFixed(1)}% of profiled buyers show extremely low lifetime transaction activity.`;
+      }
+    }
+    // Phase 5D-8: Cross-token history and win-rate narratives
+    if (m.profiledReputationCount !== undefined && m.profiledReputationCount > 0) {
+      if (m.crossTokenBuyerRatio !== undefined) {
+        buyerQualityAssessment += ` Cross-token activity: ${(m.crossTokenBuyerRatio * 100).toFixed(1)}% of reputation-profiled buyers have traded multiple tokens (${m.crossTokenBuyerCount ?? 0} of ${m.profiledReputationCount}).`;
+      }
+      if (m.cohortAvgWinRate != null) {
+        buyerQualityAssessment += ` Historical cohort win rate: ${(m.cohortAvgWinRate * 100).toFixed(1)}% (average across buyers with closed trade history).`;
+      } else if (m.cohortAvgWinRate === null) {
+        buyerQualityAssessment += ` Historical win rate unavailable for this cohort (no closed trades on record).`;
+      }
+    }
+    // Phase 5D-9: Creator-funded buyer narrative
+    if (m.creatorFundedBuyerRatio !== undefined && m.creatorFundedBuyerRatio > 0) {
+      buyerQualityAssessment += ` Warning: ${(m.creatorFundedBuyerRatio * 100).toFixed(1)}% of profiled buyers show a direct funding-source match with the token creator address (${m.creatorFundedBuyerCount ?? 0} of ${m.profiledBuyerCount ?? 0} profiled).`;
+    }
   }
 
   // ── 7. Capital Efficiency ──

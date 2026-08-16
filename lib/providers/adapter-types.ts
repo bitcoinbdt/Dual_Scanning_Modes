@@ -369,7 +369,7 @@ export interface WalletQualityProfile {
   coverage: 'complete' | 'capped';
 
   /** Data provenance identifier. */
-  provenance: 'goldrush';
+  provenance: 'goldrush' | 'helius';
 
   /** Optional: identified primary funding source address. */
   fundingSource?: string | null;

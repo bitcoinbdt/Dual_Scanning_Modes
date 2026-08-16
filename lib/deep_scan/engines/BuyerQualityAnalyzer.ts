@@ -19,12 +19,14 @@ import {
 import { UniversalTransaction } from '../../elevator/collectors/types';
 import { DEEP_SCAN_CONFIG } from '../config';
 import type { WalletQualityProfile } from '../../providers/adapter-types';
+import type { SmartMoneyReputationRecord } from '../types';
 
 const UNAVAILABLE_METRICS = [
   'walletAge',
   'crossTokenHistory',
   'fundingSourceAnalysis',
   'historicalWinRate',
+  'creatorFundingAnalysis',
 ];
 
 function round(n: number, dp = 4): number {
@@ -41,17 +43,22 @@ function stdDev(values: number[]): number {
 /**
  * Analyze buyer quality from the transaction batch.
  *
- * @param transactions   - Normalized transaction batch from Elevator
- * @param cexWallets     - CEX wallets to exclude (reused from Elevator)
- * @param contractWallets - Contract wallets to exclude (reused from Elevator)
- * @param walletProfiles  - Phase 5C: real wallet quality profiles from cache/enrichment.
- *                          Wallets absent from this map are excluded from freshWalletRatio.
+ * @param transactions      - Normalized transaction batch from Elevator
+ * @param cexWallets        - CEX wallets to exclude (reused from Elevator)
+ * @param contractWallets   - Contract wallets to exclude (reused from Elevator)
+ * @param walletProfiles    - Phase 5C: real wallet quality profiles from cache/enrichment.
+ *                            Wallets absent from this map are excluded from freshWalletRatio.
+ * @param walletReputations - Phase 5D-8: pre-fetched SmartMoney reputation records keyed by
+ *                            normalised wallet address. Only top-N buyers are expected.
+ *                            Wallets absent from this map are excluded from win-rate averaging.
  */
 export function analyzeBuyerQuality(
   transactions: UniversalTransaction[],
   cexWallets: Set<string> = new Set(),
   contractWallets: Set<string> = new Set(),
-  walletProfiles: Map<string, WalletQualityProfile> = new Map()
+  walletProfiles: Map<string, WalletQualityProfile> = new Map(),
+  walletReputations: Map<string, SmartMoneyReputationRecord> = new Map(),
+  creatorAddress?: string
 ): BuyerQualityResult {
   // ── Build normalized sets for lookup ──
   const normalizedCex = new Set<string>();
@@ -165,8 +172,152 @@ export function analyzeBuyerQuality(
     cohortMetrics.freshWalletRatio = round(freshWalletCount / profiledBuyers.length, 4);
   }
 
-  // ── Score calculation ──
+  // ── Phase 5D-7: Wallet Quality & Funding Source Integration ──
   const bqCfg = DEEP_SCAN_CONFIG.buyerQuality;
+  let profiledBuyerCount = profiledBuyers.length;
+  let knownFundingSourceBuyerCount = 0;
+  let uniqueFundingSourceCount = 0;
+  let largestFundingSourceBuyerCount = 0;
+  let largestFundingSourceBuyerRatio = 0;
+  let lowActivityBuyerCount = 0;
+  let lowActivityBuyerRatio = 0;
+  let freshBuyerCount = 0;
+  let freshBuyerRatio = 0;
+
+  if (bqCfg.phase5D7?.enabled !== false && profiledBuyers.length > 0) {
+    const fundingGroups = new Map<string, string[]>();
+    const freshAgeDaysLimit = bqCfg.phase5D7?.freshAgeDaysLimit ?? 7;
+    const lowActivityTxCountLimit = bqCfg.phase5D7?.lowActivityTxCountLimit ?? 5;
+    const lowActivityDaysLimit = bqCfg.phase5D7?.lowActivityDaysLimit ?? 2;
+
+    for (const addr of profiledBuyers) {
+      const profile = walletProfiles.get(addr)!;
+
+      // 1. Funding Source grouping
+      if (profile.fundingSource && profile.fundingSource.trim()) {
+        const normFunder = normalizeAddress(profile.fundingSource);
+        if (!fundingGroups.has(normFunder)) {
+          fundingGroups.set(normFunder, []);
+        }
+        fundingGroups.get(normFunder)!.push(addr);
+        knownFundingSourceBuyerCount++;
+      }
+
+      // 2. Activity Quality
+      const isLowActivity = (profile.transactionCount != null && profile.transactionCount < lowActivityTxCountLimit) ||
+                            (profile.activeDaysCount != null && profile.activeDaysCount < lowActivityDaysLimit);
+      if (isLowActivity) {
+        lowActivityBuyerCount++;
+      }
+
+      // 3. Freshness Check (using config limit)
+      if (profile.walletAgeDays < freshAgeDaysLimit) {
+        freshBuyerCount++;
+      }
+    }
+
+    uniqueFundingSourceCount = fundingGroups.size;
+    
+    // Find the largest funding source group
+    for (const addrs of fundingGroups.values()) {
+      if (addrs.length > largestFundingSourceBuyerCount) {
+        largestFundingSourceBuyerCount = addrs.length;
+      }
+    }
+
+    largestFundingSourceBuyerRatio = round(largestFundingSourceBuyerCount / profiledBuyers.length, 4);
+    lowActivityBuyerRatio = round(lowActivityBuyerCount / profiledBuyers.length, 4);
+    freshBuyerRatio = round(freshBuyerCount / profiledBuyers.length, 4);
+  }
+
+  // Write back into cohortMetrics
+  cohortMetrics.profiledBuyerCount = profiledBuyerCount;
+  cohortMetrics.knownFundingSourceBuyerCount = knownFundingSourceBuyerCount;
+  cohortMetrics.uniqueFundingSourceCount = uniqueFundingSourceCount;
+  cohortMetrics.largestFundingSourceBuyerCount = largestFundingSourceBuyerCount;
+  cohortMetrics.largestFundingSourceBuyerRatio = largestFundingSourceBuyerRatio;
+  cohortMetrics.lowActivityBuyerCount = lowActivityBuyerCount;
+  cohortMetrics.lowActivityBuyerRatio = lowActivityBuyerRatio;
+  cohortMetrics.freshBuyerCount = freshBuyerCount;
+  cohortMetrics.freshBuyerRatio = freshBuyerRatio;
+
+  // ── Phase 5D-8: Cross-Token History & Historical Win Rate Cohort Integration ──
+  // Only uses pre-fetched cached reputation data. No live API calls are made here.
+  let profiledReputationCount = 0;
+  let crossTokenBuyerCount = 0;
+  let crossTokenBuyerRatio: number | undefined;
+  let cohortAvgWinRate: number | null | undefined;
+
+  const bq8Cfg = bqCfg.phase5D8;
+  if (bq8Cfg?.enabled !== false && walletReputations.size > 0) {
+    // Walk every unique buyer in the batch and check for a reputation record.
+    const uniqueBuyersNorm = [...new Set(buyTrades.map(tx => normalizeAddress(tx.to)))];
+    let winRateSum = 0;
+    let winRateContributors = 0;
+
+    for (const normAddr of uniqueBuyersNorm) {
+      const rep = walletReputations.get(normAddr);
+      if (!rep || rep.status === 'unavailable' || rep.status === 'pending') continue;
+
+      profiledReputationCount++;
+
+      // Cross-token history: wallet has traded at least one other token
+      const dtt = rep.distinctTokensTraded ?? 0;
+      if (dtt >= 1) {
+        crossTokenBuyerCount++;
+      }
+
+      // Win-rate averaging: exclude wallets with zero closed trades (no valid win rate)
+      const closed = rep.closedTradeCount ?? 0;
+      if (closed > 0 && rep.winRate != null) {
+        winRateSum += rep.winRate;
+        winRateContributors++;
+      }
+    }
+
+    if (profiledReputationCount > 0) {
+      crossTokenBuyerRatio = round(crossTokenBuyerCount / profiledReputationCount, 4);
+    }
+    if (winRateContributors > 0) {
+      cohortAvgWinRate = round(winRateSum / winRateContributors, 4);
+    } else {
+      cohortAvgWinRate = null;
+    }
+  }
+
+  // Write Phase 5D-8 fields back into cohortMetrics
+  cohortMetrics.profiledReputationCount = profiledReputationCount;
+  cohortMetrics.crossTokenBuyerCount = crossTokenBuyerCount;
+  cohortMetrics.crossTokenBuyerRatio = crossTokenBuyerRatio;
+  cohortMetrics.cohortAvgWinRate = cohortAvgWinRate;
+
+  // ── Phase 5D-9: Creator-Funded Buyer Detection ──
+  let creatorFundedBuyerCount = 0;
+  let creatorFundedBuyerRatio: number | undefined;
+  const creatorAddressNorm = creatorAddress ? normalizeAddress(creatorAddress) : '';
+
+  if (creatorAddressNorm && profiledBuyers.length > 0) {
+    const excludedFundingTypes = new Set(['cex', 'bridge', 'contract']);
+    for (const addr of profiledBuyers) {
+      const profile = walletProfiles.get(addr)!;
+      if (profile.fundingSource && profile.fundingSource.trim()) {
+        const normFunder = normalizeAddress(profile.fundingSource);
+        if (normFunder === creatorAddressNorm) {
+          const isExcluded = profile.fundingSourceType && excludedFundingTypes.has(profile.fundingSourceType);
+          if (!isExcluded) {
+            creatorFundedBuyerCount++;
+          }
+        }
+      }
+    }
+    creatorFundedBuyerRatio = round(creatorFundedBuyerCount / profiledBuyers.length, 4);
+  }
+
+  // Write Phase 5D-9 fields back into cohortMetrics
+  cohortMetrics.creatorFundedBuyerCount = creatorFundedBuyerCount;
+  cohortMetrics.creatorFundedBuyerRatio = creatorFundedBuyerRatio;
+
+  // ── Score calculation ──
   let score = bqCfg.baseScore;
   const positiveFactors: BuyerQualityFactor[] = [];
   const negativeFactors: BuyerQualityFactor[] = [];
@@ -252,6 +403,113 @@ export function analyzeBuyerQuality(
     });
   }
 
+  // ── Phase 5D-7: Score Penalties ──
+  if (bqCfg.phase5D7?.enabled && profiledBuyers.length > 0) {
+    const profileCoverage = profiledBuyers.length / totalBuyers;
+    if (profileCoverage >= bqCfg.phase5D7.minimumProfileCoverage) {
+      // 1. Funding concentration penalty
+      if (
+        profiledBuyers.length >= bqCfg.phase5D7.minProfiledForConcentration &&
+        largestFundingSourceBuyerRatio > bqCfg.phase5D7.fundingConcentrationThreshold
+      ) {
+        score -= bqCfg.phase5D7.fundingConcentrationPenalty;
+        negativeFactors.push({
+          name: 'High Funding Concentration',
+          value: `${(largestFundingSourceBuyerRatio * 100).toFixed(1)}%`,
+          isPositive: false,
+          weight: -bqCfg.phase5D7.fundingConcentrationPenalty,
+          description: `Over ${(bqCfg.phase5D7.fundingConcentrationThreshold * 100).toFixed(0)}% of profiled buyers share the same funding origin (${largestFundingSourceBuyerCount} of ${profiledBuyers.length} profiled).`,
+        });
+      }
+
+      // 2. Low activity penalty
+      if (lowActivityBuyerRatio > bqCfg.phase5D7.lowActivityRatioThreshold) {
+        score -= bqCfg.phase5D7.lowActivityRatioPenalty;
+        negativeFactors.push({
+          name: 'High Low-Activity Buyer Rate',
+          value: `${(lowActivityBuyerRatio * 100).toFixed(1)}%`,
+          isPositive: false,
+          weight: -bqCfg.phase5D7.lowActivityRatioPenalty,
+          description: `Over ${(bqCfg.phase5D7.lowActivityRatioThreshold * 100).toFixed(0)}% of profiled buyers have extremely low historical activity (${lowActivityBuyerCount} of ${profiledBuyers.length} profiled).`,
+        });
+      }
+
+      // 3. Fresh wallet penalty
+      if (freshBuyerRatio > bqCfg.phase5D7.freshRatioThreshold) {
+        score -= bqCfg.phase5D7.freshRatioPenalty;
+        negativeFactors.push({
+          name: 'High Fresh Wallet Rate',
+          value: `${(freshBuyerRatio * 100).toFixed(1)}%`,
+          isPositive: false,
+          weight: -bqCfg.phase5D7.freshRatioPenalty,
+          description: `Over ${(bqCfg.phase5D7.freshRatioThreshold * 100).toFixed(0)}% of profiled buyers are fresh wallets (${freshBuyerCount} of ${profiledBuyers.length} profiled).`,
+        });
+      }
+    }
+  }
+
+  // ── Phase 5D-8: Cross-Token History & Win Rate Score Adjustments ──
+  if (bq8Cfg?.enabled !== false && profiledReputationCount > 0) {
+    // Coverage gate: fraction of unique buyers in the batch that have a reputation record
+    const uniqueBuyerCount = new Set(buyTrades.map(tx => normalizeAddress(tx.to))).size;
+    const reputationCoverage = profiledReputationCount / Math.max(uniqueBuyerCount, 1);
+
+    if (reputationCoverage >= bq8Cfg.minimumReputationCoverage) {
+      // 1. Cross-token history penalty: cohort is mostly fresh/single-token traders
+      if (crossTokenBuyerRatio !== undefined && crossTokenBuyerRatio < bq8Cfg.crossTokenThreshold) {
+        score -= bq8Cfg.crossTokenPenalty;
+        negativeFactors.push({
+          name: 'Low Cross-Token Activity',
+          value: `${(crossTokenBuyerRatio * 100).toFixed(1)}%`,
+          isPositive: false,
+          weight: -bq8Cfg.crossTokenPenalty,
+          description: `Only ${(crossTokenBuyerRatio * 100).toFixed(1)}% of reputation-profiled buyers have traded multiple tokens — cohort appears to lack trading experience.`,
+        });
+      }
+
+      // 2. Win-rate adjustments (only when valid avg win rate is available)
+      if (cohortAvgWinRate != null) {
+        if (cohortAvgWinRate < bq8Cfg.lowWinRateThreshold) {
+          score -= bq8Cfg.lowWinRatePenalty;
+          negativeFactors.push({
+            name: 'Low Cohort Historical Win Rate',
+            value: `${(cohortAvgWinRate * 100).toFixed(1)}%`,
+            isPositive: false,
+            weight: -bq8Cfg.lowWinRatePenalty,
+            description: `Cohort average historical win rate of ${(cohortAvgWinRate * 100).toFixed(1)}% is below the quality threshold — buyers have a weak track record on closed trades.`,
+          });
+        } else if (cohortAvgWinRate >= bq8Cfg.highWinRateThreshold) {
+          score += bq8Cfg.highWinRateBonus;
+          positiveFactors.push({
+            name: 'High Cohort Historical Win Rate',
+            value: `${(cohortAvgWinRate * 100).toFixed(1)}%`,
+            isPositive: true,
+            weight: bq8Cfg.highWinRateBonus,
+            description: `Cohort average historical win rate of ${(cohortAvgWinRate * 100).toFixed(1)}% indicates experienced, profitable traders among the buyer cohort.`,
+          });
+        }
+      }
+    }
+  }
+
+  // ── Phase 5D-9: Creator-Funded Buyer Score Adjustments ──
+  const bq9Cfg = bqCfg.phase5D9;
+  if (bq9Cfg?.enabled !== false && creatorAddressNorm && profiledBuyers.length > 0) {
+    const profileCoverage = profiledBuyers.length / totalBuyers;
+    if (profileCoverage >= bq9Cfg.minimumProfileCoverage) {
+      if (creatorFundedBuyerRatio !== undefined && creatorFundedBuyerRatio > bq9Cfg.creatorFundingThreshold) {
+        score -= bq9Cfg.creatorFundingPenalty;
+        negativeFactors.push({
+          name: 'Creator-Funded Buyers Detected',
+          value: `${(creatorFundedBuyerRatio * 100).toFixed(1)}%`,
+          isPositive: false,
+          weight: -bq9Cfg.creatorFundingPenalty,
+          description: `${creatorFundedBuyerCount} of ${profiledBuyers.length} profiled buyers show a direct funding-source match with the token creator address.`,
+        });
+      }
+    }
+  }
+
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   // ── Confidence based on sample size ──
@@ -273,10 +531,19 @@ export function analyzeBuyerQuality(
     confidence = Math.max(10, confidence - 15);
   }
 
-  // Phase 5C: Remove 'walletAge' from unavailableMetrics when real profiles are available
-  const activeUnavailableMetrics = walletAgeAvailable
-    ? UNAVAILABLE_METRICS.filter((m) => m !== 'walletAge')
-    : UNAVAILABLE_METRICS;
+  // Phase 5C, 5D-7, 5D-8: Remove available metrics from unavailableMetrics list when real data is present
+  const reputationCoverageForFilter = profiledReputationCount / Math.max(new Set(buyTrades.map(tx => normalizeAddress(tx.to))).size, 1);
+  const reputationCoverageGateMet = profiledReputationCount > 0 &&
+    reputationCoverageForFilter >= (bq8Cfg?.minimumReputationCoverage ?? 0.20);
+
+  const activeUnavailableMetrics = UNAVAILABLE_METRICS.filter((m) => {
+    if (m === 'walletAge') return !walletAgeAvailable;
+    if (m === 'fundingSourceAnalysis') return profiledBuyers.length === 0;
+    if (m === 'crossTokenHistory') return !reputationCoverageGateMet;
+    if (m === 'historicalWinRate') return !(reputationCoverageGateMet && cohortAvgWinRate != null);
+    if (m === 'creatorFundingAnalysis') return !(profiledBuyers.length > 0 && creatorAddressNorm);
+    return true;
+  });
 
   const status: ModuleStatus = totalBuyers < bqCfg.sampleCount.insufficientLimit ? 'partial' : 'ok';
 

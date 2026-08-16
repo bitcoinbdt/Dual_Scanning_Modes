@@ -363,6 +363,28 @@ export interface BuyerCohortMetrics {
   buyValueStdDevUsd: number;
   /** Normalized diversity index 0–1 (1 = perfectly diverse) */
   capitalDiversityIndex: number;
+  // Phase 5D-7 extension fields
+  profiledBuyerCount?: number;
+  knownFundingSourceBuyerCount?: number;
+  uniqueFundingSourceCount?: number;
+  largestFundingSourceBuyerCount?: number;
+  largestFundingSourceBuyerRatio?: number;
+  lowActivityBuyerCount?: number;
+  lowActivityBuyerRatio?: number;
+  freshBuyerCount?: number;
+  freshBuyerRatio?: number;
+  // Phase 5D-8 extension fields
+  /** Number of reputation records resolved for the cohort (≤ topBuyerWallets count) */
+  profiledReputationCount?: number;
+  /** Buyers with at least 1 distinct token traded (cross-token history present) */
+  crossTokenBuyerCount?: number;
+  /** Fraction of reputation-profiled buyers with cross-token history (0–1) */
+  crossTokenBuyerRatio?: number;
+  /** Reputation-weighted average win rate across cohort (null when insufficient data) */
+  cohortAvgWinRate?: number | null;
+  // Phase 5D-9 extension fields
+  creatorFundedBuyerCount?: number;
+  creatorFundedBuyerRatio?: number;
 }
 
 export interface BuyerQualityFactor {
@@ -783,6 +805,8 @@ export interface DeepScanResult {
   // ── P5D-6 Modules ──
   /** Liquidity / Slippage / Stress Analysis (Phase 5D-6) */
   liquidityStress?: LiquidityStressReport;
+  /** Historical behavior analysis (Module 13) */
+  historicalBehavior?: HistoricalBehaviorResult;
   riskScore: ExplainableRiskScore;
   // ── Synthesis ──
   topRisks: RiskSignal[];
@@ -1057,3 +1081,37 @@ export interface LiquidityStressReport {
   /** Regime reasoning (enumerated, never LLM-generated) */
   liquidityRegimeReason: string;
 }
+
+export interface DrawdownInfo {
+  depthPercent: number;
+  durationCandles: number;
+  recoveryCandles: number | null;
+}
+
+export interface PumpDumpAnalysis {
+  detected: boolean;
+  confidence: number;
+  details?: string;
+}
+
+export interface SlowRugAnalysis {
+  detected: boolean;
+  confidence: number;
+  details?: string;
+}
+
+export interface DistributionVelocityResult {
+  velocity: number;
+  countT0: number;
+  countT1: number;
+}
+
+export interface HistoricalBehaviorResult {
+  status: 'ok' | 'insufficient_data' | 'unavailable';
+  reason?: string;
+  maxDrawdown: DrawdownInfo | null;
+  pumpDump: PumpDumpAnalysis | null;
+  slowRug: SlowRugAnalysis | null;
+  distributionVelocity: DistributionVelocityResult | null;
+}
+

@@ -5,7 +5,7 @@
  * Reuses Elevator and Basic scan caches.
  */
 
-import { DeepScanInput, DeepScanResult, EvidenceNode, DataFreshnessStatus, normalizeAddress } from './types';
+import { DeepScanInput, DeepScanResult, EvidenceNode, DataFreshnessStatus, normalizeAddress, SmartMoneyReputationRecord } from './types';
 import { simulateAmmSlippage } from './engines/AmmSlippageSimulator';
 import { analyzeVolumeConcentration } from './engines/VolumeConcentrationAnalyzer';
 import { analyzeWhaleBehavior } from './engines/WhaleBehaviorAnalyzer';
@@ -30,6 +30,7 @@ import { enqueueSmartMoneyIndexingJob, lookupSmartMoneyReputation } from './smar
 import { queryAlchemyHistoricalRpc } from '../providers/alchemy/historicalRpc';
 import { schedulePoolReservesIndexing, queryHistoricalReserves } from './historical/HistoricalPoolReservesIndexer';
 import { analyzeLiquidityStress } from './engines/LiquidityStressAnalyzer';
+import { analyzeHistoricalBehavior } from './engines/HistoricalBehaviorAnalyzer';
 
 import { CollectorFactory, SupportedBlockchain } from '../elevator/collectors/CollectorFactory';
 import { HolderDataset } from '../elevator/collectors/types';
@@ -515,14 +516,17 @@ export class DeepScanService {
       }
     }
 
-    // 5. Buyer Quality — now receives real wallet profiles
-    const buyerQualityResult = analyzeBuyerQuality(txs, cexWallets, contractWallets, walletProfiles);
+    // 5. Buyer Quality — now receives real wallet profiles (5C) and reputation cache (5D-8).
+    // Defer until after SmartMoney reputations are resolved, so the rep map can be passed in.
+    // buyerQualityResult is declared here; populated below after rep resolution.
 
     // ── Phase 5D-1 & 5D-3: SmartMoney Cache-First Cohort Evaluation ──
     // Identify top buyer wallets for SmartMoney reputation lookup.
     // We check the existing cache and enqueue misses/stale asynchronously.
     // The scan NEVER waits for live SmartMoney indexing.
     let smartMoneyResult;
+    // Phase 5D-8: Reputation map (keyed by normalised address) forwarded to BuyerQualityAnalyzer.
+    const walletReputationMap = new Map<string, SmartMoneyReputationRecord>();
     try {
       const topBuyerWallets = uniqueBuyerWallets.slice(0, 5);
       if (topBuyerWallets.length > 0) {
@@ -537,6 +541,11 @@ export class DeepScanService {
             // Cache miss or not indexed yet — enqueue async
             enqueueSmartMoneyIndexingJob(topBuyerWallets[i], network).catch(() => {});
           }
+          // Build Phase 5D-8 reputation map regardless of freshness status;
+          // BuyerQualityAnalyzer will skip pending/unavailable records internally.
+          if (rep) {
+            walletReputationMap.set(normalizeAddress(topBuyerWallets[i]), rep);
+          }
         }
         smartMoneyResult = analyzeSmartMoney(topBuyerWallets, network, [], resolvedReps);
       } else {
@@ -546,6 +555,9 @@ export class DeepScanService {
       // SmartMoney must never crash the main scan
       smartMoneyResult = analyzeSmartMoney([], network, [], []);
     }
+
+    // 5. Buyer Quality — invoked after reputations resolved so Phase 5D-8 data is available
+    const buyerQualityResult = analyzeBuyerQuality(txs, cexWallets, contractWallets, walletProfiles, walletReputationMap, meta?.creatorAddress);
 
     if (smartMoneyResult && buyerQualityResult) {
       buyerQualityResult.smartMoneyBuyerCount = smartMoneyResult.cohortSummary?.smartMoneyWalletCount ?? null;
@@ -939,6 +951,16 @@ export class DeepScanService {
     }
 
     // ─────────────────────────────────────────────
+    // Step 6C: Module 13 — Historical Behavior Analysis
+    // ─────────────────────────────────────────────
+    let historicalBehaviorResult: import('./types').HistoricalBehaviorResult | undefined;
+    try {
+      historicalBehaviorResult = analyzeHistoricalBehavior(ohlcv, txs);
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Module 13 historical behavior analysis failed (non-fatal):', err?.message);
+    }
+
+    // ─────────────────────────────────────────────
     // Step 7: Package Final Result
     // ─────────────────────────────────────────────
     const scanDurationMs = Date.now() - startTime;
@@ -973,6 +995,7 @@ export class DeepScanService {
       liquidityFragmentation: fragmentationResult,
       smartMoney: smartMoneyResult,
       liquidityStress: liquidityStressResult,
+      historicalBehavior: historicalBehaviorResult,
       riskScore: riskScoreResult,
       topRisks: riskScoreResult.topRisks,
       evidence: compiledEvidence,

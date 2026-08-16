@@ -25,6 +25,8 @@
 
 import type { HolderInfo } from '../../elevator/collectors/types';
 import type { EvmHolderDataset, WalletQualityProfile } from '../adapter-types';
+import fs from 'fs';
+import path from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -339,6 +341,60 @@ export interface AdaptGoldrushWalletHistoryOpts {
  *   Undefined / null timestamps in items are skipped — never substituted.
  *   Returns null rather than inventing a profile from empty data.
  */
+function getCexAddresses(): Record<string, string[]> {
+  try {
+    const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
+    if (fs.existsSync(cexAddressesPath)) {
+      const fileContent = fs.readFileSync(cexAddressesPath, 'utf8');
+      const data = JSON.parse(fileContent);
+      const res: Record<string, string[]> = {};
+      for (const [ch, list] of Object.entries(data)) {
+        if (Array.isArray(list)) {
+          res[ch] = list.map((item: any) => String(item.address).toLowerCase());
+        }
+      }
+      return res;
+    }
+  } catch (err) {
+    console.error('[classifyFundingSource] Failed to load cex-addresses.json:', err);
+  }
+  return {};
+}
+
+function classifyFundingSource(address: string, chain: string): 'cex' | 'bridge' | 'wallet' | 'contract' | 'unknown' {
+  const addrLower = address.toLowerCase();
+  
+  // 1. Check CEX
+  const cexList = getCexAddresses();
+  const chainCex = cexList[chain] || cexList[chain === 'eth' ? 'ethereum' : chain] || [];
+  if (chainCex.includes(addrLower)) {
+    return 'cex';
+  }
+
+  // 2. Check known system/contract addresses
+  const knownContracts = new Set([
+    '0x7a250d5630b4cf539739df2c5dacb4c659f2488d', // Uniswap V2 Router
+    '0xe592427a0ece92de3edee1f18e0157c05861564', // Uniswap V3 Router
+    '0x68b3465833fb72a70ecdf485e0e4c7bD8665Fc45', // Uniswap V3 SwapRouter02
+    '0x10ed43c718714eb63d5aa57b78b54704e256024e', // PancakeSwap V2 Router
+    '0x13f4ea83d0bd40e75c8222255bc855a974568dd4', // PancakeSwap V3 Router
+  ]);
+
+  if (knownContracts.has(addrLower)) {
+    return 'contract';
+  }
+
+  // 3. Known bridges
+  const knownBridges = new Set([
+    '0x40ec5db5351afba853b691b4edf49196ea0e99a2' // Polygon bridge etc.
+  ]);
+  if (knownBridges.has(addrLower)) {
+    return 'bridge';
+  }
+
+  return 'wallet';
+}
+
 export function adaptGoldrushWalletHistory(
   acc: GoldrushWalletPageAccumulator,
   opts: AdaptGoldrushWalletHistoryOpts
@@ -365,6 +421,55 @@ export function adaptGoldrushWalletHistory(
   const ageSeconds = Math.max(0, opts.fetchedAt - minTs);
   const walletAgeDays = Math.floor(ageSeconds / 86400);
 
+  // Trace funding source
+  const walletNorm = opts.walletAddress.toLowerCase();
+  let resolvedFundingAddress: string | null = null;
+  let resolvedFundingTxHash: string | null = null;
+
+  for (let i = acc.items.length - 1; i >= 0; i--) {
+    const tx = acc.items[i];
+    const txTo = tx.to_address ? String(tx.to_address).toLowerCase() : '';
+    const txFrom = tx.from_address ? String(tx.from_address).toLowerCase() : '';
+    const txValue = tx.value ? Number(tx.value) : 0;
+
+    // A. Native asset transfer to the wallet
+    if (txTo === walletNorm && txFrom !== walletNorm && txValue > 0) {
+      resolvedFundingAddress = txFrom;
+      resolvedFundingTxHash = tx.tx_hash ? String(tx.tx_hash).toLowerCase() : null;
+      break;
+    }
+
+    // B. Token transfer to the wallet
+    let tokenFunder: string | null = null;
+    if (Array.isArray(tx.log_events)) {
+      for (const log of tx.log_events) {
+        if (log.decoded?.name === 'Transfer') {
+          const params = log.decoded.params || [];
+          const fromParam = params.find((p: any) => p.name === 'from')?.value;
+          const toParam = params.find((p: any) => p.name === 'to')?.value;
+          if (fromParam && toParam) {
+            const from = String(fromParam).toLowerCase();
+            const to = String(toParam).toLowerCase();
+            if (to === walletNorm && from !== walletNorm) {
+              tokenFunder = from;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (tokenFunder) {
+      resolvedFundingAddress = tokenFunder;
+      resolvedFundingTxHash = tx.tx_hash ? String(tx.tx_hash).toLowerCase() : null;
+      break;
+    }
+  }
+
+  const fundingSourceType = resolvedFundingAddress
+    ? classifyFundingSource(resolvedFundingAddress, opts.chain)
+    : null;
+
   return {
     walletAddress: opts.walletAddress,
     chain:         opts.chain,
@@ -375,8 +480,8 @@ export function adaptGoldrushWalletHistory(
     lastUpdated:      opts.fetchedAt,
     coverage:         acc.wasCapped ? 'capped' : 'complete',
     provenance:       'goldrush',
-    fundingSource:     null,
-    fundingSourceType: null,
-    fundingTxHash:     null,
+    fundingSource:     resolvedFundingAddress,
+    fundingSourceType,
+    fundingTxHash:     resolvedFundingTxHash,
   };
 }

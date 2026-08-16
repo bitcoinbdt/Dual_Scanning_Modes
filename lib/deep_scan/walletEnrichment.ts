@@ -32,6 +32,14 @@ import {
   GOLDRUSH_WALLET_PAGE_SIZE,
   type GoldrushWalletPageAccumulator,
 } from '../providers/goldrush/adapter';
+import {
+  isHeliusConfigured,
+  fetchHeliusWalletTransactions,
+} from '../providers/helius/client';
+import {
+  adaptHeliusWalletHistory,
+  type HeliusWalletAccumulator,
+} from '../providers/helius/adapter';
 import type { WalletQualityProfile } from '../providers/adapter-types';
 
 /** Timeout (ms) for each individual page fetch during synchronous enrichment. */
@@ -39,6 +47,81 @@ const PAGE_FETCH_TIMEOUT_MS = 3000;
 
 /** Timeout (ms) for the entire synchronous top-N enrichment batch. */
 export const SYNC_ENRICHMENT_TIMEOUT_MS = 1500;
+
+/**
+ * Walk up to 5 pages of transactions from Helius for a Solana wallet.
+ * Returns a WalletQualityProfile or null if no history is found or provider fails.
+ * Never throws.
+ */
+export async function enrichSolanaWallet(
+  walletAddress: string
+): Promise<WalletQualityProfile | null> {
+  if (!isHeliusConfigured()) {
+    console.log('[WalletEnrichment] Helius not configured — skipping Solana enrichment.');
+    return null;
+  }
+
+  const acc: HeliusWalletAccumulator = {
+    items: [],
+    wasCapped: false,
+  };
+
+  const fetchedAt = Math.floor(Date.now() / 1000);
+  let before: string | undefined = undefined;
+
+  // Walk up to 5 pages (100 txs per page)
+  for (let page = 0; page < 5; page++) {
+    let data: any[];
+    try {
+      data = await fetchHeliusWalletTransactions(
+        walletAddress,
+        before,
+        100
+      );
+    } catch (err: any) {
+      console.warn(`[WalletEnrichment] Solana error fetching ${walletAddress} page ${page}:`, err?.message);
+      break; // Stop walk on error — partial data is still usable
+    }
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      break;
+    }
+
+    acc.items.push(...data);
+
+    const hasMore = data.length === 100;
+    if (!hasMore) {
+      console.log(
+        `[WalletEnrichment] Solana ${walletAddress}: complete walk (${acc.items.length} txs, ${page + 1} page(s))`
+      );
+      break;
+    }
+
+    // Set cursor for next page walk
+    before = data[data.length - 1].signature || data[data.length - 1].transactionID;
+
+    if (page === 4) {
+      // Reached the page limit
+      acc.wasCapped = true;
+      console.log(
+        `[WalletEnrichment] Solana ${walletAddress}: CAPPED at page 5 (${acc.items.length} txs)`
+      );
+    }
+  }
+
+  const profile = adaptHeliusWalletHistory(acc, { chain: 'solana', walletAddress, fetchedAt });
+
+  if (!profile) {
+    console.log(`[WalletEnrichment] Solana ${walletAddress}: no usable history found.`);
+  } else {
+    console.log(
+      `[WalletEnrichment] Solana ${walletAddress}: age=${profile.walletAgeDays}d ` +
+      `txs=${profile.transactionCount} coverage=${profile.coverage}`
+    );
+  }
+
+  return profile;
+}
 
 /**
  * Walk up to GOLDRUSH_MAX_WALLET_PAGES pages of transactions_v3 for one wallet.
@@ -49,6 +132,10 @@ export async function enrichSingleWallet(
   walletAddress: string,
   chain: string
 ): Promise<WalletQualityProfile | null> {
+  if (chain === 'solana') {
+    return enrichSolanaWallet(walletAddress);
+  }
+
   if (!isGoldrushConfigured()) {
     console.log('[WalletEnrichment] GoldRush not configured — skipping enrichment.');
     return null;

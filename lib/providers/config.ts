@@ -18,6 +18,7 @@ export interface ProviderConfig {
   bitquery: ProviderState & { authUrl: string };
   goplus: ProviderState;
   moralis: ProviderState;
+  helius: ProviderState;
 }
 
 export const PROVIDER_CONFIG: ProviderConfig = {
@@ -52,6 +53,11 @@ export const PROVIDER_CONFIG: ProviderConfig = {
     baseUrl: 'https://deep-index.moralis.io/api/v2.2',
     timeoutMs: 10_000,
   },
+  helius: {
+    enabled: typeof process !== 'undefined' && !!process.env.HELIUS_API_KEY,
+    baseUrl: 'https://api.helius.xyz/v0',
+    timeoutMs: 10_000,
+  },
 };
 
 export interface DiagnosticReport {
@@ -71,5 +77,6 @@ export function getProviderDiagnostics(): DiagnosticReport[] {
     { provider: 'bitquery', configured: PROVIDER_CONFIG.bitquery.enabled, baseUrl: PROVIDER_CONFIG.bitquery.baseUrl },
     { provider: 'goplus', configured: !!(typeof process !== 'undefined' && process.env.GOPLUS_API_KEY), baseUrl: PROVIDER_CONFIG.goplus.baseUrl },
     { provider: 'moralis', configured: PROVIDER_CONFIG.moralis.enabled, baseUrl: PROVIDER_CONFIG.moralis.baseUrl },
+    { provider: 'helius', configured: PROVIDER_CONFIG.helius.enabled, baseUrl: PROVIDER_CONFIG.helius.baseUrl },
   ];
 }

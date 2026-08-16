@@ -43,6 +43,7 @@ import {
   classifyLiquidityRegime,
   analyzeLiquidityStress,
 } from './lib/deep_scan/engines/LiquidityStressAnalyzer';
+import type { WalletQualityProfile } from './lib/providers/adapter-types';
 
 
 // Helper to create a minimal valid UniversalTransaction mock
@@ -2476,6 +2477,18 @@ async function runTests() {
   // ── Run Phase 5D-6 tests ──
   await runPhase5D6Tests();
 
+  // ── Run Phase 5D-7 tests ──
+  await runPhase5D7Tests();
+
+  // ── Run Phase 5D-8 tests ──
+  await runPhase5D8Tests();
+
+  // ── Run Phase 5D-9 tests ──
+  await runPhase5D9Tests();
+
+  // ── Run Module 13 tests ──
+  await runModule13Tests();
+
   console.log('\n==================================================');
   console.log(`TEST RUN COMPLETE: ${passedTests}/${totalTests} TESTS PASSED`);
   console.log('==================================================');
@@ -3907,4 +3920,1202 @@ async function runPhase5D6Tests() {
   console.log('\n--- Phase 5D-6 tests complete ---');
 }
 
+// ────────────────────────────────────────────────
+// Phase 5D-7: Wallet Quality & Funding Source Integration Tests
+// ────────────────────────────────────────────────
+async function runPhase5D7Tests() {
+  console.log('\n--- Phase 5D-7: Wallet Quality & Funding Source Integration Tests ---');
 
+  // Let's create some common mock transactions to analyze
+  const txs: UniversalTransaction[] = [
+    makeTx({ hash: 'tx1', from: '0x1', to: '0xbuyer1', amount: 100, type: 'buy' }),
+    makeTx({ hash: 'tx2', from: '0x2', to: '0xbuyer2', amount: 200, type: 'buy' }),
+    makeTx({ hash: 'tx3', from: '0x3', to: '0xbuyer3', amount: 300, type: 'buy' }),
+    makeTx({ hash: 'tx4', from: '0x4', to: '0xbuyer4', amount: 400, type: 'buy' }),
+    makeTx({ hash: 'tx5', from: '0x5', to: '0xbuyer5', amount: 500, type: 'buy' }),
+  ];
+
+  // Helper to create a wallet quality profile
+  const mkProfile = (addr: string, ageDays: number, txCount: number, activeDays: number, fundingSrc: string | null, fundingType: any = 'wallet'): WalletQualityProfile => ({
+    walletAddress: addr,
+    chain: 'eth',
+    firstSeenAt: new Date(Date.now() - ageDays * 86400 * 1000).toISOString(),
+    walletAgeDays: ageDays,
+    transactionCount: txCount,
+    activeDaysCount: activeDays,
+    lastUpdated: Math.floor(Date.now() / 1000),
+    coverage: 'complete',
+    provenance: 'goldrush',
+    fundingSource: fundingSrc,
+    fundingSourceType: fundingType,
+  });
+
+  // ────────────────────────────────────────────────
+  // 5D7-01: All buyers have diverse funding sources
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 10, 50, 10, '0xfunder1')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 12, 60, 12, '0xfunder2')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 15, 70, 15, '0xfunder3')],
+      ['0xbuyer4', mkProfile('0xbuyer4', 20, 80, 20, '0xfunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 30, 90, 30, '0xfunder5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    assert(result.status === 'ok', '5D7-01: analysis status is ok');
+    const metric = result.cohortMetrics;
+    assert(metric.profiledBuyerCount === 5, '5D7-01: profiledBuyerCount is 5');
+    assert(metric.largestFundingSourceBuyerCount === 1, '5D7-01: largestFundingSourceBuyerCount is 1');
+    assert(metric.largestFundingSourceBuyerRatio === 0.2, '5D7-01: largest ratio is 0.2 (1/5)');
+    const hfcFactor = result.negativeFactors.find(f => f.name === 'High Funding Concentration');
+    assert(!hfcFactor, '5D7-01: no High Funding Concentration warning');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-02: Multiple buyers share one funding source
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, '0xfunder_shared')],
+      ['0xbuyer4', mkProfile('0xbuyer4', 20, 80, 20, '0xfunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 20, 90, 30, '0xfunder5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.largestFundingSourceBuyerCount === 3, '5D7-02: largest shared group size is 3');
+    assert(metric.largestFundingSourceBuyerRatio === 0.6, '5D7-02: ratio is 0.6 (3/5)');
+    const hfcFactor = result.negativeFactors.find(f => f.name === 'High Funding Concentration');
+    assert(hfcFactor !== undefined, '5D7-02: High Funding Concentration penalty applied');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-03: Case-insensitive EVM funding address comparison
+  // ────────────────────────────────────────────────
+  {
+    // Use proper 42-char EVM addresses so normalizeAddress collapses mixed-case variants
+    const FUNDER_UPPER = '0xF1234567890123456789012345678901234ABCDE';
+    const FUNDER_LOWER = '0xf1234567890123456789012345678901234abcde';
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, FUNDER_UPPER)],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, FUNDER_LOWER)],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, FUNDER_LOWER)],
+      ['0xbuyer4', mkProfile('0xbuyer4', 20, 80, 20, '0xf0000000000000000000000000000000000000f4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 20, 90, 30, '0xf0000000000000000000000000000000000000f5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.largestFundingSourceBuyerCount === 3, '5D7-03: case-insensitivity works for EVM address comparison');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-04: Partial wallet profile coverage
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.profiledBuyerCount === 2, '5D7-04: profiledBuyerCount is 2');
+    assert(metric.largestFundingSourceBuyerCount === 2, '5D7-04: largest shared group size is 2');
+    assert(metric.largestFundingSourceBuyerRatio === 1.0, '5D7-04: ratio is computed against profiled wallets (2/2 = 1.0)');
+    // profileCoverage = 2/5 = 40% (exceeds minimum 20% limit), but profiledBuyerCount < minProfiledForConcentration (3)
+    // So concentration penalty is NOT applied.
+    const hfcFactor = result.negativeFactors.find(f => f.name === 'High Funding Concentration');
+    assert(!hfcFactor, '5D7-04: no concentration penalty since profiled count < min limit (3)');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-05: No wallet profiles
+  // ────────────────────────────────────────────────
+  {
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map());
+    const metric = result.cohortMetrics;
+    assert(metric.profiledBuyerCount === 0, '5D7-05: profiledBuyerCount is 0');
+    assert(metric.largestFundingSourceBuyerRatio === 0, '5D7-05: largest ratio is 0');
+    assert(result.unavailableMetrics.includes('fundingSourceAnalysis'), '5D7-05: fundingSourceAnalysis is unavailable');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-06: Fresh/low-activity buyer cohort
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 5, 2, 1, '0xfunder1')], // fresh, low activity
+      ['0xbuyer2', mkProfile('0xbuyer2', 4, 3, 1, '0xfunder2')], // fresh, low activity
+      ['0xbuyer3', mkProfile('0xbuyer3', 6, 1, 1, '0xfunder3')], // fresh, low activity
+      ['0xbuyer4', mkProfile('0xbuyer4', 30, 80, 20, '0xfunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 30, 90, 30, '0xfunder5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.lowActivityBuyerCount === 3, '5D7-06: lowActivityBuyerCount is 3');
+    assert(metric.lowActivityBuyerRatio === 0.6, '5D7-06: lowActivityBuyerRatio is 0.6 (3/5)');
+    assert(metric.freshBuyerCount === 3, '5D7-06: freshBuyerCount is 3');
+    assert(metric.freshBuyerRatio === 0.6, '5D7-06: freshBuyerRatio is 0.6 (3/5)');
+
+    const lowActFactor = result.negativeFactors.find(f => f.name === 'High Low-Activity Buyer Rate');
+    assert(lowActFactor !== undefined, '5D7-06: Low Activity penalty applied');
+    const freshFactor = result.negativeFactors.find(f => f.name === 'High Fresh Wallet Rate');
+    assert(freshFactor !== undefined, '5D7-06: Fresh Wallet penalty applied');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-07: Funding source type CEX
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared', 'cex')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared', 'cex')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, '0xfunder_shared', 'cex')],
+      ['0xbuyer4', mkProfile('0xbuyer4', 20, 80, 20, '0xfunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 20, 90, 30, '0xfunder5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.largestFundingSourceBuyerCount === 3, '5D7-07: largest funding source group size is 3');
+    assert(metric.largestFundingSourceBuyerRatio === 0.6, '5D7-07: ratio is 0.6');
+    const profile1 = walletProfiles.get('0xbuyer1')!;
+    assert(profile1.fundingSourceType === 'cex', '5D7-07: funding source type is CEX');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-08: Funding source type contract/wallet/bridge
+  // ────────────────────────────────────────────────
+  {
+    const profile = mkProfile('0xbuyer1', 10, 10, 5, '0xfunder', 'contract');
+    assert(profile.fundingSourceType === 'contract', '5D7-08: contract type accepted');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-09: Funding source unavailable
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, null)],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, null)],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, null)],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const metric = result.cohortMetrics;
+    assert(metric.uniqueFundingSourceCount === 0, '5D7-09: uniqueFundingSourceCount is 0 when fundingSource is null');
+    assert(metric.largestFundingSourceBuyerCount === 0, '5D7-09: largest group size is 0');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-10: Metrics not interpreted as cross-token win rate
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder')],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    assert(result.unavailableMetrics.includes('crossTokenHistory'), '5D7-10: crossTokenHistory is still unavailable');
+    assert(result.unavailableMetrics.includes('historicalWinRate'), '5D7-10: historicalWinRate is still unavailable');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-11: Existing SmartMoney reputation data
+  // ────────────────────────────────────────────────
+  {
+    const smartMoneyBuyerCount = 2;
+    const smartMoneyBuyerRatio = 0.4;
+    const smartMoneyBuyerConfidence = 90;
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map());
+    result.smartMoneyBuyerCount = smartMoneyBuyerCount;
+    result.smartMoneyBuyerRatio = smartMoneyBuyerRatio;
+    result.smartMoneyBuyerConfidence = smartMoneyBuyerConfidence;
+
+    assert(result.smartMoneyBuyerCount === 2, '5D7-11: smartMoneyBuyerCount is integrated correctly');
+    assert(result.smartMoneyBuyerRatio === 0.4, '5D7-11: smartMoneyBuyerRatio is integrated correctly');
+    assert(result.smartMoneyBuyerConfidence === 90, '5D7-11: smartMoneyBuyerConfidence is integrated');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-12: Regression test for existing Buyer Quality score
+  // ────────────────────────────────────────────────
+  {
+    // Baseline: 5 buyers, all single-use (no priceUsd so buy volumes = 0, erratic check skipped).
+    // Score = baseScore(60) - singleUse penalty(20, ratio=1.0 > 0.8 limit) = 40.
+    // totalBuyers=5 equals thinLimit(5) so no thin penalty.
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map());
+    assert(result.buyerQualityScore === 40, `5D7-12: baseline score matches expected 40 (got ${result.buyerQualityScore})`);
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-13: Evidence generation
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, '0xfunder_shared')],
+    ]);
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    
+    const evidence = {
+      evidenceId: 'buyer-cohort-analysis',
+      fact: `Profiled ${bqResult.cohortMetrics.profiledBuyerCount} buyer wallet(s).`,
+      metric: `Largest funding source shared by ${bqResult.cohortMetrics.largestFundingSourceBuyerCount} buyer(s) (${(bqResult.cohortMetrics.largestFundingSourceBuyerRatio! * 100).toFixed(1)}%).`,
+      signal: bqResult.buyerQualityScore < 50 ? 'risk' : 'normal',
+      traderImpact: 'Identifies potential coordination patterns',
+      confidence: bqResult.confidence,
+      sources: ['goldrush'],
+      generatedAt: Math.floor(Date.now() / 1000),
+    };
+
+    // 3 profiled buyers, all share one funding source → ratio = 3/3 = 100.0%
+    assert(evidence.sources.includes('goldrush'), '5D7-13: evidence source includes goldrush');
+    assert(evidence.metric.includes('100.0%'), '5D7-13: evidence metric calculates correct ratio string (3/3 profiled)');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-14: Trader Intelligence
+  // ────────────────────────────────────────────────
+  {
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, '0xfunder_shared')],
+    ]);
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+
+    const report = generateTraderIntelligenceReport({
+      tokenAddress: '0xToken',
+      tokenSymbol: 'TEST',
+      tokenName: 'Test Token',
+      network: 'eth',
+      ammSlippage: { status: 'ok', simulations: [], isThinLiquidity: false, evidenceIds: [] },
+      volumeConcentration: {
+        status: 'ok',
+        totalBuyVolumeUsd: 1500,
+        totalSellVolumeUsd: 0,
+        buySellRatio: 0,
+        uniqueBuyers: 5,
+        uniqueSellers: 0,
+        buyerHHI: { hhi: 0.2, concentrationLevel: 'low', topWallets: [] },
+        sellerHHI: { hhi: 0, concentrationLevel: 'low', topWallets: [] },
+        totalVolumeHHI: { hhi: 0.2, concentrationLevel: 'low', topWallets: [] },
+        elevatorWashTraderCount: 0,
+        elevatorWashVolumeUsd: 0,
+        washVolumeRatio: 0,
+        volumePriceDivergence: false,
+        organicScore: 100,
+        evidenceIds: [],
+      },
+      whaleBehavior: { status: 'ok', reason: '', dataSemanticWarning: '', supplyThresholdPct: 1, liquidityThresholdPct: 5, whales: [], activeWhaleCount: 0, totalWhaleSupplySharePct: 0, whaleNetInflow: 0, whaleNetOutflow: 0, phase: 'neutral', isDistributionRisk: false, evidenceIds: [] },
+      whaleExit: { status: 'ok', simulationDisclaimer: '', targetWallets: [], combinedObservedBalance: 0, scenarios: [], maxSeverity: 'low', evidenceIds: [] },
+      buyerQuality: bqResult,
+      marketRegime: { status: 'ok', regime: 'ACCUMULATION', confidence: 90, stats: undefined, regimeDescription: '', predictionDisclaimer: '', evidenceIds: [] },
+      capitalEfficiency: { status: 'ok', fdvToLiquidityRatio: 1.5, capitalSensitivityMultiplier: 2.0, sensitivity: 'medium', fdvUsd: 150000, totalLiquidityUsd: 100000, spotPriceUsd: 0.1, evidenceIds: [] },
+      riskScore: {
+        status: 'ok',
+        overallRiskScore: 35,
+        riskLevel: 'medium',
+        subScores: [],
+        topRisks: [],
+        mitigators: [],
+        confidence: 80,
+        evidenceIds: [],
+        sufficientData: true,
+        scoreCompleteness: 'complete',
+        availableModuleCount: 6,
+        totalModuleCount: 6,
+      },
+      evidence: [],
+      dataQuality: { staleDataWarning: false, elevatorDataReused: false, transactionCount: 5, ohlcvCandleCount: 0 },
+      limitations: [],
+      scanId: 'test-scan-id',
+      timestamp: Date.now(),
+    });
+
+    // 3 profiled, all share one funder → ratio = 3/3 = 100.0%
+    assert(report.buyerQualityAssessment.includes('Elevated funding concentration detected among profiled buyers: 100.0%'), '5D7-14: trader intelligence includes concentration notice');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D7-15: Configuration threshold behavior
+  // ────────────────────────────────────────────────
+  {
+    const originalThreshold = DEEP_SCAN_CONFIG.buyerQuality.phase5D7.fundingConcentrationThreshold;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D7.fundingConcentrationThreshold = 0.70;
+
+    const walletProfiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', 20, 50, 10, '0xfunder_shared')],
+      ['0xbuyer2', mkProfile('0xbuyer2', 20, 60, 12, '0xfunder_shared')],
+      ['0xbuyer3', mkProfile('0xbuyer3', 20, 70, 15, '0xfunder_shared')],
+      ['0xbuyer4', mkProfile('0xbuyer4', 20, 80, 20, '0xfunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', 20, 90, 30, '0xfunder5')],
+    ]);
+
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), walletProfiles);
+    const hfcFactor = result.negativeFactors.find(f => f.name === 'High Funding Concentration');
+    assert(!hfcFactor, '5D7-15: concentration warning NOT triggered since ratio 0.60 is below new threshold 0.70');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D7.fundingConcentrationThreshold = originalThreshold;
+  }
+
+  console.log('\n--- Phase 5D-7 tests complete ---');
+}
+
+async function runPhase5D8Tests() {
+  console.log('\n--- Phase 5D-8: Cross-Token History & Historical Win Rate Cohort Integration Tests ---');
+
+  // ── Shared helpers ──
+
+  const txs: UniversalTransaction[] = [
+    makeTx({ hash: 'tx1', from: '0x1', to: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', amount: 100, type: 'buy' }),
+    makeTx({ hash: 'tx2', from: '0x2', to: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', amount: 200, type: 'buy' }),
+    makeTx({ hash: 'tx3', from: '0x3', to: '0xcccccccccccccccccccccccccccccccccccccccc', amount: 300, type: 'buy' }),
+    makeTx({ hash: 'tx4', from: '0x4', to: '0xdddddddddddddddddddddddddddddddddddddddd', amount: 400, type: 'buy' }),
+    makeTx({ hash: 'tx5', from: '0x5', to: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', amount: 500, type: 'buy' }),
+  ];
+
+  const addrs = [
+    '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    '0xcccccccccccccccccccccccccccccccccccccccc',
+    '0xdddddddddddddddddddddddddddddddddddddddd',
+    '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+  ];
+
+  function mkRep(
+    addr: string,
+    opts: {
+      distinctTokensTraded?: number;
+      closedTradeCount?: number;
+      winRate?: number | null;
+      status?: SmartMoneyReputationRecord['status'];
+    } = {}
+  ): SmartMoneyReputationRecord {
+    return {
+      walletAddress: addr,
+      chain: 'eth',
+      distinctTokensTraded: opts.distinctTokensTraded ?? 0,
+      closedTradeCount: opts.closedTradeCount ?? 0,
+      winRate: opts.winRate ?? null,
+      status: opts.status ?? 'available',
+      freshness: 'FRESH',
+      lastUpdatedAt: new Date().toISOString(),
+      provider: 'test',
+    };
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-01: Cross-token ratio correctly computed
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      [addrs[0], mkRep(addrs[0], { distinctTokensTraded: 5, closedTradeCount: 10, winRate: 0.5 })],
+      [addrs[1], mkRep(addrs[1], { distinctTokensTraded: 2, closedTradeCount: 8, winRate: 0.6 })],
+      [addrs[2], mkRep(addrs[2], { distinctTokensTraded: 0, closedTradeCount: 3, winRate: 0.3 })],
+      [addrs[3], mkRep(addrs[3], { distinctTokensTraded: 0, closedTradeCount: 5, winRate: 0.4 })],
+      [addrs[4], mkRep(addrs[4], { distinctTokensTraded: 1, closedTradeCount: 7, winRate: 0.7 })],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const m = result.cohortMetrics;
+    assert(m.profiledReputationCount === 5, '5D8-01: profiledReputationCount is 5');
+    assert(m.crossTokenBuyerCount === 3, '5D8-01: crossTokenBuyerCount is 3');
+    assert(Math.abs((m.crossTokenBuyerRatio ?? -1) - 0.6) < 0.001, '5D8-01: crossTokenBuyerRatio is 0.6');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-02: Coverage gate blocks scoring when rep coverage < threshold
+  // ────────────────────────────────────────────────
+  {
+    const originalCoverage = DEEP_SCAN_CONFIG.buyerQuality.phase5D8.minimumReputationCoverage;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.minimumReputationCoverage = 0.60;
+
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      [addrs[0], mkRep(addrs[0], { distinctTokensTraded: 0, closedTradeCount: 10, winRate: 0.1 })],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const crossTokenFactor = result.negativeFactors.find(f => f.name === 'Low Cross-Token Activity');
+    const winRateFactor = result.negativeFactors.find(f => f.name === 'Low Cohort Historical Win Rate');
+    assert(!crossTokenFactor, '5D8-02: cross-token penalty NOT triggered when coverage gate fails');
+    assert(!winRateFactor, '5D8-02: win-rate penalty NOT triggered when coverage gate fails');
+    assert(result.unavailableMetrics.includes('crossTokenHistory'), '5D8-02: crossTokenHistory stays in unavailableMetrics when gate fails');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.minimumReputationCoverage = originalCoverage;
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-03: Low cross-token ratio triggers penalty
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 0, closedTradeCount: 0, winRate: null })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const factor = result.negativeFactors.find(f => f.name === 'Low Cross-Token Activity');
+    assert(factor !== undefined, '5D8-03: Low Cross-Token Activity factor triggered when ratio = 0');
+    assert(factor!.weight === -DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenPenalty, '5D8-03: penalty weight matches config');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-04: High cross-token ratio suppresses penalty
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 3, closedTradeCount: 5, winRate: 0.5 })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const factor = result.negativeFactors.find(f => f.name === 'Low Cross-Token Activity');
+    assert(!factor, '5D8-04: no cross-token penalty when ratio = 1.0');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-05: Low cohort avg win rate triggers penalty
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 1, closedTradeCount: 10, winRate: 0.20 })])
+    );
+    const baseResult = analyzeBuyerQuality(txs, new Set(), new Set(), new Map());
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const factor = result.negativeFactors.find(f => f.name === 'Low Cohort Historical Win Rate');
+    assert(factor !== undefined, '5D8-05: Low Cohort Historical Win Rate triggered when avg = 0.20');
+    assert(result.buyerQualityScore < baseResult.buyerQualityScore, '5D8-05: score is lower than baseline due to win-rate penalty');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-06: High cohort avg win rate grants bonus
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 5, closedTradeCount: 20, winRate: 0.80 })])
+    );
+    const baseResult = analyzeBuyerQuality(txs, new Set(), new Set(), new Map());
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const factor = result.positiveFactors.find(f => f.name === 'High Cohort Historical Win Rate');
+    assert(factor !== undefined, '5D8-06: High Cohort Historical Win Rate bonus present when avg = 0.80');
+    assert(result.buyerQualityScore > baseResult.buyerQualityScore, '5D8-06: score is higher than baseline due to win-rate bonus');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-07: Score clamped to [0, 100] with extreme penalties
+  // ────────────────────────────────────────────────
+  {
+    const origCP = DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenPenalty;
+    const origWRP = DEEP_SCAN_CONFIG.buyerQuality.phase5D8.lowWinRatePenalty;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenPenalty = 1000;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.lowWinRatePenalty = 1000;
+
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 0, closedTradeCount: 10, winRate: 0.10 })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    assert(result.buyerQualityScore >= 0, '5D8-07: score >= 0 even with extreme penalties');
+    assert(result.buyerQualityScore <= 100, '5D8-07: score <= 100');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenPenalty = origCP;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.lowWinRatePenalty = origWRP;
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-08: EVM mixed-case address normalisation
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      [normalizeAddress(addrs[0]), mkRep(addrs[0], { distinctTokensTraded: 3, closedTradeCount: 5, winRate: 0.55 })],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    assert((result.cohortMetrics.profiledReputationCount ?? 0) >= 1, '5D8-08: mixed-case address resolved via normalisation');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-09: Zero closed trades → cohortAvgWinRate is null
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 2, closedTradeCount: 0, winRate: null })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    assert(result.cohortMetrics.cohortAvgWinRate === null, '5D8-09: cohortAvgWinRate is null when all buyers have zero closed trades');
+    assert(result.unavailableMetrics.includes('historicalWinRate'), '5D8-09: historicalWinRate remains in unavailableMetrics when avg is null');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-10: Empty reputation map → no 5D-8 metrics
+  // ────────────────────────────────────────────────
+  {
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), new Map());
+    assert((result.cohortMetrics.profiledReputationCount ?? 0) === 0, '5D8-10: profiledReputationCount is 0');
+    assert(result.cohortMetrics.crossTokenBuyerRatio === undefined, '5D8-10: crossTokenBuyerRatio undefined');
+    assert(result.cohortMetrics.cohortAvgWinRate === undefined, '5D8-10: cohortAvgWinRate undefined');
+    assert(result.unavailableMetrics.includes('crossTokenHistory'), '5D8-10: crossTokenHistory in unavailableMetrics');
+    assert(result.unavailableMetrics.includes('historicalWinRate'), '5D8-10: historicalWinRate in unavailableMetrics');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-11: crossTokenHistory removed from unavailableMetrics when coverage gate met
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 5, closedTradeCount: 10, winRate: 0.50 })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    assert(!result.unavailableMetrics.includes('crossTokenHistory'), '5D8-11: crossTokenHistory removed when gate met');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-12: historicalWinRate removed from unavailableMetrics when avg win rate is valid
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 2, closedTradeCount: 5, winRate: 0.60 })])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    assert(!result.unavailableMetrics.includes('historicalWinRate'), '5D8-12: historicalWinRate removed when valid avg available');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-13: Config threshold override — custom crossTokenThreshold
+  // ────────────────────────────────────────────────
+  {
+    const origThreshold = DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenThreshold;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenThreshold = 0.80;
+
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      [addrs[0], mkRep(addrs[0], { distinctTokensTraded: 1, closedTradeCount: 5, winRate: 0.5 })],
+      [addrs[1], mkRep(addrs[1], { distinctTokensTraded: 1, closedTradeCount: 5, winRate: 0.5 })],
+      [addrs[2], mkRep(addrs[2], { distinctTokensTraded: 1, closedTradeCount: 5, winRate: 0.5 })],
+      [addrs[3], mkRep(addrs[3], { distinctTokensTraded: 0, closedTradeCount: 5, winRate: 0.5 })],
+      [addrs[4], mkRep(addrs[4], { distinctTokensTraded: 0, closedTradeCount: 5, winRate: 0.5 })],
+    ]);
+    // crossTokenBuyerRatio = 3/5 = 0.60 < new threshold 0.80 → penalty fires
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const factor = result.negativeFactors.find(f => f.name === 'Low Cross-Token Activity');
+    assert(factor !== undefined, '5D8-13: penalty fires when crossTokenBuyerRatio 0.60 < custom threshold 0.80');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D8.crossTokenThreshold = origThreshold;
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-14: TraderIntelligenceGenerator narrative includes cross-token and win-rate
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>(
+      addrs.map(a => [a, mkRep(a, { distinctTokensTraded: 3, closedTradeCount: 10, winRate: 0.70 })])
+    );
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+
+    const report = generateTraderIntelligenceReport({
+      tokenAddress: '0xToken', tokenSymbol: 'TST', tokenName: 'Test Token', network: 'eth',
+      scanId: 'test-5d8-14',
+      ammSlippage: { status: 'insufficient_data', reason: 'No pool data for test', evidenceIds: [] } as any,
+      volumeConcentration: { status: 'ok', uniqueBuyers: 5, uniqueSellers: 3, buyerHHI: { hhi: 0.2, concentrationLevel: 'low', topWallets: [] }, sellerHHI: { hhi: 0.1, concentrationLevel: 'low', topWallets: [] }, totalVolumeHHI: { hhi: 0.15, concentrationLevel: 'low', topWallets: [] }, elevatorWashTraderCount: 0, elevatorWashVolumeUsd: 0, washVolumeRatio: 0, volumePriceDivergence: false, organicScore: 100, totalBuyVolumeUsd: 1000, totalSellVolumeUsd: 800, buySellRatio: 1.25, evidenceIds: [] },
+      whaleBehavior: { status: 'ok', reason: '', dataSemanticWarning: '', supplyThresholdPct: 1, liquidityThresholdPct: 5, whales: [], activeWhaleCount: 0, totalWhaleSupplySharePct: 0, whaleNetInflow: 0, whaleNetOutflow: 0, phase: 'neutral', isDistributionRisk: false, evidenceIds: [] },
+      whaleExit: { status: 'ok', simulationDisclaimer: '', targetWallets: [], combinedObservedBalance: 0, scenarios: [], maxSeverity: 'low', evidenceIds: [] },
+      buyerQuality: bqResult,
+      marketRegime: { status: 'ok', regime: 'ACCUMULATION', confidence: 90, stats: undefined, regimeDescription: '', predictionDisclaimer: '', evidenceIds: [] },
+      capitalEfficiency: { status: 'ok', fdvToLiquidityRatio: 2, capitalSensitivityMultiplier: 1.5, sensitivity: 'low', fdvUsd: 200000, totalLiquidityUsd: 100000, spotPriceUsd: 1.0, evidenceIds: [] },
+      riskScore: { status: 'ok', overallRiskScore: 30, riskLevel: 'low', subScores: [], topRisks: [], mitigators: [], confidence: 80, evidenceIds: [], sufficientData: true, scoreCompleteness: 'complete', availableModuleCount: 6, totalModuleCount: 6 },
+      evidence: [],
+      dataQuality: { staleDataWarning: false, elevatorDataReused: false, transactionCount: 5, ohlcvCandleCount: 0 },
+      limitations: [],
+      timestamp: Date.now(),
+    });
+
+    assert(report.buyerQualityAssessment.includes('Cross-token activity:'), '5D8-14: narrative includes cross-token activity');
+    assert(report.buyerQualityAssessment.includes('Historical cohort win rate:'), '5D8-14: narrative includes historical win rate');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D8-15: Partial reputation data with mixed closed-trade counts
+  // ────────────────────────────────────────────────
+  {
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      [addrs[0], mkRep(addrs[0], { distinctTokensTraded: 2, closedTradeCount: 5, winRate: 0.60 })],
+      [addrs[1], mkRep(addrs[1], { distinctTokensTraded: 0, closedTradeCount: 8, winRate: 0.40 })],
+      [addrs[2], mkRep(addrs[2], { distinctTokensTraded: 1, closedTradeCount: 0, winRate: null })], // excluded from avg
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), reps);
+    const m = result.cohortMetrics;
+    assert(m.profiledReputationCount === 3, '5D8-15: profiledReputationCount is 3');
+    assert(m.crossTokenBuyerCount === 2, '5D8-15: crossTokenBuyerCount is 2');
+    // avg win rate = (0.60 + 0.40) / 2 = 0.50 (addrs[2] excluded — zero closed trades)
+    assert(m.cohortAvgWinRate != null && Math.abs(m.cohortAvgWinRate - 0.50) < 0.001, '5D8-15: cohortAvgWinRate = 0.50 (zero-closedTrade wallet excluded)');
+    // crossTokenBuyerRatio = 2/3 = 0.667 >= threshold 0.30 → no penalty
+    const crossTokenFactor = result.negativeFactors.find(f => f.name === 'Low Cross-Token Activity');
+    assert(!crossTokenFactor, '5D8-15: no cross-token penalty when ratio 0.667 >= threshold 0.30');
+  }
+
+  console.log('\n--- Phase 5D-8 tests complete ---');
+}
+
+async function runPhase5D9Tests() {
+  console.log('\n--- Phase 5D-9: Creator-Funded Buyer Detection Tests ---');
+
+  // ── Shared setup ──
+  const CREATOR = '0xCreatorAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+  const CREATOR_LOWER = CREATOR.toLowerCase();
+
+  const txs: UniversalTransaction[] = [
+    makeTx({ hash: 'tx1', from: '0x1', to: '0xbuyer1', amount: 100, type: 'buy' }),
+    makeTx({ hash: 'tx2', from: '0x2', to: '0xbuyer2', amount: 200, type: 'buy' }),
+    makeTx({ hash: 'tx3', from: '0x3', to: '0xbuyer3', amount: 300, type: 'buy' }),
+    makeTx({ hash: 'tx4', from: '0x4', to: '0xbuyer4', amount: 400, type: 'buy' }),
+    makeTx({ hash: 'tx5', from: '0x5', to: '0xbuyer5', amount: 500, type: 'buy' }),
+  ];
+
+  const mkProfile = (
+    addr: string,
+    fundingSrc: string | null,
+    fundingType: WalletQualityProfile['fundingSourceType'] = 'wallet'
+  ): WalletQualityProfile => ({
+    walletAddress: addr,
+    chain: 'eth',
+    firstSeenAt: new Date(Date.now() - 30 * 86400 * 1000).toISOString(),
+    walletAgeDays: 30,
+    transactionCount: 50,
+    activeDaysCount: 15,
+    lastUpdated: Math.floor(Date.now() / 1000),
+    coverage: 'complete',
+    provenance: 'goldrush',
+    fundingSource: fundingSrc,
+    fundingSourceType: fundingType,
+  });
+
+  // ────────────────────────────────────────────────
+  // 5D9-01: Zero creator-funded buyers
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', '0xSomeFunder1')],
+      ['0xbuyer2', mkProfile('0xbuyer2', '0xSomeFunder2')],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xSomeFunder3')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xSomeFunder4')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xSomeFunder5')],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const m = result.cohortMetrics;
+    assert(m.creatorFundedBuyerCount === 0, '5D9-01: creatorFundedBuyerCount is 0');
+    assert(m.creatorFundedBuyerRatio === 0, '5D9-01: creatorFundedBuyerRatio is 0');
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(!penalty, '5D9-01: no penalty factor when no creator-funded buyers');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-02: Single creator-funded buyer — count, ratio, and penalty
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],   // creator-funded
+      ['0xbuyer2', mkProfile('0xbuyer2', '0xOther1')],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther2')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther3')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther4')],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const m = result.cohortMetrics;
+    assert(m.creatorFundedBuyerCount === 1, '5D9-02: creatorFundedBuyerCount is 1');
+    // ratio = 1/5 = 0.20 > threshold 0.10 → penalty activates
+    assert(m.creatorFundedBuyerRatio !== undefined && Math.abs(m.creatorFundedBuyerRatio - 0.2) < 0.001,
+      '5D9-02: creatorFundedBuyerRatio is 0.2');
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(penalty !== undefined, '5D9-02: penalty factor is present when ratio > threshold');
+    assert(penalty!.weight === -DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingPenalty,
+      '5D9-02: penalty weight matches config');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-03: Mixed-case EVM address comparison
+  // ────────────────────────────────────────────────
+  {
+    const CREATOR_UPPER = '0xCREATORAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const CREATOR_MIXED = '0xCreatorAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR_UPPER)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR_MIXED)],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther2')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther3')],
+    ]);
+    // Pass creatorAddress in lowercase to verify normalization
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR_LOWER);
+    const m = result.cohortMetrics;
+    assert((m.creatorFundedBuyerCount ?? 0) === 2, '5D9-03: mixed-case addresses match via normalizeAddress');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-04: Excluded funding types (cex, bridge, contract)
+  // ────────────────────────────────────────────────
+  {
+    for (const excludedType of ['cex', 'bridge', 'contract'] as Array<WalletQualityProfile['fundingSourceType']>) {
+      const profiles = new Map<string, WalletQualityProfile>([
+        ['0xbuyer1', mkProfile('0xbuyer1', CREATOR, excludedType)],
+        ['0xbuyer2', mkProfile('0xbuyer2', '0xOther1')],
+        ['0xbuyer3', mkProfile('0xbuyer3', '0xOther2')],
+        ['0xbuyer4', mkProfile('0xbuyer4', '0xOther3')],
+        ['0xbuyer5', mkProfile('0xbuyer5', '0xOther4')],
+      ]);
+      const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+      const m = result.cohortMetrics;
+      assert((m.creatorFundedBuyerCount ?? 0) === 0,
+        `5D9-04: fundingSourceType '${excludedType}' is excluded from creator-funded match`);
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-05: Missing creatorAddress — no crash, no penalty
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR)],
+    ]);
+    // No creatorAddress supplied
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), undefined);
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(!penalty, '5D9-05: no penalty when creatorAddress is undefined');
+    assert(result.unavailableMetrics.includes('creatorFundingAnalysis'),
+      '5D9-05: creatorFundingAnalysis remains unavailable when creatorAddress missing');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-06: Ratio exactly at threshold — no penalty (uses strict >)
+  // ────────────────────────────────────────────────
+  {
+    // threshold = 0.10; 1 of 10 = 0.10 exactly
+    const moreTxs: UniversalTransaction[] = Array.from({ length: 10 }, (_, i) =>
+      makeTx({ hash: `tx${i}`, from: `0xf${i}`, to: `0xb${i}`, amount: 100, type: 'buy' })
+    );
+    const profileMap = new Map<string, WalletQualityProfile>();
+    for (let i = 0; i < 10; i++) {
+      profileMap.set(`0xb${i}`, mkProfile(`0xb${i}`, i === 0 ? CREATOR : `0xOther${i}`));
+    }
+    const result = analyzeBuyerQuality(moreTxs, new Set(), new Set(), profileMap, new Map(), CREATOR);
+    const m = result.cohortMetrics;
+    assert(m.creatorFundedBuyerRatio !== undefined && Math.abs(m.creatorFundedBuyerRatio - 0.10) < 0.001,
+      '5D9-06: ratio is exactly 0.10');
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(!penalty, '5D9-06: no penalty when ratio === threshold (strict > required)');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-07: Ratio above threshold — penalty fires exactly once
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR)],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther1')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther2')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther3')],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const penaltyFactors = result.negativeFactors.filter(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(penaltyFactors.length === 1, '5D9-07: penalty factor fires exactly once');
+    assert(penaltyFactors[0].weight === -DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingPenalty,
+      '5D9-07: penalty weight matches configured creatorFundingPenalty');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-08: Score clamping — score always stays in [0, 100]
+  // ────────────────────────────────────────────────
+  {
+    // All buyers are creator-funded — maximum penalty scenario
+    const profiles = new Map<string, WalletQualityProfile>(
+      txs.map((_, i) => [`0xbuyer${i + 1}`, mkProfile(`0xbuyer${i + 1}`, CREATOR)])
+    );
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    assert(result.buyerQualityScore >= 0 && result.buyerQualityScore <= 100,
+      '5D9-08: buyerQualityScore stays clamped in [0, 100]');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-09: Risk signal — high severity when ratio < 50%
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],   // 1 of 5 = 20%
+      ['0xbuyer2', mkProfile('0xbuyer2', '0xOther1')],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther2')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther3')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther4')],
+    ]);
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const riskResult = calculateRiskScore({
+      ammSlippage: { status: 'unavailable' } as any,
+      volumeConcentration: { status: 'unavailable' } as any,
+      whaleBehavior: { status: 'unavailable' } as any,
+      whaleExit: { status: 'unavailable' } as any,
+      buyerQuality: bqResult,
+      capitalEfficiency: { status: 'unavailable' } as any,
+      isHoneypot: false,
+    });
+    const signal = riskResult.topRisks.find(r => r.riskId === 'creator-funded-buyers');
+    assert(signal !== undefined, '5D9-09: creator-funded-buyers risk signal is emitted');
+    assert(signal!.severity === 'high', '5D9-09: severity is high when ratio = 20%');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-10: Risk signal — critical severity when ratio >= 50%
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR)],
+      ['0xbuyer3', mkProfile('0xbuyer3', CREATOR)],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther1')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther2')],
+    ]);
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const riskResult = calculateRiskScore({
+      ammSlippage: { status: 'unavailable' } as any,
+      volumeConcentration: { status: 'unavailable' } as any,
+      whaleBehavior: { status: 'unavailable' } as any,
+      whaleExit: { status: 'unavailable' } as any,
+      buyerQuality: bqResult,
+      capitalEfficiency: { status: 'unavailable' } as any,
+      isHoneypot: false,
+    });
+    const signal = riskResult.topRisks.find(r => r.riskId === 'creator-funded-buyers');
+    assert(signal !== undefined, '5D9-10: creator-funded-buyers signal emitted at 60% ratio');
+    assert(signal!.severity === 'critical', '5D9-10: severity is critical when ratio >= 50%');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-11: Trader Intelligence narrative
+  // ────────────────────────────────────────────────
+  {
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR)],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther2')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther3')],
+    ]);
+    const bqResult = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const riskResult = calculateRiskScore({
+      ammSlippage: { status: 'unavailable' } as any,
+      volumeConcentration: { status: 'unavailable' } as any,
+      whaleBehavior: { status: 'unavailable' } as any,
+      whaleExit: { status: 'unavailable' } as any,
+      buyerQuality: bqResult,
+      capitalEfficiency: { status: 'unavailable' } as any,
+      isHoneypot: false,
+    });
+    const report = generateTraderIntelligenceReport({
+      tokenAddress: '0xToken', tokenSymbol: 'TST', tokenName: 'Test', network: 'eth',
+      ammSlippage: { status: 'unavailable' } as any,
+      volumeConcentration: { status: 'unavailable' } as any,
+      whaleBehavior: { status: 'unavailable' } as any,
+      whaleExit: { status: 'unavailable' } as any,
+      buyerQuality: bqResult,
+      marketRegime: { status: 'unavailable' } as any,
+      capitalEfficiency: { status: 'unavailable' } as any,
+      riskScore: riskResult,
+      evidence: [], dataQuality: { staleDataWarning: false, elevatorDataReused: false, transactionCount: 5, ohlcvCandleCount: 0 },
+      limitations: [], scanId: 'scan-5d9-11', timestamp: Date.now(),
+    });
+    const narrative = report.buyerQualityAssessment ?? '';
+    assert(narrative.includes('Warning:'), '5D9-11: creator-funded warning present in narrative');
+    assert(narrative.includes('funding-source match with the token creator'), '5D9-11: narrative contains factual match description');
+    assert(!narrative.includes('controls these wallets'), '5D9-11: narrative does not make ownership claims');
+    assert(!narrative.includes('wash trading'), '5D9-11: narrative does not allege wash trading');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-12: Coverage below minimum — penalty and signal blocked
+  // ────────────────────────────────────────────────
+  {
+    const originalCoverage = DEEP_SCAN_CONFIG.buyerQuality.phase5D9.minimumProfileCoverage;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.minimumProfileCoverage = 0.90; // very high gate
+
+    // Only 1 of 5 buyers profiled → coverage = 0.20 < 0.90 → gate fails
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(!penalty, '5D9-12: penalty blocked when profile coverage < minimumProfileCoverage');
+
+    const bqResult = result;
+    const riskResult = calculateRiskScore({
+      ammSlippage: { status: 'unavailable' } as any,
+      volumeConcentration: { status: 'unavailable' } as any,
+      whaleBehavior: { status: 'unavailable' } as any,
+      whaleExit: { status: 'unavailable' } as any,
+      buyerQuality: bqResult,
+      capitalEfficiency: { status: 'unavailable' } as any,
+      isHoneypot: false,
+    });
+    const signal = riskResult.topRisks.find(r => r.riskId === 'creator-funded-buyers');
+    assert(!signal, '5D9-12: risk signal blocked when profile coverage < minimumProfileCoverage');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.minimumProfileCoverage = originalCoverage;
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-13: Empty profile map — no crash, graceful degraded state
+  // ────────────────────────────────────────────────
+  {
+    let threw = false;
+    try {
+      const result = analyzeBuyerQuality(txs, new Set(), new Set(), new Map(), new Map(), CREATOR);
+      const m = result.cohortMetrics;
+      assert((m.creatorFundedBuyerCount ?? 0) === 0, '5D9-13: count is 0 with empty profile map');
+      assert(m.creatorFundedBuyerRatio === undefined, '5D9-13: ratio is undefined with empty profile map');
+      assert(result.unavailableMetrics.includes('creatorFundingAnalysis'),
+        '5D9-13: creatorFundingAnalysis stays unavailable when no profiles resolved');
+    } catch {
+      threw = true;
+    }
+    assert(!threw, '5D9-13: analyzer does not throw with empty profile map');
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-14: Config override respected at runtime
+  // ────────────────────────────────────────────────
+  {
+    const originalThreshold = DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingThreshold;
+    const originalPenalty = DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingPenalty;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingThreshold = 0.50; // raise bar significantly
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingPenalty = 20;    // increase penalty
+
+    // 1 of 5 buyers funded by creator = 20% — below new threshold of 50% → no penalty
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', '0xOther1')],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xOther2')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther3')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther4')],
+    ]);
+    const result = analyzeBuyerQuality(txs, new Set(), new Set(), profiles, new Map(), CREATOR);
+    const penalty = result.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(!penalty, '5D9-14: no penalty when ratio (20%) < overridden threshold (50%)');
+
+    // 4 of 5 buyers = 80% — above new threshold → penalty fires with overridden amount
+    const profiles2 = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', CREATOR)],
+      ['0xbuyer2', mkProfile('0xbuyer2', CREATOR)],
+      ['0xbuyer3', mkProfile('0xbuyer3', CREATOR)],
+      ['0xbuyer4', mkProfile('0xbuyer4', CREATOR)],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther')],
+    ]);
+    const result2 = analyzeBuyerQuality(txs, new Set(), new Set(), profiles2, new Map(), CREATOR);
+    const penalty2 = result2.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected');
+    assert(penalty2 !== undefined, '5D9-14: penalty fires when ratio (80%) > overridden threshold (50%)');
+    assert(penalty2!.weight === -20, '5D9-14: overridden penalty amount of 20 is applied');
+
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingThreshold = originalThreshold;
+    DEEP_SCAN_CONFIG.buyerQuality.phase5D9.creatorFundingPenalty = originalPenalty;
+  }
+
+  // ────────────────────────────────────────────────
+  // 5D9-15: Regression — Phase 5D-7 and 5D-8 behavior unaffected
+  // ────────────────────────────────────────────────
+  {
+    // Phase 5D-7 regression: fundingConcentration still works correctly
+    const profiles = new Map<string, WalletQualityProfile>([
+      ['0xbuyer1', mkProfile('0xbuyer1', '0xSharedFunder')],
+      ['0xbuyer2', mkProfile('0xbuyer2', '0xSharedFunder')],
+      ['0xbuyer3', mkProfile('0xbuyer3', '0xSharedFunder')],
+      ['0xbuyer4', mkProfile('0xbuyer4', '0xOther')],
+      ['0xbuyer5', mkProfile('0xbuyer5', '0xOther2')],
+    ]);
+    // No creator address — should behave exactly as pre-5D9
+    const result5D7 = analyzeBuyerQuality(txs, new Set(), new Set(), profiles);
+    const hfcFactor = result5D7.negativeFactors.find(f => f.name === 'High Funding Concentration');
+    assert(hfcFactor !== undefined, '5D9-15: 5D-7 fundingConcentration penalty still fires without creatorAddress');
+    assert(!result5D7.negativeFactors.find(f => f.name === 'Creator-Funded Buyers Detected'),
+      '5D9-15: no creator-funded penalty when creatorAddress is not passed');
+
+    // Phase 5D-8 regression: crossTokenBuyerRatio still computed correctly
+    const reps = new Map<string, SmartMoneyReputationRecord>([
+      ['0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', chain: 'eth', distinctTokensTraded: 5, closedTradeCount: 10, winRate: 0.6, status: 'available', freshness: 'FRESH', lastUpdatedAt: new Date().toISOString(), provider: 'test' }],
+    ]);
+    const txsRep: UniversalTransaction[] = [
+      makeTx({ hash: 'r1', from: '0xf1', to: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', amount: 100, type: 'buy' }),
+    ];
+    const result5D8 = analyzeBuyerQuality(txsRep, new Set(), new Set(), new Map(), reps, undefined);
+    assert((result5D8.cohortMetrics.crossTokenBuyerCount ?? 0) === 1,
+      '5D9-15: 5D-8 crossTokenBuyerCount still correct with undefined creatorAddress');
+  }
+
+  console.log('\n--- Phase 5D-9 tests complete ---');
+}
+
+async function runModule13Tests() {
+  console.log('\n--- Module 13: Historical Behavior Cycle Analysis Tests ---');
+
+  const {
+    calculateMaxDrawdown,
+    detectPumpAndDump,
+    detectSlowRug,
+    calculateDistributionVelocity,
+    analyzeHistoricalBehavior,
+  } = await import('./lib/deep_scan/engines/HistoricalBehaviorAnalyzer');
+
+  const mkCandle = (ts: number, close: number, volume: number = 1000) => ({
+    timestamp: ts, open: close, close, volume,
+  });
+
+  // ────────────────────────────────────────────────
+  // M13-01: calculateMaxDrawdown — basic case
+  // ────────────────────────────────────────────────
+  {
+    // Rise to 100, drop to 40 (60% drawdown), recover to 120
+    const candles = [
+      mkCandle(1, 50),   // rising
+      mkCandle(2, 100),  // peak
+      mkCandle(3, 80),
+      mkCandle(4, 60),
+      mkCandle(5, 40),   // trough at -60%
+      mkCandle(6, 80),
+      mkCandle(7, 120),  // recovery above peak
+    ];
+    const dd = calculateMaxDrawdown(candles);
+    assert(dd !== null, 'M13-01: drawdown is not null');
+    assert(Math.abs((dd?.depthPercent ?? 0) - 60) < 1, `M13-01: depthPercent ~ 60% (got ${dd?.depthPercent?.toFixed(1)})`);
+    assert((dd?.durationCandles ?? 0) === 3, `M13-01: durationCandles is 3 (got ${dd?.durationCandles})`);
+    assert(dd?.recoveryCandles !== null, 'M13-01: recovery is found');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-02: calculateMaxDrawdown — no recovery
+  // ────────────────────────────────────────────────
+  {
+    const candles = [
+      mkCandle(1, 100),  // peak
+      mkCandle(2, 80),
+      mkCandle(3, 60),
+      mkCandle(4, 40),   // never recovers
+    ];
+    const dd = calculateMaxDrawdown(candles);
+    assert(dd !== null, 'M13-02: drawdown is not null even without recovery');
+    assert(dd?.recoveryCandles === null, 'M13-02: recoveryCandles is null when never recovers');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-03: detectPumpAndDump — detected
+  // ────────────────────────────────────────────────
+  {
+    // Low price, then rapid 200% pump with volume spike, then 80% dump
+    const candles = [
+      mkCandle(1, 10, 500),
+      mkCandle(2, 12, 600),
+      mkCandle(3, 30, 5000),  // spike start
+      mkCandle(4, 50, 8000),
+      mkCandle(5, 80, 12000), // volume spike
+      mkCandle(6, 90, 15000), // peak ~+800%
+      mkCandle(7, 60, 7000),
+      mkCandle(8, 30, 4000),
+      mkCandle(9, 15, 2000),  // -83% from peak
+      mkCandle(10, 12, 1000),
+    ];
+    const result = detectPumpAndDump(candles);
+    assert(result !== null, 'M13-03: pump-and-dump detection returns non-null');
+    assert(result?.detected === true, 'M13-03: pump-and-dump detected on extreme pump+dump candles');
+    assert((result?.confidence ?? 0) > 0, 'M13-03: confidence > 0 when detected');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-04: detectPumpAndDump — not detected on steady price
+  // ────────────────────────────────────────────────
+  {
+    // Steady price with no volatility
+    const candles = Array.from({ length: 10 }, (_, i) => mkCandle(i + 1, 100 + i, 1000));
+    const result = detectPumpAndDump(candles);
+    assert(result?.detected === false, 'M13-04: no pump-and-dump on steady upward price');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-05: detectSlowRug — detected
+  // ────────────────────────────────────────────────
+  {
+    // Gradually declining price and volume over 20 candles
+    const candles = Array.from({ length: 20 }, (_, i) => mkCandle(
+      i + 1,
+      100 - i * 4,    // price: 100 → 24 (-76%)
+      5000 - i * 230  // volume: 5000 → 630 (-87%)
+    ));
+    const result = detectSlowRug(candles);
+    assert(result !== null, 'M13-05: slow rug returns non-null result');
+    assert(result?.detected === true, 'M13-05: slow rug detected on gradual price+volume decline');
+    assert((result?.confidence ?? 0) > 0, 'M13-05: confidence > 0 when slow rug detected');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-06: detectSlowRug — not detected on healthy growth
+  // ────────────────────────────────────────────────
+  {
+    // Trending upward in both price and volume
+    const candles = Array.from({ length: 20 }, (_, i) => mkCandle(i + 1, 50 + i * 5, 1000 + i * 100));
+    const result = detectSlowRug(candles);
+    assert(result?.detected === false, 'M13-06: slow rug NOT detected on healthy upward trend');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-07: calculateDistributionVelocity — growing wallet distribution
+  // ────────────────────────────────────────────────
+  {
+    // First 10 txs: 5 unique wallets; next 10 txs: 10 unique wallets (growth)
+    const txs = [
+      ...Array.from({ length: 10 }, (_, i) => ({ timestamp: i + 1, from: `0xw${i % 5}`, to: '0xpool' })),
+      ...Array.from({ length: 10 }, (_, i) => ({ timestamp: i + 11, from: `0xw${i + 10}`, to: '0xpool' })),
+    ];
+    const result = calculateDistributionVelocity(txs);
+    assert(result !== null, 'M13-07: distribution velocity returns non-null with sufficient txs');
+    assert((result?.velocity ?? 0) > 0, 'M13-07: velocity > 0 when wallet count grows (second half has more unique wallets)');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-08: analyzeHistoricalBehavior — insufficient data gate
+  // ────────────────────────────────────────────────
+  {
+    // Fewer than 7 candles — should return insufficient_data
+    const candles = [
+      mkCandle(1, 100), mkCandle(2, 90), mkCandle(3, 80),
+    ];
+    const result = analyzeHistoricalBehavior(candles, []);
+    assert(result.status === 'insufficient_data', 'M13-08: status is insufficient_data with < 7 candles');
+    assert(result.maxDrawdown === null, 'M13-08: maxDrawdown is null when insufficient_data');
+    assert(result.pumpDump === null, 'M13-08: pumpDump is null when insufficient_data');
+    assert(result.slowRug === null, 'M13-08: slowRug is null when insufficient_data');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-09: analyzeHistoricalBehavior — full ok result
+  // ────────────────────────────────────────────────
+  {
+    // 16 candles: above 7-candle status gate AND 15-candle detectSlowRug gate
+    const candles = Array.from({ length: 16 }, (_, i) => mkCandle(i + 1, 100 - i * 3, 3000 - i * 100));
+    const result = analyzeHistoricalBehavior(candles, []);
+    assert(result.status === 'ok', `M13-09: status is ok with sufficient candles (got ${result.status})`);
+    assert(result.maxDrawdown !== null, 'M13-09: maxDrawdown is populated');
+    assert(result.pumpDump !== null, 'M13-09: pumpDump result is not null');
+    assert(result.slowRug !== null, 'M13-09: slowRug result is not null');
+  }
+
+  // ────────────────────────────────────────────────
+  // M13-10: empty candles returns insufficient_data (not a throw)
+  // ────────────────────────────────────────────────
+  {
+    let threw = false;
+    let result: any;
+    try {
+      result = analyzeHistoricalBehavior([], []);
+    } catch {
+      threw = true;
+    }
+    assert(!threw, 'M13-10: analyzeHistoricalBehavior does not throw on empty candles');
+    assert(result?.status === 'insufficient_data', 'M13-10: empty candles → insufficient_data');
+  }
+
+  console.log('\n--- Module 13 tests complete ---');
+}
