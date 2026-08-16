@@ -864,13 +864,390 @@ const deployerAddress = deployTx.from;
 
 ---
 
-**Document Version:** 1.2  
+## New Token Funnel Analysis System
+
+### Problem Statement
+Current scanner treats all tokens equally without considering token age. New tokens (0-7 days) have different risk profiles and behavior patterns compared to established tokens, requiring specialized analysis.
+
+### Solution: Age-Based Token Classification & Analysis
+
+#### 1. Token Age Categories
+
+**Category Definitions:**
+```typescript
+enum TokenAgeCategory {
+  BRAND_NEW = 'brand_new',    // 0-3 days
+  NEW = 'new',                 // 4-7 days  
+  ESTABLISHED = 'established'  // 8+ days
+}
+
+interface TokenAge {
+  category: TokenAgeCategory;
+  deployedAt: Date;
+  ageInHours: number;
+  ageInDays: number;
+}
+```
+
+**Thresholds:**
+- **Brand New Token:** 0-72 hours (0-3 days)
+- **New Token:** 73-168 hours (4-7 days)
+- **Established Token:** 169+ hours (8+ days)
+
+#### 2. Token Age Badge Display
+
+**Implementation Across All Scans:**
+
+**Visual Badge Design:**
+```
+┌──────────────────────┐
+│ 🆕 NEW TOKEN (2 days) │  ← Brand New (0-3 days) - Red/Orange
+└──────────────────────┘
+
+┌──────────────────────┐
+│ ⚠️  NEW (5 days)      │  ← New (4-7 days) - Yellow
+└──────────────────────┘
+
+No badge for established tokens (8+ days)
+```
+
+**Badge Properties:**
+- **0-3 days:** Prominent badge, high visibility (red/orange)
+- **4-7 days:** Warning badge, medium visibility (yellow)
+- **8+ days:** No badge (treated as established)
+
+**Display Locations:**
+1. **Basic Scan:** Top of results, next to token name/symbol
+2. **Elevator Scan:** Header section, next to token overview
+3. **Deep Scan:** Prominent position in main analysis card
+
+**Badge Components:**
+```typescript
+interface TokenAgeBadge {
+  show: boolean;
+  label: string;           // "NEW TOKEN" or "NEW"
+  severity: 'critical' | 'warning' | 'none';
+  ageText: string;         // "2 days" or "5 days"
+  tooltip: string;         // Full explanation
+}
+```
+
+#### 3. New Token Funnel Analysis (Deep Scan Only)
+
+**Specialized Analysis for 0-7 Day Old Tokens:**
+
+When Deep Scan detects a new token (0-7 days), perform additional funnel analysis:
+
+##### A. Launch Momentum Metrics
+
+```typescript
+interface LaunchMomentumAnalysis {
+  // Trading Activity
+  tradingVolume: {
+    first24h: number;
+    first72h: number;
+    last24h: number;
+    trend: 'growing' | 'declining' | 'stable';
+  };
+  
+  // Holder Growth
+  holderGrowth: {
+    currentHolders: number;
+    hourlyGrowthRate: number;
+    dailyGrowthRate: number;
+    trend: 'accelerating' | 'steady' | 'slowing';
+  };
+  
+  // Liquidity Evolution
+  liquidityGrowth: {
+    initialLiquidity: number;
+    currentLiquidity: number;
+    percentageChange: number;
+    added: boolean;  // Liquidity added post-launch
+    removed: boolean; // Liquidity removed post-launch
+  };
+}
+```
+
+##### B. Early Risk Indicators
+
+```typescript
+interface EarlyRiskIndicators {
+  // Deployer Behavior
+  deployerActivity: {
+    deploysMultipleTokens: boolean;
+    previousTokenCount: number;
+    previousTokensSuccessRate: number;  // % that survived >30 days
+    deployerReputation: 'trusted' | 'neutral' | 'suspicious' | 'flagged';
+  };
+  
+  // Initial Distribution Red Flags
+  distributionFlags: {
+    creatorHoldingsTooHigh: boolean;      // >5% of supply
+    concentratedTopHolders: boolean;      // Top 10 > 50% in first 3 days
+    suspiciousWalletClusters: boolean;    // Connected wallets
+    botActivity: boolean;                 // Automated trading patterns
+  };
+  
+  // Liquidity Red Flags
+  liquidityFlags: {
+    insufficientInitialLiquidity: boolean;  // Below chain-specific minimum
+    liquidityNotLocked: boolean;            // No lock detected
+    deployerCanRemoveLiquidity: boolean;    // Deployer is LP holder
+  };
+  
+  // Price Action Red Flags
+  priceFlags: {
+    extremeVolatility: boolean;           // >100% swings
+    pumpAndDumpPattern: boolean;          // Rapid spike then decline
+    suspiciousVolumeSpikes: boolean;      // Artificial volume
+  };
+}
+```
+
+##### C. New Token Survival Score
+
+```typescript
+interface NewTokenSurvivalScore {
+  score: number;  // 0-100
+  confidence: 'low' | 'medium' | 'high';
+  
+  factors: {
+    liquidityHealth: number;        // 0-25 points
+    holderDistribution: number;     // 0-25 points
+    deployerReputation: number;     // 0-20 points
+    tradingActivity: number;        // 0-15 points
+    contractSecurity: number;       // 0-15 points
+  };
+  
+  prediction: 'likely_rug' | 'high_risk' | 'moderate_risk' | 'promising';
+  recommendations: string[];
+}
+```
+
+##### D. Funnel Stages Visualization
+
+**New Token Lifecycle Funnel:**
+```
+┌─────────────────────────────────────────────────────┐
+│  NEW TOKEN FUNNEL ANALYSIS                          │
+│                                                     │
+│  Stage 1: Launch (0-24h)       ✓ PASSED            │
+│  ├─ Initial Liquidity Added    ✓ $12,500           │
+│  ├─ Contract Verified          ✓ Yes               │
+│  ├─ Ownership Renounced        ✗ No                │
+│  └─ First 24h Volume           ✓ $45,000           │
+│                                                     │
+│  Stage 2: Early Growth (24-72h) ⚠️  IN PROGRESS    │
+│  ├─ Holder Count Growth        ✓ +156 holders      │
+│  ├─ Liquidity Stability        ⚠️  -15% decrease   │
+│  ├─ Price Stability            ⚠️  High volatility │
+│  └─ Top Holders Distribution   ✓ Healthy (< 40%)   │
+│                                                     │
+│  Stage 3: Momentum (3-7 days)  ⏳ PENDING          │
+│  ├─ Sustained Volume           - Not yet           │
+│  ├─ Holder Retention           - Not yet           │
+│  ├─ Liquidity Lock             - Not yet           │
+│  └─ Community Engagement       - Not yet           │
+│                                                     │
+│  Survival Score: 62/100        Risk: MODERATE      │
+│  Prediction: Needs monitoring, mixed signals       │
+└─────────────────────────────────────────────────────┘
+```
+
+##### E. Time-Gated Analysis Features
+
+**Different checks based on age:**
+
+**0-24 hours (First Day):**
+- Initial liquidity adequacy
+- Contract verification status
+- Ownership status
+- First transactions analysis
+- Deployer history check
+
+**24-72 hours (First 3 Days):**
+- Holder growth rate
+- Liquidity changes (added/removed)
+- Price volatility patterns
+- Volume consistency
+- Whale accumulation
+
+**72-168 hours (Days 4-7):**
+- Trading volume trends
+- Holder retention rate
+- Community formation signals
+- Liquidity lock detection
+- Marketing/social presence
+
+#### 4. Integration Points
+
+**API Layer:**
+```typescript
+// New service endpoint
+POST /api/scan/analyze-new-token
+{
+  tokenAddress: string;
+  chain: string;
+}
+
+Response:
+{
+  tokenAge: TokenAge;
+  badge: TokenAgeBadge;
+  funnelAnalysis?: NewTokenFunnelAnalysis;  // Only if age < 7 days
+  survivalScore?: NewTokenSurvivalScore;     // Only if age < 7 days
+}
+```
+
+**Database Schema:**
+```sql
+-- Track new token analysis results
+CREATE TABLE new_token_analysis (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  token_address TEXT NOT NULL,
+  chain TEXT NOT NULL,
+  deployed_at TIMESTAMP NOT NULL,
+  age_category TEXT NOT NULL,  -- brand_new, new, established
+  
+  -- Funnel metrics
+  launch_momentum JSONB,
+  early_risk_indicators JSONB,
+  survival_score JSONB,
+  
+  -- Historical tracking
+  analyzed_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(token_address, chain)
+);
+
+-- Index for quick age-based queries
+CREATE INDEX idx_new_tokens_age ON new_token_analysis(deployed_at DESC, age_category);
+```
+
+#### 5. User Experience Flow
+
+**Scan Process:**
+```
+1. User submits token for scan
+   ↓
+2. Fetch deployment date
+   ↓
+3. Calculate token age
+   ↓
+4. If age < 7 days:
+   ├─ Show age badge prominently
+   ├─ Display age-appropriate warnings
+   └─ In Deep Scan: Run full funnel analysis
+   ↓
+5. Display results with age-specific insights
+```
+
+**Warning Messages by Age:**
+
+**0-3 days (Brand New):**
+```
+⚠️ BRAND NEW TOKEN (2 days old)
+This token was deployed recently and carries HIGH RISK. New tokens 
+are more susceptible to rug pulls, exploits, and price manipulation.
+Exercise extreme caution and only invest what you can afford to lose.
+```
+
+**4-7 days (New):**
+```
+⚠️ NEW TOKEN (5 days old)
+This token is still very new. While it has survived the first few days,
+continue to monitor liquidity, holder distribution, and trading patterns.
+Risk remains elevated for tokens under 1 week old.
+```
+
+#### 6. Implementation Checklist
+
+**Phase 1: Foundation (All Scans)**
+- [ ] Implement token age calculation logic
+- [ ] Create TokenAge and TokenAgeBadge TypeScript types
+- [ ] Design and implement age badge UI component
+- [ ] Add age badge to Basic Scan results
+- [ ] Add age badge to Elevator Scan results
+- [ ] Add age badge to Deep Scan results
+- [ ] Implement age-based warning messages
+- [ ] Add unit tests for age calculation
+
+**Phase 2: Database & Tracking**
+- [ ] Create new_token_analysis table schema
+- [ ] Set up indexes for performance
+- [ ] Create database functions for age queries
+- [ ] Implement historical tracking
+- [ ] Add RLS policies for data access
+
+**Phase 3: Funnel Analysis (Deep Scan Only)**
+- [ ] Implement LaunchMomentumAnalysis
+- [ ] Implement EarlyRiskIndicators
+- [ ] Implement NewTokenSurvivalScore algorithm
+- [ ] Create funnel stages visualization component
+- [ ] Implement time-gated analysis logic
+- [ ] Add deployer reputation tracking
+- [ ] Integrate with existing risk scoring
+
+**Phase 4: API & Services**
+- [ ] Create /api/scan/analyze-new-token endpoint
+- [ ] Extend existing scan APIs with age data
+- [ ] Implement caching for deployer history
+- [ ] Add rate limiting for funnel analysis
+- [ ] Create background job for historical tracking
+
+**Phase 5: Testing & Refinement**
+- [ ] Test with brand new tokens (0-3 days)
+- [ ] Test with new tokens (4-7 days)
+- [ ] Test with established tokens (8+ days)
+- [ ] Validate funnel analysis accuracy
+- [ ] Tune survival score algorithm
+- [ ] A/B test warning message effectiveness
+- [ ] Monitor false positive rates
+
+**Phase 6: Documentation & Monitoring**
+- [ ] Update API documentation
+- [ ] Create user-facing guide on new token risks
+- [ ] Set up analytics tracking for badge views
+- [ ] Monitor funnel analysis performance
+- [ ] Document survival score methodology
+
+#### 7. Success Metrics
+
+**Track effectiveness:**
+- Percentage of users who see new token badges
+- Engagement with new token warnings
+- Accuracy of survival score predictions
+- False positive/negative rates
+- User feedback on funnel analysis utility
+
+#### Priority: HIGH
+**Dependencies:** 
+- Requires Token Deployer Information Enhancement (deploy date)
+- Should be implemented immediately after deploy date feature
+
+**Impact:**
+- Improved risk assessment for new tokens
+- Better user protection against rug pulls
+- Enhanced analysis depth for early-stage tokens
+- Differentiated value proposition vs competitors
+
+---
+
+**Document Version:** 1.3  
 **Last Updated:** 2026-08-03  
 **Status:** Planning Phase  
 **Priority:** Medium-High (Post-Boost Feature Launch)
 
-**New Sections Added:**
-- Token Sniffer Analysis Features (Reference)
-- Token Deployer Information Enhancement (HIGH PRIORITY)
+**Sections in this Document:**
+1. Launchpad Integration Framework (Planning)
+2. Token Sniffer Analysis Features (Reference for Comparison)
+3. Token Deployer Information Enhancement (HIGH PRIORITY)
+4. New Token Funnel Analysis System (HIGH PRIORITY)
 
-**Purpose:** Benchmark comparison for security analysis features and track required enhancements
+**Purpose:** 
+- Benchmark comparison for security analysis features
+- Track required enhancements and future features
+- Document age-based token analysis requirements
+- Plan funnel analysis for early-stage token risk assessment
