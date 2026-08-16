@@ -518,7 +518,261 @@ Expected: Detect Raydium, show migration status
 
 ---
 
-**Document Version:** 1.0  
+## Token Sniffer Analysis Features (Reference for Comparison)
+
+### Overview
+Features observed from Token Sniffer results page that should be compared with current project implementation to identify gaps and opportunities for enhancement.
+
+### 1. Audit Score Display
+**Feature:** Overall security score (0-100)
+- Visual score display with color coding
+- Clear disclaimer about automated scanner limitations
+- Warning that high scores can still have hidden malicious code
+- Recommendation to consult multiple sources
+- Results regeneration frequency (15 minutes)
+
+**Components:**
+```
+- Score header with X/100 format
+- Disclaimer text about limitations
+- Timestamp of last scan/regeneration
+```
+
+### 2. Swap Analysis Section
+**Feature:** Honeypot detection via integrated service
+- **Provider:** honeypot.is
+- **Check:** "Token is sellable (not a honeypot) at this time"
+- Status indicator (✓ for pass)
+
+**Key Points:**
+- Third-party integration for swap testing
+- Real-time sellability verification
+- Clear pass/fail indicators
+
+### 3. Contract Analysis Section
+**Features checked:**
+
+#### a) Verified Contract Source
+- ✓ Contract source code is verified on blockchain explorer
+- Important for transparency and auditing
+
+#### b) Ownership Status
+- ✓ "Ownership renounced or source does not contain an owner contract"
+- Critical for preventing rug pulls
+- Checks if owner privileges have been removed
+
+#### c) Special Permissions Check
+- ✓ "Creator not authorized for special permission"
+- Verifies creator cannot execute privileged functions
+- Prevents hidden backdoors
+
+**Display Format:**
+```
+Contract Analysis
+  ✓ Verified contract source
+  ✓ Ownership renounced or source does not contain an owner contract
+  ✓ Creator not authorized for special permission
+```
+
+### 4. Holder Analysis Section
+**Features with "View Holders" link:**
+
+#### a) Creator Wallet Holdings
+- ✓ "Creator wallet contains less than 5% of circulating token supply (0%)"
+- Shows exact percentage
+- Critical threshold: 5%
+- Prevents creator dump risk
+
+#### b) Other Holders Distribution
+- ✓ "All other holders possess less than 5% of circulating token supply"
+- Ensures no whale concentration
+- Reduces manipulation risk
+
+#### c) Top 10 Holders Concentration
+- ✓ "Top 10 token holders possess less than 70% of circulating token supply (6.33%)"
+- Shows exact percentage
+- Critical threshold: 70%
+- Example shows healthy distribution at 6.33%
+
+**Display Format:**
+```
+Holder Analysis    [View Holders]
+  ✓ Creator wallet contains less than 5% of circulating token supply (0%)
+  ✓ All other holders possess less than 5% of circulating token supply
+  ✓ Top 10 token holders possess less than 70% of circulating token supply (6.33%)
+```
+
+### 5. Liquidity Analysis Section
+**Features with DEX/Locker integration:**
+
+#### a) Current Liquidity Check
+- ✗ "Adequate current liquidity"
+- Shows liquidity amount and DEX
+- Example: "< 0.01 BNB in PancakeSwap v3 1%"
+- Links to liquidity pool view
+- Failure indicator when insufficient
+- Warning message: "Not enough liquidity is present which could potentially cause high slippage and other problems when swapping"
+
+#### b) Liquidity Lock Status
+- ✗ "At least 95% of largest pool's liquidity burned/locked for 15 days or longer (0%)"
+- Shows exact lock percentage
+- Time threshold: 15 days minimum
+- Critical for preventing liquidity rug pulls
+
+**Display Format:**
+```
+Liquidity Analysis
+  Please see the list of supported DEXes and lockers.
+  
+  ✗ Adequate current liquidity
+    < 0.01 BNB in PancakeSwap v3 1%  [View LP]
+    Warning: Not enough liquidity is present which could potentially cause 
+    high slippage and other problems when swapping.
+  
+  ✗ At least 95% of largest pool's liquidity burned/locked for 15 days or longer (0%)
+```
+
+### 6. Integration Points Noted
+
+#### External Services:
+1. **honeypot.is** - Swap/sellability testing
+2. **DEX Integration** - Liquidity data (PancakeSwap v3, Uniswap, etc.)
+3. **Liquidity Lockers** - Lock verification (Team Finance, Unicrypt, PinkLock, etc.)
+4. **Blockchain Explorers** - Contract verification status
+
+### 7. Key Thresholds & Criteria
+
+| Metric | Threshold | Status |
+|--------|-----------|--------|
+| Creator Holdings | < 5% | CRITICAL |
+| Individual Holder | < 5% | IMPORTANT |
+| Top 10 Holders | < 70% | IMPORTANT |
+| Liquidity Lock | ≥ 95% for 15+ days | CRITICAL |
+| Minimum Liquidity | Chain-specific minimum | IMPORTANT |
+| Contract Verification | Must be verified | IMPORTANT |
+| Ownership | Should be renounced | CRITICAL |
+| Special Permissions | Should be disabled | CRITICAL |
+
+### 8. UI/UX Patterns Observed
+
+#### Visual Indicators:
+- ✓ Green checkmark for passed tests
+- ✗ Red X for failed tests
+- Color coding for severity
+
+#### Information Architecture:
+```
+Score (prominent at top)
+↓
+Disclaimer (immediately after score)
+↓
+Swap Analysis (first security check)
+↓
+Contract Analysis (code-level checks)
+↓
+Holder Analysis (distribution checks)
+↓
+Liquidity Analysis (market depth checks)
+```
+
+#### Interactive Elements:
+- "View Holders" link for detailed holder breakdown
+- "View LP" link to see liquidity pool details
+- External links to honeypot.is, DEX interfaces
+- Link to supported DEXes and lockers list
+
+### 9. Warning & Error Messages
+
+#### Examples Observed:
+1. **Score Disclaimer:**
+   ```
+   "A token with a high score may still have hidden malicious code. 
+   The score is not advice and should be considered along with other factors. 
+   Always do your own research and consult multiple sources of information."
+   ```
+
+2. **Liquidity Warning:**
+   ```
+   "Not enough liquidity is present which could potentially cause high 
+   slippage and other problems when swapping."
+   ```
+
+3. **Result Freshness:**
+   ```
+   "Results are regenerated every 15 minutes"
+   ```
+
+### 10. Comparison Checklist (For Future Review)
+
+**To be compared with current project:**
+
+- [ ] Do we have an overall audit score (0-100)?
+- [ ] Do we check honeypot status via external service?
+- [ ] Do we verify contract source code verification?
+- [ ] Do we check ownership renouncement?
+- [ ] Do we check special permissions/backdoors?
+- [ ] Do we analyze creator wallet holdings?
+- [ ] Do we check individual holder concentrations?
+- [ ] Do we analyze top 10 holder distribution?
+- [ ] Do we verify adequate liquidity levels?
+- [ ] Do we check liquidity lock status and duration?
+- [ ] Do we integrate with DEX APIs for liquidity data?
+- [ ] Do we integrate with liquidity locker services?
+- [ ] Do we provide "View Holders" detailed breakdown?
+- [ ] Do we show exact percentages for holdings?
+- [ ] Do we have clear pass/fail visual indicators?
+- [ ] Do we display warnings for failed checks?
+- [ ] Do we have appropriate disclaimers?
+- [ ] Do we show scan timestamp/freshness?
+- [ ] Do we link to external explorers/DEXes?
+- [ ] Do we support multiple chains (BSC, ETH, Solana)?
+
+### 11. Enhancement Opportunities
+
+Based on Token Sniffer analysis, potential improvements:
+
+1. **Score Aggregation System**
+   - Combine multiple check results into single 0-100 score
+   - Weight different checks by importance
+   - Visual score display with color coding
+
+2. **Enhanced Holder Analysis**
+   - Real-time holder distribution data
+   - Top N holders detailed breakdown
+   - Whale alert thresholds
+   - Historical holder trend tracking
+
+3. **Liquidity Monitoring**
+   - Multi-DEX liquidity aggregation
+   - Liquidity locker integration (Team Finance, Unicrypt, PinkLock)
+   - Minimum liquidity thresholds per chain
+   - LP token tracking and burn verification
+
+4. **Contract Security Deep Dive**
+   - Ownership status verification
+   - Special permissions audit
+   - Backdoor detection
+   - Proxy contract analysis
+
+5. **Third-Party Integrations**
+   - honeypot.is API integration
+   - DEX API integrations (PancakeSwap, Uniswap, Raydium)
+   - Liquidity locker APIs
+   - Block explorer APIs for verification status
+
+6. **User Experience**
+   - Clear pass/fail indicators with icons
+   - Contextual warnings for failed checks
+   - Detailed explanations for each metric
+   - "View Details" links for deep dives
+   - Timestamp showing data freshness
+
+---
+
+**Document Version:** 1.1  
 **Last Updated:** 2026-08-03  
 **Status:** Planning Phase  
 **Priority:** Medium-High (Post-Boost Feature Launch)
+
+**New Section Added:** Token Sniffer Analysis Features (Reference)  
+**Purpose:** Benchmark comparison for security analysis features
