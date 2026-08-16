@@ -1,11 +1,11 @@
 import {
-  OHLCVCandle,
   DrawdownInfo,
   PumpDumpAnalysis,
   SlowRugAnalysis,
   DistributionVelocityResult,
   HistoricalBehaviorResult
 } from '../types';
+import { OHLCVCandle } from '../../elevator/collectors/types';
 
 /** Minimum candles required to perform analysis. */
 const MIN_CANDLES = 7;

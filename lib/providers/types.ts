@@ -2,7 +2,7 @@
  * Provider-level Types and Interfaces
  */
 
-export type ProviderName = 'goldrush' | 'alchemy' | 'uniswap' | 'bitquery' | 'goplus' | 'moralis';
+export type ProviderName = 'goldrush' | 'alchemy' | 'uniswap' | 'bitquery' | 'goplus' | 'moralis' | 'helius';
 
 export interface ProviderStatus {
   provider: ProviderName;
