@@ -1235,7 +1235,953 @@ Risk remains elevated for tokens under 1 week old.
 
 ---
 
-**Document Version:** 1.3  
+## Launchpad-Specific Funnel Analysis
+
+### Problem Statement
+Tokens launched on Solana launchpads (Pump.fun, Raydium LaunchLab) require **different analysis funnels** compared to regular tokens. These platforms use bonding curves and structured migration systems that create unique risk patterns and success indicators.
+
+### Solution: Dynamic Funnel Selection Based on Launch Platform
+
+When a token is detected from a specific launchpad, apply a specialized analysis framework tailored to that platform's mechanics.
+
+---
+
+### 1. Pump.fun Bonding Curve Analysis
+
+#### A. Bonding Curve Mechanics Understanding
+
+**How Pump.fun Works:**
+```
+Launch Phase (Bonding Curve)
+├─ Token created on bonding curve
+├─ Price increases as more SOL deposited
+├─ Graduation target: ~85 SOL in curve
+└─ At graduation: Auto-migrates to Raydium CPMM
+
+Post-Graduation Phase
+├─ Liquidity locked on Raydium
+├─ Free market trading begins
+└─ Creator receives no LP tokens (fair launch)
+```
+
+**Key Metrics to Track:**
+```typescript
+interface PumpFunBondingCurveData {
+  // Curve Progress
+  curveProgress: {
+    currentSOL: number;           // SOL currently in curve
+    targetSOL: number;            // SOL needed for graduation (typically 85)
+    percentComplete: number;      // 0-100%
+    remainingSOL: number;         // SOL left to graduate
+  };
+  
+  // Curve Activity
+  curveActivity: {
+    totalBuys: number;
+    totalSells: number;
+    buyToSellRatio: number;       // >1 is bullish
+    uniqueBuyers: number;
+    uniqueSellers: number;
+    avgBuySize: number;           // In SOL
+    avgSellSize: number;          // In SOL
+  };
+  
+  // Migration Status
+  migration: {
+    hasGraduated: boolean;
+    graduatedAt?: Date;
+    raydiumPoolAddress?: string;
+    initialRaydiumLiquidity?: number;
+    timeSinceLaunch: number;      // Hours to graduation
+  };
+}
+```
+
+#### B. Pump.fun Specific Funnel Stages
+
+**Stage 1: Curve Launch (0-1 hour)**
+```typescript
+interface CurveLaunchAnalysis {
+  checks: {
+    // Initial Activity
+    earlyMomentum: {
+      firstHourBuyers: number;          // Should be >10 for organic
+      firstHourVolume: number;          // In SOL
+      isOrganic: boolean;               // vs bot activity
+      suspiciousPatterns: string[];     // Detected issues
+    };
+    
+    // Creator Analysis
+    creatorBehavior: {
+      soldImmediately: boolean;         // Red flag if true
+      percentageSold: number;           // % of initial holdings sold
+      stillHolding: boolean;            // Creator still invested
+      creatorAddress: string;
+      otherTokensCreated: number;       // How many other tokens
+      otherTokensAbandoned: number;     // How many failed/rugged
+    };
+    
+    // Social Signals
+    socialPresence: {
+      hasTelegram: boolean;
+      hasTwitter: boolean;
+      hasWebsite: boolean;
+      socialLinksVerified: boolean;
+      communitySize: number;
+    };
+  };
+  
+  score: number;  // 0-100
+  flags: string[];
+  recommendation: 'proceed' | 'caution' | 'avoid';
+}
+```
+
+**Stage 2: Curve Progress (1 hour - Pre-Graduation)**
+```typescript
+interface CurveProgressAnalysis {
+  // Graduation Momentum
+  graduationMetrics: {
+    currentProgress: number;          // % to graduation
+    progressRate: number;             // SOL/hour rate
+    estimatedGraduationTime: number;  // Hours remaining
+    progressTrend: 'accelerating' | 'steady' | 'stalling';
+    likelihoodToGraduate: number;    // 0-100%
+  };
+  
+  // Trading Health
+  tradingHealth: {
+    buyPressure: number;              // 0-100 score
+    sellPressure: number;             // 0-100 score
+    priceStability: number;           // Low volatility = healthy
+    liquidityDepth: number;           // SOL in curve
+    slippageEstimate: number;         // % for 1 SOL trade
+  };
+  
+  // Holder Distribution
+  holderAnalysis: {
+    totalHolders: number;
+    holdersGrowthRate: number;        // Holders/hour
+    topHolderConcentration: number;   // % held by top 10
+    creatorPercentage: number;        // % held by creator
+    suspiciousWallets: number;        // Connected wallets detected
+    avgHoldingSize: number;           // In tokens
+  };
+  
+  // Red Flags
+  warningFlags: {
+    curveStalled: boolean;            // No progress in 6+ hours
+    massiveSelloff: boolean;          // >20% curve drained in 1 hour
+    botActivity: boolean;             // Suspicious trading patterns
+    creatorDumping: boolean;          // Creator selling >50%
+    lowUniqueHolders: boolean;        // <20 holders after 6 hours
+  };
+}
+```
+
+**Stage 3: Post-Graduation (After Raydium Migration)**
+```typescript
+interface PostGraduationAnalysis {
+  // Migration Health
+  migrationMetrics: {
+    graduationSuccessful: boolean;
+    raydiumPoolCreated: boolean;
+    liquidityAmount: number;          // In USD
+    liquidityLocked: boolean;         // Always true for Pump.fun
+    timeSinceGraduation: number;      // Hours
+  };
+  
+  // Post-Migration Performance
+  postGradPerformance: {
+    priceChange24h: number;           // % change since graduation
+    volumeChange: number;             // Volume before vs after
+    holderRetention: number;          // % of holders still holding
+    newHolderGrowth: number;          // New holders post-grad
+    liquidityStable: boolean;         // No unusual LP changes
+  };
+  
+  // Market Maturity
+  maturitySignals: {
+    sustainedVolume: boolean;         // >$10k daily for 3+ days
+    holdersGrowing: boolean;          // Consistent new holders
+    priceStabilizing: boolean;        // Lower volatility
+    communityActive: boolean;         // Social engagement
+  };
+}
+```
+
+#### C. Pump.fun Risk Scoring Algorithm
+
+```typescript
+interface PumpFunRiskScore {
+  overallScore: number;  // 0-100 (higher is safer)
+  
+  componentScores: {
+    creatorTrustworthiness: number;   // 0-25 points
+    curveHealth: number;              // 0-25 points
+    holderDistribution: number;       // 0-20 points
+    tradingActivity: number;          // 0-15 points
+    socialPresence: number;           // 0-15 points
+  };
+  
+  riskLevel: 'extreme' | 'high' | 'moderate' | 'low';
+  
+  specificFlags: {
+    creatorFlags: string[];           // "Previously rugged 3 tokens"
+    curveFlags: string[];             // "Stalled at 45% for 12 hours"
+    holderFlags: string[];            // "Top 5 wallets hold 80%"
+    activityFlags: string[];          // "Suspicious bot activity"
+  };
+  
+  recommendation: {
+    action: 'avoid' | 'extreme_caution' | 'monitor' | 'consider';
+    reasoning: string[];
+    suggestedWaitTime?: string;       // "Wait for graduation" or "Wait 3 days post-grad"
+  };
+}
+```
+
+---
+
+### 2. Raydium LaunchLab Token Analysis
+
+#### A. Raydium LaunchLab Mechanics
+
+**How Raydium LaunchLab Works:**
+```
+Launch Phase (CLMM Pool)
+├─ Token launched in Concentrated Liquidity Pool
+├─ Creator provides initial liquidity
+├─ Can migrate to AMM pool later
+└─ Creator controls migration timing
+
+Migration Options
+├─ migrate_to_amm: Traditional AMM pool (XYK)
+├─ migrate_to_cpswap: Constant product swap
+└─ Or stay in CLMM indefinitely
+```
+
+**Key Difference from Pump.fun:**
+- Creator has MORE control (can remove liquidity)
+- No forced graduation mechanism
+- Requires liquidity lock verification
+- Higher rug pull risk potential
+
+#### B. Raydium LaunchLab Funnel Stages
+
+**Stage 1: Launch Analysis (0-24 hours)**
+```typescript
+interface RaydiumLaunchAnalysis {
+  // Initial Liquidity Setup
+  liquiditySetup: {
+    initialLiquidityUSD: number;
+    liquidityProvider: string;        // Deployer wallet
+    liquidityLocked: boolean;         // CRITICAL CHECK
+    lockDuration: number;             // Days locked
+    lockContract: string;             // Locker address
+    canRemoveLiquidity: boolean;      // Red flag if true
+  };
+  
+  // Pool Configuration
+  poolConfig: {
+    poolType: 'CLMM' | 'AMM' | 'CPSWAP';
+    feeRate: number;                  // Trading fee %
+    priceRange?: {                    // For CLMM pools
+      min: number;
+      max: number;
+      concentration: number;          // How tight the range
+    };
+  };
+  
+  // Deployer Background
+  deployerAnalysis: {
+    walletAddress: string;
+    walletAge: number;                // Days since first tx
+    previousLaunches: number;
+    successfulLaunches: number;       // Still active after 30d
+    ruggedLaunches: number;           // Liquidity pulled <7d
+    reputationScore: number;          // 0-100
+    
+    // Current Holdings
+    currentHoldings: {
+      tokenPercentage: number;        // % of supply held
+      lpTokensOwned: boolean;         // Owns LP = can rug
+      recentTransfers: Array<{
+        type: 'buy' | 'sell' | 'transfer';
+        amount: number;
+        timestamp: Date;
+        toAddress?: string;
+      }>;
+    };
+    
+    // Wallet Behavior Patterns
+    behaviorPatterns: {
+      normalTrader: boolean;          // Regular trading activity
+      serialRugger: boolean;          // Pattern of rugs
+      longTermHolder: boolean;        // Holds own tokens long-term
+      liquidityProvider: boolean;     // Regular LP provider
+      suspiciousActivity: string[];   // Detected red flags
+    };
+  };
+  
+  // Social & Documentation
+  projectCredibility: {
+    whitepaper: boolean;
+    auditReport: boolean;
+    doxxedTeam: boolean;
+    verifiedSocials: boolean;
+    roadmapPublic: boolean;
+    githubActive: boolean;
+  };
+}
+```
+
+**Stage 2: Ongoing Monitoring (24h - 7 days)**
+```typescript
+interface RaydiumOngoingAnalysis {
+  // Liquidity Monitoring (MOST CRITICAL)
+  liquidityTracking: {
+    currentLiquidity: number;
+    liquidityChanges: Array<{
+      timestamp: Date;
+      type: 'added' | 'removed';
+      amount: number;
+      byAddress: string;
+    }>;
+    
+    // Red Flags
+    liquidityDecreasing: boolean;     // MAJOR RED FLAG
+    suddenWithdrawals: boolean;       // IMMEDIATE ALERT
+    deployerWithdrawing: boolean;     // RUG PULL INDICATOR
+    
+    // Health Metrics
+    liquidityStability: number;       // 0-100 score
+    liquidityGrowth: number;          // % change
+    liquidityToMcapRatio: number;     // Should be >5%
+  };
+  
+  // Deployer Wallet Behavior Tracking
+  deployerBehavior: {
+    dailyActivity: {
+      buysCount: number;
+      sellsCount: number;
+      transfersOut: number;           // To other wallets
+      lpTokensTransferred: boolean;   // CRITICAL RED FLAG
+    };
+    
+    // Behavioral Analysis
+    holdingPattern: {
+      stillHolding: number;           // % of initial holding
+      averageHoldTime: number;        // Hours
+      sellingPressure: number;        // 0-100 score
+      dumpRisk: 'low' | 'medium' | 'high' | 'imminent';
+    };
+    
+    // Connected Wallet Detection
+    relatedWallets: {
+      suspiciousConnections: number;  // Wallets with similar patterns
+      possibleSybil: boolean;         // Multiple wallets by same entity
+      coordinatedActivity: boolean;   // Synchronized trading
+      connectedAddresses: string[];
+    };
+  };
+  
+  // Top Holders Analysis
+  topHoldersTracking: {
+    top10Holders: Array<{
+      address: string;
+      percentage: number;
+      isDeployer: boolean;
+      isRelatedToDeployer: boolean;   // Detected connection
+      walletAge: number;
+      behaviorType: 'holder' | 'trader' | 'bot' | 'suspicious';
+      recentActivity: 'accumulating' | 'holding' | 'distributing';
+    }>;
+    
+    concentration: {
+      top1Percentage: number;         // Should be <10%
+      top5Percentage: number;         // Should be <30%
+      top10Percentage: number;        // Should be <50%
+      concentrationTrend: 'increasing' | 'stable' | 'decreasing';
+    };
+    
+    holderQuality: {
+      avgWalletAge: number;           // Older = better
+      percentageBots: number;         // Lower = better
+      percentageNewWallets: number;   // <1d old = suspicious
+      organicHolders: number;         // Real users estimate
+    };
+  };
+  
+  // Migration Monitoring
+  migrationWatch: {
+    migrationPerformed: boolean;
+    migrationType?: 'to_amm' | 'to_cpswap';
+    migrationTimestamp?: Date;
+    liquidityPreserved: boolean;      // After migration
+    priceImpact: number;              // % change post-migration
+  };
+}
+```
+
+**Stage 3: Maturity Assessment (7+ days)**
+```typescript
+interface RaydiumMaturityAnalysis {
+  // Long-term Liquidity Health
+  liquidityLongTerm: {
+    averageLiquidity7d: number;
+    liquidityVolatility: number;      // Lower = more stable
+    neverDecreased: boolean;          // Best case scenario
+    lockStillActive: boolean;
+    remainingLockTime: number;        // Days
+  };
+  
+  // Deployer Long-term Behavior
+  deployerLongTerm: {
+    hasntDumped: boolean;
+    stillEngaged: boolean;            // Still interacting
+    addedMoreLiquidity: boolean;      // Bullish sign
+    tokensBurned: boolean;            // Deflationary actions
+    transparentCommunication: boolean;
+  };
+  
+  // Community & Market Signals
+  maturityIndicators: {
+    sustainedVolume: boolean;         // Consistent daily volume
+    growingHolderBase: boolean;       // New holders joining
+    decreasingConcentration: boolean; // Distribution improving
+    activeGovernance: boolean;        // DAO activity
+    partnerships: boolean;            // Listed on aggregators
+    
+    maturityScore: number;            // 0-100
+    classification: 'failed' | 'struggling' | 'growing' | 'established';
+  };
+}
+```
+
+---
+
+### 3. Unified Launchpad Detection & Routing System
+
+#### A. Automatic Launchpad Detection
+
+```typescript
+interface LaunchpadDetectionResult {
+  detected: boolean;
+  launchpad: 'pump_fun' | 'raydium_launchlab' | 'moonshot' | 'boop_fun' | 'none';
+  confidence: number;  // 0-100%
+  
+  detectionMethod: 
+    | 'program_id_match'      // Solana: Matched known program ID
+    | 'pool_structure'        // Pool characteristics match
+    | 'metadata_tag'          // Token metadata indicates source
+    | 'transaction_history';  // Creation tx from known launchpad
+  
+  launchpadSpecificData?: PumpFunBondingCurveData | RaydiumLaunchData;
+}
+
+async function detectLaunchpad(
+  tokenAddress: string, 
+  chain: string
+): Promise<LaunchpadDetectionResult> {
+  // Step 1: Check program ID in token creation transaction
+  const creationTx = await getTokenCreationTransaction(tokenAddress);
+  
+  if (creationTx.programId === PUMP_FUN_PROGRAM_ID) {
+    return {
+      detected: true,
+      launchpad: 'pump_fun',
+      confidence: 100,
+      detectionMethod: 'program_id_match',
+      launchpadSpecificData: await fetchPumpFunData(tokenAddress)
+    };
+  }
+  
+  // Step 2: Check for Raydium LaunchLab pool
+  const pools = await getRaydiumPools(tokenAddress);
+  const launchLabPool = pools.find(p => p.programId === RAYDIUM_LAUNCHLAB_PROGRAM_ID);
+  
+  if (launchLabPool) {
+    return {
+      detected: true,
+      launchpad: 'raydium_launchlab',
+      confidence: 95,
+      detectionMethod: 'program_id_match',
+      launchpadSpecificData: await fetchRaydiumLaunchLabData(tokenAddress)
+    };
+  }
+  
+  // Step 3: Check token metadata
+  const metadata = await getTokenMetadata(tokenAddress);
+  if (metadata.tags?.includes('pump.fun') || metadata.description?.includes('pump.fun')) {
+    return {
+      detected: true,
+      launchpad: 'pump_fun',
+      confidence: 80,
+      detectionMethod: 'metadata_tag'
+    };
+  }
+  
+  // Step 4: No launchpad detected
+  return {
+    detected: false,
+    launchpad: 'none',
+    confidence: 100,
+    detectionMethod: 'transaction_history'
+  };
+}
+```
+
+#### B. Dynamic Funnel Selection
+
+```typescript
+async function selectAnalysisFunnel(
+  tokenAddress: string,
+  chain: string,
+  scanType: 'basic' | 'elevator' | 'deep'
+): Promise<AnalysisFunnel> {
+  // Detect launchpad
+  const launchpadInfo = await detectLaunchpad(tokenAddress, chain);
+  
+  // Get token age
+  const tokenAge = await getTokenAge(tokenAddress);
+  
+  // Select appropriate funnel
+  if (launchpadInfo.detected && launchpadInfo.launchpad === 'pump_fun') {
+    if (scanType === 'deep') {
+      return new PumpFunDeepAnalysisFunnel(tokenAddress, tokenAge, launchpadInfo);
+    } else {
+      return new PumpFunBasicFunnel(tokenAddress, tokenAge, launchpadInfo);
+    }
+  }
+  
+  if (launchpadInfo.detected && launchpadInfo.launchpad === 'raydium_launchlab') {
+    if (scanType === 'deep') {
+      return new RaydiumDeepAnalysisFunnel(tokenAddress, tokenAge, launchpadInfo);
+    } else {
+      return new RaydiumBasicFunnel(tokenAddress, tokenAge, launchpadInfo);
+    }
+  }
+  
+  // Default funnel for non-launchpad tokens
+  if (tokenAge.ageInDays <= 7) {
+    return new NewTokenFunnel(tokenAddress, tokenAge);
+  }
+  
+  return new StandardAnalysisFunnel(tokenAddress);
+}
+```
+
+---
+
+### 4. Deployer Wallet Behavior Analysis Engine
+
+#### A. Comprehensive Deployer Profile
+
+```typescript
+interface DeployerWalletProfile {
+  // Identity
+  address: string;
+  ensName?: string;
+  walletAge: number;              // Days since first transaction
+  totalTransactions: number;
+  
+  // Launch History
+  launchHistory: {
+    totalTokensCreated: number;
+    successfulTokens: number;     // Still active >30d
+    failedTokens: number;         // Dead <7d
+    ruggedTokens: number;         // Liquidity pulled <7d
+    successRate: number;          // %
+    avgTokenLifespan: number;     // Days
+    
+    recentLaunches: Array<{
+      tokenAddress: string;
+      tokenName: string;
+      launchedAt: Date;
+      status: 'active' | 'dead' | 'rugged';
+      finalMarketCap?: number;
+      liquidityPulled: boolean;
+    }>;
+  };
+  
+  // Financial Behavior
+  financialProfile: {
+    totalSOLReceived: number;     // Lifetime
+    totalSOLSpent: number;
+    currentSOLBalance: number;
+    profitFromTokens: number;     // Estimated profit
+    avgProfitPerToken: number;
+    
+    // Liquidity Behavior
+    liquidityBehavior: {
+      totalLPsCreated: number;
+      totalLPsRemoved: number;
+      avgLPRemovalTime: number;   // Hours after creation
+      earlyLPRemovalCount: number; // <7 days
+      responsibleLPManagement: boolean;
+    };
+  };
+  
+  // Trading Patterns
+  tradingPatterns: {
+    // Sell Behavior
+    sellBehavior: {
+      avgTimeToFirstSell: number;  // Minutes after launch
+      avgPercentageSold: number;   // % of holdings sold
+      dumpsImmediately: boolean;   // Sells >50% within 1h
+      graduallySells: boolean;     // Steady selling over time
+      holdsLongTerm: boolean;      // Holds >30d
+    };
+    
+    // Transfer Patterns
+    transferPatterns: {
+      transfersToNewWallets: number;
+      suspiciousTransferTiming: boolean;  // Right before dumps
+      circularTransfers: boolean;         // A→B→C→A
+      knownRelatedWallets: string[];
+    };
+    
+    // Bot Activity
+    botIndicators: {
+      highFrequencyTrading: boolean;
+      perfectTiming: boolean;            // Suspiciously precise
+      similarPatterns: boolean;          // Same behavior across tokens
+      likelyBot: boolean;
+    };
+  };
+  
+  // Reputation & Risk
+  reputation: {
+    riskScore: number;            // 0-100 (higher = riskier)
+    riskLevel: 'trusted' | 'neutral' | 'caution' | 'dangerous' | 'known_rugger';
+    
+    flags: {
+      serialRugger: boolean;      // 3+ rugs
+      quickDumper: boolean;       // Consistently dumps fast
+      sockpuppeteer: boolean;     // Uses multiple wallets
+      liquidityThief: boolean;    // Removes LP early
+      communityScammer: boolean;  // Reported by users
+    };
+    
+    trustSignals: {
+      longTermHolder: boolean;
+      communityBuilder: boolean;
+      addedLiquidity: boolean;
+      burnedTokens: boolean;
+      verifiedIdentity: boolean;
+    };
+  };
+  
+  // Behavioral Prediction
+  prediction: {
+    likelyToRug: number;          // 0-100% probability
+    estimatedDumpTime: string;    // "Within 24h" or "7+ days"
+    recommendedAction: 'avoid' | 'extreme_caution' | 'monitor_closely' | 'acceptable_risk';
+    reasoning: string[];
+  };
+}
+```
+
+#### B. Real-time Deployer Monitoring
+
+```typescript
+interface DeployerMonitoringAlert {
+  severity: 'info' | 'warning' | 'critical';
+  type: 
+    | 'deployer_selling'
+    | 'deployer_transferring'
+    | 'liquidity_decreasing'
+    | 'lp_tokens_moved'
+    | 'connected_wallet_activity'
+    | 'suspicious_pattern';
+  
+  message: string;
+  details: any;
+  timestamp: Date;
+  actionRequired: boolean;
+}
+
+// Real-time monitoring service
+class DeployerMonitoringService {
+  async monitorDeployer(
+    deployerAddress: string,
+    tokenAddress: string
+  ): Promise<DeployerMonitoringAlert[]> {
+    const alerts: DeployerMonitoringAlert[] = [];
+    
+    // Check recent transactions
+    const recentTxs = await getRecentTransactions(deployerAddress, '1h');
+    
+    // Alert: Deployer selling tokens
+    const sellTxs = recentTxs.filter(tx => 
+      tx.type === 'sell' && tx.tokenAddress === tokenAddress
+    );
+    if (sellTxs.length > 0) {
+      const totalSold = sellTxs.reduce((sum, tx) => sum + tx.amount, 0);
+      alerts.push({
+        severity: totalSold > 10000 ? 'critical' : 'warning',
+        type: 'deployer_selling',
+        message: `Deployer sold ${totalSold.toLocaleString()} tokens in last hour`,
+        details: { transactions: sellTxs },
+        timestamp: new Date(),
+        actionRequired: totalSold > 10000
+      });
+    }
+    
+    // Alert: LP tokens moved
+    const lpTransfers = recentTxs.filter(tx => 
+      tx.type === 'transfer' && tx.isLPToken
+    );
+    if (lpTransfers.length > 0) {
+      alerts.push({
+        severity: 'critical',
+        type: 'lp_tokens_moved',
+        message: 'Deployer transferred LP tokens - POSSIBLE RUG PULL IMMINENT',
+        details: { transactions: lpTransfers },
+        timestamp: new Date(),
+        actionRequired: true
+      });
+    }
+    
+    // Alert: Connected wallet activity
+    const connectedWallets = await getConnectedWallets(deployerAddress);
+    for (const wallet of connectedWallets) {
+      const walletTxs = await getRecentTransactions(wallet, '1h');
+      const suspiciousActivity = detectSuspiciousPatterns(walletTxs);
+      
+      if (suspiciousActivity) {
+        alerts.push({
+          severity: 'warning',
+          type: 'connected_wallet_activity',
+          message: `Connected wallet ${wallet.slice(0, 8)}... showing suspicious activity`,
+          details: { wallet, activity: suspiciousActivity },
+          timestamp: new Date(),
+          actionRequired: false
+        });
+      }
+    }
+    
+    return alerts;
+  }
+}
+```
+
+---
+
+### 5. Implementation Architecture
+
+#### A. Database Schema Extensions
+
+```sql
+-- Launchpad-specific analysis table
+CREATE TABLE launchpad_analysis (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  token_address TEXT NOT NULL,
+  chain TEXT NOT NULL,
+  launchpad TEXT NOT NULL,  -- pump_fun, raydium_launchlab, etc.
+  
+  -- Detection info
+  detected_at TIMESTAMP DEFAULT NOW(),
+  detection_method TEXT,
+  confidence INTEGER,
+  
+  -- Platform-specific data (JSONB for flexibility)
+  bonding_curve_data JSONB,      -- For Pump.fun
+  pool_data JSONB,                -- For Raydium
+  migration_data JSONB,
+  
+  -- Analysis results
+  funnel_stage TEXT,
+  stage_analysis JSONB,
+  risk_score INTEGER,
+  flags JSONB,
+  
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(token_address, chain)
+);
+
+-- Deployer reputation tracking
+CREATE TABLE deployer_profiles (
+  wallet_address TEXT PRIMARY KEY,
+  chain TEXT NOT NULL,
+  
+  -- Basic info
+  first_seen TIMESTAMP,
+  wallet_age_days INTEGER,
+  total_transactions INTEGER,
+  
+  -- Launch history
+  tokens_created INTEGER DEFAULT 0,
+  successful_tokens INTEGER DEFAULT 0,
+  failed_tokens INTEGER DEFAULT 0,
+  rugged_tokens INTEGER DEFAULT 0,
+  success_rate DECIMAL(5,2),
+  
+  -- Financial
+  total_sol_received DECIMAL(20,8),
+  total_sol_spent DECIMAL(20,8),
+  estimated_profit DECIMAL(20,8),
+  
+  -- Behavior patterns
+  avg_time_to_first_sell INTEGER,  -- Minutes
+  avg_percentage_sold DECIMAL(5,2),
+  early_lp_removals INTEGER,
+  
+  -- Reputation
+  risk_score INTEGER,  -- 0-100
+  risk_level TEXT,
+  flags JSONB,
+  trust_signals JSONB,
+  
+  -- Prediction
+  likely_to_rug_score INTEGER,
+  
+  last_analyzed TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Deployer monitoring alerts
+CREATE TABLE deployer_alerts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  deployer_address TEXT NOT NULL,
+  token_address TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  alert_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  details JSONB,
+  action_required BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  resolved BOOLEAN DEFAULT FALSE
+);
+
+-- Connected wallets tracking
+CREATE TABLE connected_wallets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  primary_wallet TEXT NOT NULL,
+  connected_wallet TEXT NOT NULL,
+  connection_confidence INTEGER,  -- 0-100
+  connection_type TEXT,  -- transfer_pattern, timing, common_tokens
+  first_detected TIMESTAMP DEFAULT NOW(),
+  last_activity TIMESTAMP,
+  is_suspicious BOOLEAN DEFAULT FALSE,
+  
+  UNIQUE(primary_wallet, connected_wallet)
+);
+
+-- Indexes for performance
+CREATE INDEX idx_launchpad_token ON launchpad_analysis(token_address, chain);
+CREATE INDEX idx_launchpad_type ON launchpad_analysis(launchpad, detected_at DESC);
+CREATE INDEX idx_deployer_risk ON deployer_profiles(risk_level, risk_score DESC);
+CREATE INDEX idx_alerts_unresolved ON deployer_alerts(token_address, resolved, created_at DESC);
+```
+
+#### B. API Endpoints
+
+```typescript
+// New launchpad-specific endpoints
+
+// 1. Detect launchpad
+POST /api/launchpad/detect
+{
+  tokenAddress: string;
+  chain: string;
+}
+Response: LaunchpadDetectionResult
+
+// 2. Get launchpad-specific analysis
+POST /api/launchpad/analyze
+{
+  tokenAddress: string;
+  launchpad: string;
+  scanType: 'basic' | 'deep';
+}
+Response: PumpFunAnalysis | RaydiumAnalysis
+
+// 3. Get deployer profile
+GET /api/deployer/{walletAddress}
+Response: DeployerWalletProfile
+
+// 4. Get deployer alerts
+GET /api/deployer/{walletAddress}/alerts/{tokenAddress}
+Response: DeployerMonitoringAlert[]
+
+// 5. Get bonding curve status (Pump.fun)
+GET /api/launchpad/pump-fun/{tokenAddress}/curve
+Response: PumpFunBondingCurveData
+
+// 6. Get top holders with analysis
+GET /api/token/{tokenAddress}/top-holders-analysis
+Response: TopHoldersAnalysis with deployer connection detection
+```
+
+---
+
+### 6. Implementation Phases
+
+#### Phase 1: Detection & Foundation
+- [ ] Implement launchpad detection system
+- [ ] Create database schemas
+- [ ] Build deployer profile system
+- [ ] Set up data collection pipelines
+
+#### Phase 2: Pump.fun Integration
+- [ ] Integrate Codex API for bonding curve data
+- [ ] Implement Pump.fun funnel stages
+- [ ] Build curve progress tracking
+- [ ] Create Pump.fun risk scoring
+- [ ] Add graduation monitoring
+
+#### Phase 3: Raydium LaunchLab Integration
+- [ ] Integrate Bitquery for Raydium data
+- [ ] Implement Raydium funnel stages
+- [ ] Build liquidity monitoring system
+- [ ] Create LP token tracking
+- [ ] Add migration detection
+
+#### Phase 4: Deployer Intelligence
+- [ ] Build deployer behavior analyzer
+- [ ] Implement connected wallet detection
+- [ ] Create reputation scoring system
+- [ ] Add real-time monitoring
+- [ ] Build alert system
+
+#### Phase 5: Top Holder Analysis
+- [ ] Implement top holder tracking
+- [ ] Build concentration analysis
+- [ ] Add holder quality scoring
+- [ ] Create suspicious pattern detection
+- [ ] Link to deployer connections
+
+#### Phase 6: UI Integration
+- [ ] Create launchpad-specific result cards
+- [ ] Build bonding curve visualizations
+- [ ] Add deployer profile displays
+- [ ] Implement alert notifications
+- [ ] Create funnel stage progress UI
+
+---
+
+### 7. Priority & Dependencies
+
+**Priority:** HIGH
+
+**Dependencies:**
+- Token Deployer Information Enhancement (deploy date, deployer address)
+- New Token Funnel Analysis (age-based classification)
+- External APIs: Codex, Bitquery, CoinGecko
+
+**Impact:**
+- Significantly more accurate risk assessment for launchpad tokens
+- Early detection of rug pulls
+- Better deployer reputation tracking
+- Competitive advantage with specialized analysis
+
+---
+
+---
+
+**Document Version:** 1.4  
 **Last Updated:** 2026-08-03  
 **Status:** Planning Phase  
 **Priority:** Medium-High (Post-Boost Feature Launch)
@@ -1245,9 +2191,16 @@ Risk remains elevated for tokens under 1 week old.
 2. Token Sniffer Analysis Features (Reference for Comparison)
 3. Token Deployer Information Enhancement (HIGH PRIORITY)
 4. New Token Funnel Analysis System (HIGH PRIORITY)
+5. **Launchpad-Specific Funnel Analysis (HIGH PRIORITY)** - NEW
+   - Pump.fun bonding curve analysis with 3-stage funnel
+   - Raydium LaunchLab analysis with liquidity monitoring
+   - Comprehensive deployer wallet behavior tracking
+   - Top holder analysis with connection detection
+   - Real-time monitoring and alert system
 
 **Purpose:** 
 - Benchmark comparison for security analysis features
 - Track required enhancements and future features
 - Document age-based token analysis requirements
 - Plan funnel analysis for early-stage token risk assessment
+- **Define launchpad-specific analysis frameworks for specialized risk detection**
