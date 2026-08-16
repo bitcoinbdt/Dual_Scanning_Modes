@@ -33,7 +33,8 @@ import { parseTransactionToSwaps } from './lib/deep_scan/parsers/SmartMoneySwapP
 import { getHistoricalV2Reserves } from './lib/deep_scan/historical/HistoricalPoolState';
 import { getContractStateAtBlock, getBlockMetadata } from './lib/providers/alchemy/historicalRpc';
 import { calculateHistoricalSnapshotBlocks, schedulePoolReservesIndexing, setSupabaseMock as setIndexerSupabaseMock, queryHistoricalReserves } from './lib/deep_scan/historical/HistoricalPoolReservesIndexer';
-import { POST as historicalReservesWorkerPost, setSupabaseMock as setWorkerSupabaseMock } from './app/api/worker/historical-reserves-indexer/route';
+import { POST as historicalReservesWorkerPost } from './app/api/worker/historical-reserves-indexer/route';
+import { setSupabaseMock as setWorkerSupabaseMock } from './app/api/worker/historical-reserves-indexer/supabaseClientFactory';
 import { fetchMarketDataWithFallback } from './lib/blockchain/marketDataFallback';
 import {
   simulateV2SwapBigInt,

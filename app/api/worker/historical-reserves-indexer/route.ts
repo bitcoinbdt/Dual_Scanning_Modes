@@ -25,10 +25,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getHistoricalV2Reserves } from '@/lib/deep_scan/historical/HistoricalPoolState';
 import { DEEP_SCAN_CONFIG } from '@/lib/deep_scan/config';
 import { normalizeAddress } from '@/lib/deep_scan/types';
+import { getServiceClient } from './supabaseClientFactory';
 
 /** EVM address validation regex. */
 const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/i;
@@ -58,19 +58,6 @@ const PERMANENT_ERROR_CODES = new Set([
 
 const MAX_ATTEMPTS = DEEP_SCAN_CONFIG.historicalReserves.maxAttempts;
 
-let supabaseMock: any = null;
-
-export function setSupabaseMock(mock: any) {
-  supabaseMock = mock;
-}
-
-function getServiceClient() {
-  if (supabaseMock) return supabaseMock;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  if (!url || !key) throw new Error('[HistoricalReservesWorker] Supabase credentials not configured.');
-  return createClient(url, key);
-}
 
 export async function POST(request: NextRequest) {
   // ── 1. Authenticate ──────────────────────────────────────────────────────
