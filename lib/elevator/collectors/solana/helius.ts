@@ -13,6 +13,9 @@ const MAX_RETRIES = 3;
 const SOLANA_DEX_PROGRAMS = new Set([
   '675k1q2c2T6m779aoxxX48BudGXWv97Qr4BDG87paL18', // Raydium V4 AMM
   'CAMMC7Jbi2gTYccZ4t1gnhsihjh29yb2y2wqShH6A1E3', // Raydium CLMM
+  'CPMMoo87FVaCHxtnTa9515pZSme8BSfU2bgZmd4CoQ2', // Raydium CPMM
+  '6EF8f514592B11E0F5E5113810c3461d57c3080b', // Pump.fun Bonding Curve
+  'MoonCVVeaRTTKc2Z9dZ55H1bw39s2kFjkK2t7cZ7q9Q', // Moonshot
   'JUP6LkbZbjS1jKKbbRB67cjSsCc49GVvpjC285137LM', // Jupiter v6
   'whirSpFb6fc49YrevjZgx7Ko6sD4iPr2Sm8DTrG7dVY', // Orca Whirlpool
   '24Uqj9J6jxYiGLNsgeW9msiw1xN24sa58CcG9w8AK3mG', // Meteora
