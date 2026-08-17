@@ -52,8 +52,7 @@ CREATE TABLE IF NOT EXISTS public.token_unlock_schedules (
 );
 
 CREATE INDEX IF NOT EXISTS idx_unlock_imminent 
-  ON public.token_unlock_schedules (next_unlock_at ASC) 
-  WHERE next_unlock_at >= NOW();
+  ON public.token_unlock_schedules (next_unlock_at ASC);
 
 
 -- 3. TOKEN SOCIAL CACHE TABLE
