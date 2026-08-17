@@ -238,12 +238,15 @@ export function calculateRiskScore(params: {
   let whaleBehConfidence = 0;
 
   if (whaleBehAvail === 'measured') {
-    if (params.whaleBehavior.isDistributionRisk) {
+    if (params.whaleBehavior.phase === 'distribution') {
       whaleBehScore = 90;
     } else if (params.whaleBehavior.phase === 'accumulation') {
       whaleBehScore = 15;
+    } else if (params.whaleBehavior.phase === 'dormant') {
+      whaleBehScore = 30; // low-to-moderate risk from dormant whales
     } else {
-      whaleBehScore = Math.min(100, params.whaleBehavior.totalWhaleSupplySharePct * 2);
+      // neutral
+      whaleBehScore = 40;
     }
     whaleBehConfidence = 65;
   }
@@ -259,7 +262,7 @@ export function calculateRiskScore(params: {
     dataAvailability: whaleBehAvail,
   });
 
-  if (whaleBehAvail === 'measured' && whaleBehScore >= 35) {
+  if (whaleBehAvail === 'measured' && params.whaleBehavior.phase === 'distribution') {
     topRisks.push({
       riskId: 'active-whale-distribution',
       riskName: 'Active Whale Distribution',
@@ -267,6 +270,16 @@ export function calculateRiskScore(params: {
       status: 'active',
       evidenceIds: params.whaleBehavior.evidenceIds || [],
       description: 'Major whale wallets are actively selling or distributing supply in this transaction batch.',
+      confidence: whaleBehConfidence,
+    });
+  } else if (whaleBehAvail === 'measured' && params.whaleBehavior.phase === 'dormant' && params.whaleBehavior.totalWhaleSupplySharePct >= 30) {
+    topRisks.push({
+      riskId: 'dormant-whale-concentration',
+      riskName: 'Dormant Whale Concentration',
+      severity: 'medium',
+      status: 'active',
+      evidenceIds: params.whaleBehavior.evidenceIds || [],
+      description: `Significant supply (${params.whaleBehavior.totalWhaleSupplySharePct.toFixed(1)}%) is concentrated in dormant whale wallets. Sudden re-activation presents a sell-off risk.`,
       confidence: whaleBehConfidence,
     });
   }
