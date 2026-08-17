@@ -10,7 +10,7 @@
 
 import axios from 'axios';
 import { retryWithBackoff } from './retryUtils';
-import { LiquidityInfo, DexScreenerResponse, DexScreenerPair } from './types';
+import { LiquidityInfo, DexScreenerResponse, DexScreenerPair, CrossChainPoolInfo } from './types';
 
 /**
  * Fetch market data with fallback chain
@@ -61,21 +61,9 @@ export async function fetchMarketDataWithFallback(
 
 /**
  * Infer pool AMM type from the DEX identifier string.
- *
- * WHY: The V2 constant-product reserve formula is only valid for balanced 50/50
- * pools. Applying it to concentrated-liquidity (V3/CLMM) pools produces grossly
- * inaccurate slippage estimates. We record what is inferable from the provider name
- * so the AMM simulator can refuse rather than fabricate.
- *
- * This is inference only — providers do not always expose pool type directly.
- * Pools whose type cannot be determined safely are marked 'unknown'.
- *
- * A future implementation can replace this with explicit on-chain lookup once
- * pool-type metadata is integrated.
  */
 function inferPoolType(dexId: string): 'constant-product' | 'concentrated-liquidity' | 'unknown' {
   const d = (dexId || '').toLowerCase();
-  // Known concentrated-liquidity (V3/CLMM) DEXes — checked first to prevent overlap
   if (
     d.includes('uniswap-v3') || d.includes('uniswapv3') ||
     d.includes('pancakeswap-v3') || d.includes('pancakeswapv3') ||
@@ -88,7 +76,6 @@ function inferPoolType(dexId: string): 'constant-product' | 'concentrated-liquid
   ) {
     return 'concentrated-liquidity';
   }
-  // Known constant-product (V2-style) DEXes
   if (
     d.includes('uniswap-v2') || d.includes('uniswapv2') ||
     d.includes('pancakeswap-v2') || d.includes('pancakeswapv2') ||
@@ -104,7 +91,7 @@ function inferPoolType(dexId: string): 'constant-product' | 'concentrated-liquid
 }
 
 /**
- * Fetch market data from DexScreener
+ * Fetch market data from DexScreener with multichain & cross-chain pool discovery
  */
 async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
   return await retryWithBackoff(async () => {
@@ -133,10 +120,66 @@ async function fetchDexScreener(address: string): Promise<LiquidityInfo> {
       
       const mainPair = sortedPairs[0];
       const exactMatch = mainPair && mainPair.baseToken.address.toLowerCase() === address.toLowerCase();
+      const symbol = mainPair?.baseToken?.symbol;
+
+      let crossChainPools: CrossChainPoolInfo[] = [];
+      let totalCrossChainLiquidityUsd = totalLiquidity;
+
+      // Perform secondary symbol search to find cross-chain/multichain pools (e.g., BSC, ETH, Arbitrum, Solana)
+      if (symbol && symbol.length >= 2) {
+        try {
+          const searchRes = await axios.get<DexScreenerResponse>(
+            `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(symbol)}`,
+            { timeout: 5000 }
+          );
+          if (searchRes.data?.pairs && searchRes.data.pairs.length > 0) {
+            const crossMap = new Map<string, CrossChainPoolInfo>();
+            
+            // Add primary pools first
+            for (const p of sortedPairs) {
+              const key = `${p.chainId || 'unknown'}:${p.pairAddress || ''}`.toLowerCase();
+              crossMap.set(key, {
+                chain: p.chainId || 'unknown',
+                dex: p.dexId || 'Unknown',
+                pair: `${p.baseToken.symbol}/${p.quoteToken.symbol}`,
+                tokenAddress: p.baseToken.address,
+                poolAddress: p.pairAddress || '',
+                liquidityUsd: p.liquidity?.usd || 0,
+                priceUsd: parseFloat(p.priceUsd || "0"),
+              });
+            }
+
+            // Filter symbol matches on other chains/deployments with >$500 liquidity
+            for (const p of searchRes.data.pairs) {
+              if (p.baseToken?.symbol?.toUpperCase() === symbol.toUpperCase() && (p.liquidity?.usd || 0) >= 500) {
+                const key = `${p.chainId || 'unknown'}:${p.pairAddress || ''}`.toLowerCase();
+                if (!crossMap.has(key)) {
+                  crossMap.set(key, {
+                    chain: p.chainId || 'unknown',
+                    dex: p.dexId || 'Unknown',
+                    pair: `${p.baseToken.symbol}/${p.quoteToken.symbol}`,
+                    tokenAddress: p.baseToken.address,
+                    poolAddress: p.pairAddress || '',
+                    liquidityUsd: p.liquidity?.usd || 0,
+                    priceUsd: parseFloat(p.priceUsd || "0"),
+                  });
+                }
+              }
+            }
+
+            crossChainPools = Array.from(crossMap.values()).sort((a, b) => b.liquidityUsd - a.liquidityUsd);
+            totalCrossChainLiquidityUsd = crossChainPools.reduce((sum, p) => sum + p.liquidityUsd, 0);
+          }
+        } catch (err: any) {
+          console.warn('[DEXSCREENER] Cross-chain pool search failed (non-fatal):', err.message);
+        }
+      }
 
       return {
         totalLiquidityUsd: totalLiquidity,
         mainPools,
+        crossChainPools,
+        totalCrossChainLiquidityUsd,
         tokenNameOverride: exactMatch ? mainPair.baseToken.name : null,
         symbolOverride: exactMatch ? mainPair.baseToken.symbol : null,
         fdv: mainPair.fdv || mainPair.marketCap || null,

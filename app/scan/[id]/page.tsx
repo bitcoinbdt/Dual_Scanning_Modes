@@ -259,6 +259,40 @@ export default async function SharedScanPage({ params, searchParams }: PageProps
         </div>
       )}
 
+      {/* Multichain Pools Section */}
+      {result?.marketSummary?.crossChainPools && result.marketSummary.crossChainPools.length > 0 && (
+        <div style={{
+          background: '#111827',
+          border: '1px solid #1f2937',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Multichain &amp; Cross-Chain Liquidity Pools
+            </h2>
+            <span style={{ color: '#a855f7', fontWeight: 600, fontSize: '13px' }}>
+              Total: ${result.marketSummary.totalCrossChainLiquidityUsd?.toLocaleString() ?? result.marketSummary.totalLiquidityUsd?.toLocaleString()}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {result.marketSummary.crossChainPools.map((p: any, i: number) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', background: '#1e293b', padding: '10px 14px', borderRadius: '8px' }}>
+                <div>
+                  <span style={{ color: '#f8fafc', fontWeight: 700, textTransform: 'uppercase', marginRight: '8px' }}>{p.chain}</span>
+                  <span style={{ color: '#c084fc', fontWeight: 600, marginRight: '8px' }}>{p.dex}</span>
+                  <span style={{ color: '#94a3b8' }}>{p.pair}</span>
+                </div>
+                <span style={{ color: '#4ade80', fontWeight: 700 }}>
+                  ${p.liquidityUsd?.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Socials Presence Section */}
       {result?.socials && (
         <div style={{

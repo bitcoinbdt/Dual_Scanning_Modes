@@ -14,6 +14,7 @@ import {
   ArrowDownRight,
   Minus,
   FileText,
+  Globe,
 } from 'lucide-react';
 import type {
   DeepScanResult,
@@ -773,11 +774,14 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
     <div className="text-center py-8 text-white/40 text-sm">Liquidity data unavailable for this scan.</div>
   );
 
+  const crossPools = data.marketSummary?.crossChainPools ?? [];
+  const totalMultichainUsd = data.marketSummary?.totalCrossChainLiquidityUsd ?? cap.totalLiquidityUsd;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([
-          { label: 'Pool Liquidity', value: fmtUsd(cap.totalLiquidityUsd) },
+          { label: 'Pool Liquidity', value: fmtUsd(totalMultichainUsd) },
           { label: 'FDV',            value: fmtUsd(cap.fdvUsd) },
           { label: 'FDV/Liq Ratio', value: cap.fdvToLiquidityRatio != null ? `${cap.fdvToLiquidityRatio.toFixed(1)}x` : 'N/A' },
           { label: 'Sensitivity',    value: cap.sensitivity ?? '—' },
@@ -788,6 +792,42 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
           </div>
         ))}
       </div>
+
+      {/* Multichain & Cross-Chain Liquidity Table */}
+      {crossPools.length > 0 && (
+        <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-widest text-white/40 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-purple-400" /> Multichain &amp; Cross-Chain Liquidity Pools
+            </p>
+            <span className="text-xs font-bold font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+              Multichain Total: {fmtUsd(totalMultichainUsd)}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono border-collapse">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-2 px-3 text-white/40 font-medium">Chain</th>
+                  <th className="text-left py-2 px-3 text-white/40 font-medium">DEX</th>
+                  <th className="text-left py-2 px-3 text-white/40 font-medium">Pair</th>
+                  <th className="text-right py-2 px-3 text-white/40 font-medium">Liquidity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crossPools.map((pool, idx) => (
+                  <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    <td className="py-2 px-3 text-white/90 font-bold uppercase">{pool.chain}</td>
+                    <td className="py-2 px-3 text-purple-300 font-semibold">{pool.dex}</td>
+                    <td className="py-2 px-3 text-white/80">{pool.pair}</td>
+                    <td className="py-2 px-3 text-right text-emerald-400 font-bold">{fmtUsd(pool.liquidityUsd)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {amm.status !== 'insufficient_data' && amm.simulations && amm.simulations.length > 0 ? (
         <div>

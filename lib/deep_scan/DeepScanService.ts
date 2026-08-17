@@ -185,7 +185,7 @@ export class DeepScanService {
     // ─────────────────────────────────────────────
     // Step 1: Resolve Basic / Token Metadata
     // ─────────────────────────────────────────────
-    let meta = input.tokenMetadata;
+    let meta: any = input.tokenMetadata;
     let basicScanData: any = null;
 
     if (!meta) {
@@ -213,6 +213,8 @@ export class DeepScanService {
           totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
           volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
           mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
+          crossChainPools: basicScanData.liquidityInfo?.crossChainPools ?? [],
+          totalCrossChainLiquidityUsd: basicScanData.liquidityInfo?.totalCrossChainLiquidityUsd ?? basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
           creatorAddress: basicScanData.securityInfo?.creatorAddress ?? undefined,
           securityFlags: {
             isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
@@ -1177,6 +1179,8 @@ export class DeepScanService {
         fdvUsd: finalFdv,
         marketRegime: regimeResult.regime,
         totalLiquidityUsd: finalLiquidity,
+        totalCrossChainLiquidityUsd: meta?.totalCrossChainLiquidityUsd ?? finalLiquidity,
+        crossChainPools: meta?.crossChainPools ?? [],
       },
       ammSlippage: ammResult,
       volumeConcentration: hhiResult,

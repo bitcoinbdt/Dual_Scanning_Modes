@@ -227,9 +227,21 @@ export function toLegacyPool(state: NormalizedPoolState): LiquidityPool {
   };
 }
 
+export interface CrossChainPoolInfo {
+  chain: string;
+  dex: string;
+  pair: string;
+  tokenAddress: string;
+  poolAddress: string;
+  liquidityUsd: number;
+  priceUsd: number;
+}
+
 export interface LiquidityInfo {
   totalLiquidityUsd: number;
   mainPools: LiquidityPool[];
+  crossChainPools?: CrossChainPoolInfo[];
+  totalCrossChainLiquidityUsd?: number;
   tokenNameOverride?: string | null;
   symbolOverride?: string | null;
   fdv?: number | null;
@@ -372,6 +384,7 @@ export interface RetryOptions {
 // ============================================================================
 
 export interface DexScreenerPair {
+  chainId?: string;
   pairAddress?: string;
   baseToken: {
     address: string;

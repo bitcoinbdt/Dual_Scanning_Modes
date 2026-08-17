@@ -788,6 +788,8 @@ export interface DeepScanResult {
     fdvUsd: number;
     marketRegime: RegimeLabel;
     totalLiquidityUsd: number;
+    totalCrossChainLiquidityUsd?: number;
+    crossChainPools?: import('../blockchain/types').CrossChainPoolInfo[];
   };
   // ── P0 Modules ──
   ammSlippage: AmmSlippageResult;
