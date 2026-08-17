@@ -39,7 +39,17 @@ export interface OnChainData {
   };
   liquidityInfo?: {
     totalLiquidityUsd: number;
+    totalCrossChainLiquidityUsd?: number;
     mainPools: LiquidityPool[];
+    crossChainPools?: {
+      chain: string;
+      dex: string;
+      pair: string;
+      tokenAddress: string;
+      poolAddress: string;
+      liquidityUsd: number;
+      priceUsd: number;
+    }[];
   };
 }
 

@@ -6,7 +6,7 @@ import type { OnChainData } from '@/types/scanner';
 import { InfoTooltip } from './InfoTooltip';
 
 export const TokenOverviewCard = ({ token }: { token: OnChainData }) => {
-  const totalLiq = token.liquidityInfo?.totalLiquidityUsd || 0;
+  const totalLiq = token.liquidityInfo?.totalCrossChainLiquidityUsd ?? token.liquidityInfo?.totalLiquidityUsd ?? 0;
 
   return (
     <motion.div 
