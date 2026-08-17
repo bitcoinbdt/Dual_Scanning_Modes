@@ -32,6 +32,7 @@ import { schedulePoolReservesIndexing, queryHistoricalReserves } from './histori
 import { analyzeLiquidityStress } from './engines/LiquidityStressAnalyzer';
 import { analyzeHistoricalBehavior } from './engines/HistoricalBehaviorAnalyzer';
 import { Connection } from '@solana/web3.js';
+import { getSolanaConnection } from '../blockchain/solanaScanner';
 import { RaydiumPoolReader } from '../solana/RaydiumPoolReader';
 import { DeployerProfiler } from '../reputation/DeployerProfiler';
 import { TokenUnlockTracker } from '../traceability/TokenUnlockTracker';
@@ -262,7 +263,7 @@ export class DeepScanService {
         ) as NormalizedPoolState | undefined;
         
         if (primaryV2) {
-          const conn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+          const conn = await getSolanaConnection();
           const reserves = await RaydiumPoolReader.getPoolReserves(primaryV2.poolIdentifier, conn);
           if (reserves) {
             console.log(`[DEEP SERVICE] Enriched Solana pool reserves: base=${reserves.baseReserve.toString()}, quote=${reserves.quoteReserve.toString()}`);
@@ -1070,7 +1071,7 @@ export class DeepScanService {
       if (deployerAddr) {
         let solConn: Connection | undefined = undefined;
         if (network === 'solana') {
-          solConn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+          solConn = await getSolanaConnection();
         }
         deployerProfileResult = await DeployerProfiler.profile(deployerAddr, network, solConn);
       }
@@ -1082,7 +1083,7 @@ export class DeepScanService {
       // 2. Token Unlock & Vesting Schedule Tracking
       let solConn: Connection | undefined = undefined;
       if (network === 'solana') {
-        solConn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+        solConn = await getSolanaConnection();
       }
       unlockScheduleResult = await TokenUnlockTracker.getUnlockSchedule(
         address,

@@ -17,21 +17,35 @@ const PUBLIC_RPCS = [
   'https://solana-rpc.publicnode.com'
 ];
 
-async function getActiveConnection(): Promise<Connection> {
+export async function getSolanaConnection(): Promise<Connection> {
+  const rpcs: string[] = [];
+  
+  if (process.env.HELIUS_API_KEY) {
+    rpcs.push(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+  }
+  
+  rpcs.push(...PUBLIC_RPCS);
+
   let lastError: Error | null = null;
-  for (const rpc of PUBLIC_RPCS) {
+  for (const rpc of rpcs) {
     try {
-      console.log(`[SOLANA] Probing RPC node: ${rpc}`);
+      const isPrivate = rpc.includes('helius-rpc.com');
+      console.log(`[SOLANA] Probing RPC node: ${isPrivate ? 'Helius Private RPC' : rpc}`);
       const conn = new Connection(rpc, 'confirmed');
       await conn.getSlot(); // lightweight probe call
-      console.log(`[SOLANA] Active RPC node selected: ${rpc}`);
+      console.log(`[SOLANA] Active RPC node selected: ${isPrivate ? 'Helius Private RPC' : rpc}`);
       return conn;
     } catch (err: any) {
-      console.warn(`[SOLANA] RPC node probe failed: ${rpc} - ${err.message}`);
+      const isPrivate = rpc.includes('helius-rpc.com');
+      console.warn(`[SOLANA] RPC node probe failed: ${isPrivate ? 'Helius Private RPC' : rpc} - ${err.message}`);
       lastError = err;
     }
   }
-  throw new Error(`All public Solana RPC nodes failed. Last error: ${lastError?.message}`);
+  throw new Error(`All Solana RPC nodes failed. Last error: ${lastError?.message}`);
+}
+
+async function getActiveConnection(): Promise<Connection> {
+  return getSolanaConnection();
 }
 
 /**
