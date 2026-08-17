@@ -60,7 +60,14 @@ export async function fetchOHLCV(
 }
 
 /**
- * Fetch token transaction history from Birdeye
+ * Fetch token transaction history from Birdeye using sequential throttled pagination.
+ * Replaces the previous 10-parallel-requests strategy that immediately triggered 429 rate limits.
+ *
+ * Strategy:
+ *   - Fetch one page at a time with a 250ms inter-request gap
+ *   - On 429: exponential backoff (1s, 2s, 4s) up to MAX_RETRIES times
+ *   - On persistent 429: stop early and return what was collected so far (partial = all available)
+ *   - On 400 for offset 0: token not indexed in Birdeye trades API — return [] to trigger fallback
  */
 export async function fetchBirdeyeTransactions(
   address: string,
@@ -68,51 +75,80 @@ export async function fetchBirdeyeTransactions(
   maxTransactions: number = 10000
 ): Promise<any[]> {
   const url = `${BIRDEYE_API_URL}/defi/txs/token`;
-  const BATCH_SIZE = 10;   // parallel requests per batch
-  const PAGE_LIMIT = 100;  // max limit allowed by Birdeye
-  const totalPages = Math.ceil(maxTransactions / PAGE_LIMIT);
+  const PAGE_LIMIT = 100;           // max items per request
+  const INTER_REQUEST_DELAY = 250;  // ms between requests
+  const MAX_RETRIES = 3;            // retries per page on 429
 
   const allTx: any[] = [];
-  
-  // We fetch page batches in parallel to respect rate limits while maintaining high performance
-  for (let batch = 0; batch < totalPages / BATCH_SIZE; batch++) {
-    const pagePromises = Array.from({ length: BATCH_SIZE }, (_, i) => {
-      const offset = (batch * BATCH_SIZE + i) * PAGE_LIMIT;
-      if (offset >= maxTransactions) return Promise.resolve([]);
-      
-      return axios.get(url, {
-        headers: {
-          'X-API-KEY': apiKey,
-          'x-chain': 'solana'
-        },
-        params: {
-          address: address,
-          offset: offset,
-          limit: PAGE_LIMIT
-        }
-      }).then(res => res.data?.data?.items || [])
-        .catch(err => {
-          console.warn(`[Birdeye Ingestion] Failed to fetch offset ${offset}:`, err.message);
-          return [];
+  let offset = 0;
+
+  while (allTx.length < maxTransactions) {
+    let attempt = 0;
+    let pageData: any[] = [];
+    let success = false;
+
+    while (attempt <= MAX_RETRIES) {
+      try {
+        const res = await axios.get(url, {
+          headers: {
+            'X-API-KEY': apiKey,
+            'x-chain': 'solana'
+          },
+          params: {
+            address,
+            offset,
+            limit: PAGE_LIMIT
+          },
+          timeout: 10000
         });
-    });
 
-    const results = await Promise.allSettled(pagePromises);
-    let emptyPageCount = 0;
-    
-    results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value) {
-        if (r.value.length === 0) emptyPageCount++;
-        allTx.push(...r.value);
+        pageData = res.data?.data?.items ?? [];
+        success = true;
+        break;
+      } catch (err: any) {
+        const status = err.response?.status;
+
+        if (status === 400 && offset === 0) {
+          // Token not indexed in Birdeye Token Trades API — signal caller to use fallback
+          console.warn(`[Birdeye] Token ${address} not indexed in trades API (HTTP 400 on first page). Falling back.`);
+          return [];
+        }
+
+        if (status === 429) {
+          attempt++;
+          const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          console.warn(`[Birdeye] 429 rate limit at offset ${offset}. Backoff ${backoffMs}ms (attempt ${attempt}/${MAX_RETRIES}).`);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+        } else {
+          console.warn(`[Birdeye] Failed to fetch offset ${offset}: ${err.message}`);
+          break; // Non-retryable error — stop pagination
+        }
       }
-    });
+    }
 
-    // If all pages in the current batch returned empty results, we have hit the end of history
-    if (emptyPageCount === BATCH_SIZE) {
+    if (!success) {
+      // Could not fetch this page after retries — return partial result
+      console.warn(`[Birdeye] Stopping pagination after persistent failure at offset ${offset}. Collected ${allTx.length} transactions so far.`);
       break;
     }
+
+    if (pageData.length === 0) {
+      // End of available history
+      break;
+    }
+
+    allTx.push(...pageData);
+
+    if (pageData.length < PAGE_LIMIT) {
+      // Received fewer items than requested — we've reached the end
+      break;
+    }
+
+    offset += PAGE_LIMIT;
+    await new Promise(resolve => setTimeout(resolve, INTER_REQUEST_DELAY));
   }
 
   return allTx.slice(0, maxTransactions);
 }
+
 

@@ -50,9 +50,15 @@ export class SolanaCollector implements IBlockchainCollector {
   }
 
   /**
-   * Fetch transactions (DEX trades) with Birdeye primary and Helius fallback
+   * Fetch transactions (DEX trades) with Birdeye primary and Helius fallback.
+   * ohlcv is passed in so the Helius fallback path can interpolate priceUsd
+   * from the nearest OHLCV candle when Birdeye is unavailable.
    */
-  async fetchTransactions(address: string, maxTransactions: number): Promise<UniversalTransaction[]> {
+  async fetchTransactions(
+    address: string,
+    maxTransactions: number,
+    ohlcv: OHLCVCandle[] = []
+  ): Promise<UniversalTransaction[]> {
     console.log(`[SolanaCollector] Ingesting transactions for ${address} (max: ${maxTransactions})...`);
     
     // 1. Try Birdeye trades API (Primary)
@@ -63,7 +69,6 @@ export class SolanaCollector implements IBlockchainCollector {
       if (birdeyeTxs && birdeyeTxs.length > 0) {
         console.log(`[SolanaCollector] [Primary] Birdeye retrieved ${birdeyeTxs.length} transactions successfully`);
         return birdeyeTxs.map((tx: any): UniversalTransaction => {
-          const isBuy = tx.side === 'buy';
           const tokenAmount = tx.fromAddress?.toLowerCase() === address.toLowerCase() 
             ? tx.fromAmount 
             : tx.toAmount;
@@ -78,9 +83,7 @@ export class SolanaCollector implements IBlockchainCollector {
             to: tx.toAddress || '',
             amount: amount,
             type: tx.side === 'buy' ? 'buy' : tx.side === 'sell' ? 'sell' : 'transfer',
-            token: {
-              address: address,
-            },
+            token: { address: address },
             blockchain: 'solana',
             isTrade: true,
             priceUsd: priceUsd,
@@ -94,7 +97,7 @@ export class SolanaCollector implements IBlockchainCollector {
       console.warn(`[SolanaCollector] [Primary] Birdeye transaction fetch failed: ${error.message}. Falling back to Helius...`);
     }
 
-    // 2. Fallback to Helius transaction endpoint
+    // 2. Fallback: Helius enhanced transaction endpoint
     console.log(`[SolanaCollector] [Fallback] Fetching via Helius Address Transactions API...`);
     const solanaTransactions = await fetchSolanaTransactions(
       address,
@@ -103,23 +106,54 @@ export class SolanaCollector implements IBlockchainCollector {
       maxTransactions
     );
 
-    // Convert to universal format
-    return this.convertToUniversalTransactions(solanaTransactions, address);
+    // Convert to universal format, enriching with OHLCV-interpolated prices
+    return this.convertToUniversalTransactions(solanaTransactions, address, ohlcv);
   }
 
   /**
-   * Convert Solana transactions to universal format
+   * Interpolate USD price for a transaction timestamp from the OHLCV candle series.
+   * Finds the candle whose interval contains the timestamp and returns its close price.
+   * Returns undefined if no matching candle is found.
+   */
+  private interpolatePriceFromOHLCV(
+    timestamp: number,
+    ohlcv: OHLCVCandle[]
+  ): number | undefined {
+    if (!ohlcv || ohlcv.length === 0) return undefined;
+    // OHLCV candles are 15-minute intervals; find the closest candle at or before the timestamp
+    const CANDLE_INTERVAL = 15 * 60; // 15 minutes in seconds
+    let closest: OHLCVCandle | undefined;
+    let minDiff = Infinity;
+    for (const candle of ohlcv) {
+      const diff = Math.abs(candle.timestamp - timestamp);
+      if (diff < minDiff && diff <= CANDLE_INTERVAL) {
+        minDiff = diff;
+        closest = candle;
+      }
+    }
+    return closest ? closest.close : undefined;
+  }
+
+  /**
+   * Convert Solana transactions (from Helius) to universal format.
+   * Enriches each trade transaction with a USD price interpolated from
+   * the OHLCV candle series, and correctly classifies buy/sell direction.
    */
   private convertToUniversalTransactions(
     solanaTransactions: NormalizedTransaction[],
-    tokenAddress: string
+    tokenAddress: string,
+    ohlcv: OHLCVCandle[] = []
   ): UniversalTransaction[] {
     const universalTxs: UniversalTransaction[] = [];
 
     for (const solanaTx of solanaTransactions) {
       const isTrade = solanaTx.isTrade !== false;
-      // Process each transfer in the transaction
       for (const transfer of solanaTx.transfers) {
+        // Interpolate price from OHLCV candles (Helius doesn't provide USD price per tx)
+        const priceUsd = isTrade
+          ? this.interpolatePriceFromOHLCV(solanaTx.timestamp, ohlcv)
+          : undefined;
+
         universalTxs.push({
           hash: solanaTx.signature || `${solanaTx.timestamp}-${transfer.from}-${transfer.to}`,
           timestamp: solanaTx.timestamp,
@@ -129,12 +163,13 @@ export class SolanaCollector implements IBlockchainCollector {
           type: isTrade ? this.detectTransactionType(transfer, solanaTx.wallets) : 'transfer',
           token: {
             address: tokenAddress,
-            symbol: undefined, // Could be fetched from token metadata
+            symbol: undefined,
             decimals: undefined
           },
           blockchain: 'solana',
           raw: solanaTx,
-          isTrade: isTrade
+          isTrade: isTrade,
+          priceUsd: priceUsd  // ← populated from OHLCV interpolation
         });
       }
     }
@@ -143,16 +178,31 @@ export class SolanaCollector implements IBlockchainCollector {
   }
 
   /**
-   * Detect transaction type (buy, sell, or transfer)
-   * This is a simplified version - could be enhanced with DEX detection
+   * Classify a Helius token transfer as buy, sell, or transfer.
+   *
+   * Helius enhanced transactions include a wallets array of all accounts involved
+   * in the transaction. For a DEX swap:
+   *   - The token flows FROM the pool TO the buyer wallet   → 'buy'
+   *   - The token flows FROM the seller wallet TO the pool  → 'sell'
+   *
+   * "pool" accounts are system/program accounts not in solanaTx.wallets (the user wallets).
+   * If the FROM address is in the user wallets array, tokens are leaving a user → 'sell'.
+   * If the TO address is in the user wallets array (and FROM is not), tokens enter → 'buy'.
    */
   private detectTransactionType(
     transfer: any,
     wallets: string[]
   ): 'buy' | 'sell' | 'transfer' {
-    // For now, classify all as transfers
-    // In the future, we could detect DEX interactions to identify buys/sells
-    return 'transfer';
+    const walletSet = new Set(wallets.map(w => w.toLowerCase()));
+    const from = (transfer.from || '').toLowerCase();
+    const to = (transfer.to || '').toLowerCase();
+
+    const fromIsUser = walletSet.has(from);
+    const toIsUser = walletSet.has(to);
+
+    if (fromIsUser && !toIsUser) return 'sell'; // user sends tokens to pool/program → sell
+    if (toIsUser && !fromIsUser) return 'buy';  // pool/program sends tokens to user → buy
+    return 'transfer'; // user-to-user or ambiguous
   }
 
   /**
@@ -236,11 +286,11 @@ export class SolanaCollector implements IBlockchainCollector {
         console.warn(`[SolanaCollector] OHLCV fetch failed: ${err.message}`);
       }
 
-      // Step 2: Fetch transactions
+      // Step 2: Fetch transactions — pass ohlcv so the Helius fallback can interpolate priceUsd
       let heliusTxs: UniversalTransaction[] = [];
       try {
         console.log('[STEP 2/4] Fetching transactions from Helius...');
-        heliusTxs = await this.fetchTransactions(address, maxTransactions);
+        heliusTxs = await this.fetchTransactions(address, maxTransactions, ohlcv);
         console.log(`✅ Fetched ${heliusTxs.length} Helius transactions`);
       } catch (err: any) {
         console.warn(`[SolanaCollector] Helius transactions fetch failed: ${err.message}`);
