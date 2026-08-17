@@ -54,7 +54,9 @@ export async function getBasicScan(address: string, chain: string = '1'): Promis
     const data = await res.json();
     
     if (!res.ok) {
-      throw { message: data.error || 'Scan failed', code: data.code };
+      const detail = data.detail ? ` | Detail: ${data.detail}` : '';
+      console.error('[Scanner API] Basic scan failed:', data.error, data.detail);
+      throw { message: (data.error || 'Scan failed') + detail, code: data.code };
     }
     
     return data.data;
@@ -88,8 +90,9 @@ export async function startElevatorScan(
     const data = await res.json();
     
     if (!res.ok) {
-      // Throw an object with both message and code so the frontend can branch on specific errors
-      throw { message: data.error || 'Elevator scan failed', code: data.code };
+      const detail = data.detail ? ` | Detail: ${data.detail}` : '';
+      console.error('[Scanner API] Elevator scan failed:', data.error, data.detail);
+      throw { message: (data.error || 'Elevator scan failed') + detail, code: data.code };
     }
     
     return {
