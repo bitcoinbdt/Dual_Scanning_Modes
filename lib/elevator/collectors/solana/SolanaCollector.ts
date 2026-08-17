@@ -122,16 +122,33 @@ export class SolanaCollector implements IBlockchainCollector {
     if (!ohlcv || ohlcv.length === 0) return undefined;
     // OHLCV candles are 15-minute intervals; find the closest candle at or before the timestamp
     const CANDLE_INTERVAL = 15 * 60; // 15 minutes in seconds
-    let closest: OHLCVCandle | undefined;
-    let minDiff = Infinity;
+    let closestInterval: OHLCVCandle | undefined;
+    let closestFallback: OHLCVCandle | undefined;
+    let minDiffInterval = Infinity;
+    let minDiffFallback = Infinity;
+
     for (const candle of ohlcv) {
       const diff = Math.abs(candle.timestamp - timestamp);
-      if (diff < minDiff && diff <= CANDLE_INTERVAL) {
-        minDiff = diff;
-        closest = candle;
+      
+      // 1. Check for close match within 15 mins
+      if (diff < minDiffInterval && diff <= CANDLE_INTERVAL) {
+        minDiffInterval = diff;
+        closestInterval = candle;
+      }
+      
+      // 2. Track overall closest as fallback
+      if (diff < minDiffFallback) {
+        minDiffFallback = diff;
+        closestFallback = candle;
       }
     }
-    return closest ? closest.close : undefined;
+
+    if (closestInterval) {
+      return closestInterval.close;
+    }
+    
+    // Best-effort fallback for transactions outside the 24-hour window
+    return closestFallback ? closestFallback.close : undefined;
   }
 
   /**
@@ -325,8 +342,8 @@ export class SolanaCollector implements IBlockchainCollector {
             tx.type = matchingDexTrade.type; // 'buy' or 'sell'
             dexTradesMap.delete(signature);
           } else {
-            tx.isTrade = false;
-            tx.type = 'transfer';
+            // Keep original isTrade, type, and priceUsd assigned by fetchTransactions.
+            // Do not force-clobber Helius-only transactions to transfers/non-trades.
           }
           mergedTransactions.push(tx);
         }
