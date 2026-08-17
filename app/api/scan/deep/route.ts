@@ -12,6 +12,7 @@ import { headers } from 'next/headers';
 import { DeepScanService } from '@/lib/deep_scan/DeepScanService';
 import { detectChain, isChainSupported } from '@/lib/elevator/utils/chainDetector';
 import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
+import { saveSnapshot } from '@/lib/snapshots/snapshotService';
 import crypto from 'crypto';
 
 const DEFAULT_DEEP_SCAN_COST = 15; // 15 credits standard cost
@@ -159,13 +160,32 @@ export async function POST(request: NextRequest) {
     }
 
     // F-9: Mark scan as completed BEFORE building the response.
-    // If NextResponse.json() throws (e.g. serialization error),
-    // the catch block will NOT refund credits since the scan succeeded.
     scanCompleted = true;
+
+    // Phase 6: Save shareable snapshot (non-blocking — never fails the scan)
+    let snapshotId: string | undefined;
+    try {
+      snapshotId = await saveSnapshot(
+        'deep',
+        address,
+        detection.chain,
+        result.tokenMetadata?.symbol ?? null,
+        result.tokenMetadata?.name ?? null,
+        result,
+        user.id
+      );
+    } catch (snapErr: any) {
+      console.warn('[DEEP API] Snapshot save failed (non-fatal):', snapErr.message);
+    }
+
+    if (snapshotId) {
+      result.snapshotId = snapshotId;
+    }
 
     return NextResponse.json({
       success: true,
       remainingCredits: newBalance,
+      snapshotId,
       result,
     });
   } catch (error: any) {

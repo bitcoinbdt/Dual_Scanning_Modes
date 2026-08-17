@@ -807,6 +807,14 @@ export interface DeepScanResult {
   liquidityStress?: LiquidityStressReport;
   /** Historical behavior analysis (Module 13) */
   historicalBehavior?: HistoricalBehaviorResult;
+  // ── Phase 4 Reputation & Traceability Modules ──
+  deployerProfile?: import('../reputation/DeployerProfiler').DeployerProfile;
+  tokenUnlockSchedule?: import('../traceability/TokenUnlockTracker').UnlockSchedule;
+  rugPatternMatch?: import('../reputation/RugPatternMatcher').RugMatchResult;
+  insiderAccumulation?: import('./engines/InsiderAccumulationDetector').InsiderAccumulationResult;
+  // ── Phase 5: AI Agents ──
+  exchangeListing?: import('../ai/ExchangeListingAgent').ExchangeListingResult;
+  news?: import('../ai/NewsAgent').NewsResult;
   riskScore: ExplainableRiskScore;
   // ── Synthesis ──
   topRisks: RiskSignal[];
@@ -841,6 +849,7 @@ export interface DeepScanResult {
   overallConfidence: number;
   /** Wall-clock ms for the scan */
   scanDurationMs: number;
+  snapshotId?: string;
 }
 
 export interface HistoricalPoolStateResult {

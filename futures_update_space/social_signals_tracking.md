@@ -44,16 +44,26 @@ social links as part of their token metadata response.
 Extract and validate the existence of:
 
 ```typescript
+// ✅ NEW-008 RESOLVED — source is now tracked per-field, not per-record.
+// This handles cases where website comes from DexScreener but Twitter from CoinGecko.
+type SocialSource = 'dexscreener' | 'coingecko' | 'codex' | 'geckoterminal' | null;
+
 interface SocialPresenceLinks {
-  website: string | null;         // e.g. "https://pepe.vip"
-  twitter: string | null;         // e.g. "https://twitter.com/pepecoineth"
-  telegram: string | null;        // e.g. "https://t.me/pepecoin"
+  website: string | null;
+  websiteSource: SocialSource;
+  twitter: string | null;
+  twitterSource: SocialSource;
+  telegram: string | null;
+  telegramSource: SocialSource;
   discord: string | null;
+  discordSource: SocialSource;
   github: string | null;
-  // Source of these links (which API returned them)
-  source: 'dexscreener' | 'coingecko' | 'codex' | 'geckoterminal';
+  githubSource: SocialSource;
 }
+// Merge rule: for each field, use the first non-null value found in priority order.
+// Record which provider provided it via the corresponding *Source field.
 ```
+
 
 **Validation Rules:**
 - `website`: Must pass HTTP HEAD request (non-4xx). If the domain resolves but
@@ -85,9 +95,30 @@ Codex or CoinGecko):
   - `< 7 days`: BRAND NEW ACCOUNT — extremely high rug risk.
   - `7–30 days`: NEW ACCOUNT.
   - `> 30 days`: Display age in days/months.
+
+  #### ✅ C-008 RESOLVED — Twitter Account Age Requires Authentication
+
+  **Problem was**: The spec said "query public APIs only" but Twitter's
+  `created_at` field requires OAuth 2.0 Bearer Token authentication.
+
+  **Resolution — Two-Track Approach**:
+
+  **Track A (Preferred, if Twitter Developer API key is available)**:
+  - Add `TWITTER_BEARER_TOKEN` to `.env.local`.
+  - Query: `GET https://api.twitter.com/2/users/by/username/{handle}?user.fields=created_at`
+  - Returns exact account creation timestamp. No user auth required — app-level bearer token only (free Basic tier).
+  - **Rate limit**: 15 requests / 15 minutes (free tier). Mitigated by the 24h `token_social_cache` table.
+
+  **Track B (Fallback, no API key)**:
+  - If `TWITTER_BEARER_TOKEN` is not set, skip the account age check entirely.
+  - Return `twitter_account_age_days: null` and suppress SOC-002 signal.
+  - The UI shows: *"Twitter: @handle (age unknown — API key not configured)"*
+  - **No false positives**: Missing data never counts as a risk signal.
+
 - **Website Domain Age**: Query WHOIS API (e.g. `who-dat.as93.net` public endpoint)
   for domain registration date.
   - Domain registered same week as token launch: Flag as `NEW DOMAIN`.
+
 
 ---
 
@@ -178,3 +209,35 @@ Link Consistency: All sources agree
 | `lib/social/SocialRiskMapper.ts` | **[NEW]** Maps social facts to risk signals (SOC-001 through SOC-006) |
 | `lib/deep_scan/DeepScanService.ts` | Call `SocialMetadataCollector` and inject result into `EvidenceMapper` |
 | `token_social_cache` | **[NEW DB TABLE]** See schema above |
+
+---
+
+## 8. Technical Feasibility, Cost & Implementation Details
+
+### A. Extracting Social URLs
+- **Mechanism**: The standard DexScreener `/pairs` query already returns a `socials` array containing website, Twitter, and Telegram links.
+  - **Feasibility**: **Highly Feasible**. The data is already fetched in the basic scan path; it only needs to be parsed and mapped.
+  - **Cost**: $0 (0 additional API queries).
+
+### B. Website Liveness Auditing
+- **Mechanism**: Use `axios` in Node to send an HTTP `HEAD` request to the website URL:
+  ```typescript
+  try {
+    const res = await axios.head(url, { timeout: 2000 });
+    const isAlive = res.status >= 200 && res.status < 400;
+  } catch {
+    // Retry with GET if HEAD is rejected by server
+  }
+  ```
+  - **Feasibility**: **Highly Feasible**. Uses a 2-second timeout to prevent stalling the scan.
+  - **Cost**: $0 (Standard HTTP request).
+
+### C. Domain WHOIS Age & GitHub Checks
+- **WHOIS**: Query public REST APIs (e.g. `who-dat.as93.net/api/` or similar free domain info services) for domain creation timestamps.
+  - **Feasibility**: **Feasible**. Requires third-party public API endpoints which can occasionally rate-limit.
+  - **Fallback**: If the WHOIS API fails, skip domain age and return the link as unverified rather than failing the scan.
+- **GitHub**: Fetch the repository's latest commit date using standard public GitHub APIs: `GET https://api.github.com/repos/{owner}/{repo}/commits?per_page=1`.
+  - **Feasibility**: **Highly Feasible**. No authentication required for public repositories.
+  - **Cost**: $0 (Free GitHub API tier allows 60 requests/hour per IP; caching covers this easily).
+- **Caching**: All social verification data must be cached for **24 hours** in the `token_social_cache` table to prevent API rate limiting.
+

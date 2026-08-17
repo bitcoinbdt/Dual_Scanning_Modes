@@ -59,14 +59,51 @@ interface RaydiumV4PoolState {
 1. Identify the pool address from DexScreener's `/pairs` response
    (`pairAddress` field for Raydium pairs)
 2. Call `connection.getAccountInfo(poolAddress)` to get raw buffer
-3. Deserialize using Raydium V4 AMM layout (borsh schema)
+3. Deserialize using the Raydium V4 AMM layout
+
+### ✅ C-003 RESOLVED — Borsh Package & Serverless Strategy
+
+**Problem was**: The full `@raydium-io/raydium-sdk` is 50MB+ and causes
+serverless cold-start failures and Vercel bundle limit errors.
+
+**Resolution**: Do NOT import the full Raydium SDK. Use one of the following
+two approaches in priority order:
+
+**Approach A (Primary) — Raydium Public REST API (No SDK)**:
+```typescript
+// Zero bundle impact. Raydium exposes reserves directly as JSON.
+const res = await fetch(
+  `https://api.raydium.io/v2/ammV3/ammInfo?ids=${poolAddress}`,
+  { next: { revalidate: 60 } } // Next.js 60-second cache
+);
+const data = await res.json();
+const baseReserve = BigInt(data[0].baseReserve);   // Already parsed
+const quoteReserve = BigInt(data[0].quoteReserve);
+```
+- **Feasibility**: Highly Feasible. No SDK, no bundle issues.
+- **Cost**: $0 (Public Raydium API).
+- **Latency**: ~100ms. Cache for 60 seconds.
+
+**Approach B (Fallback) — Minimal Manual Borsh Layout**:
+If the REST API is down, manually decode only the vault pubkeys using
+`@solana/web3.js` (already a dependency) + a hand-written 8-field offset map.
+Do NOT install `@raydium-io/raydium-sdk` for this purpose alone.
+```typescript
+// Read vault pubkeys at known byte offsets in V4 pool state buffer
+// coinVaultOffset = 336, pcVaultOffset = 368 (from community V4 layout docs)
+const coinVaultPubkey = new PublicKey(buffer.slice(336, 368));
+const pcVaultPubkey = new PublicKey(buffer.slice(368, 400));
+// Then call getTokenAccountBalance on each vault
+```
+
 4. Extract `coinVaultBalance` and `pcVaultBalance` as BigInt reserves
 
-**Alternative (no borsh)**:  
+**Alternative (no borsh)**:
 Use Helius `getAsset` or `getProgramAccounts` with the pool address directly.
 Raydium also exposes a REST API: `https://api.raydium.io/v2/ammV3/ammInfo`
 that returns `baseReserve` and `quoteReserve` in human-readable form — use
 this as a fallback if raw deserialization is unreliable.
+
 
 ### CPMM Pool State
 Same constant-product model. Raydium CPMM stores reserves in token vault
@@ -147,3 +184,24 @@ consistency within a single scan session, but short enough to avoid stale data:
 | `lib/solana/RaydiumPoolResolver.ts` | **[NEW]** Resolves pool address from token address via DexScreener pairAddress |
 | `lib/deep_scan/DeepScanService.ts` | For Solana deep scans, call `RaydiumPoolReader` before `LiquidityStressAnalyzer` |
 | `lib/deep_scan/historical/HistoricalPoolReservesIndexer.ts` | Phase 2: Add Solana branch using Helius RPC |
+
+---
+
+## 8. Technical Feasibility, Cost & Implementation Details
+
+### A. Raydium Pool Account Query
+- **Mechanism**: The Raydium V4 AMM pool state account is a standard Solana account.
+  - Query via `connection.getAccountInfo(new PublicKey(poolAddress))`.
+  - Parse the raw `accountInfo.data` buffer using the standard Raydium V4 Borsh layout (available from `@raydium-io/raydium-sdk` or standard community definitions).
+  - Extract the base vault and quote vault public keys.
+  - Run a batch `connection.getMultipleAccountsInfo([baseVault, quoteVault])` to extract the raw token reserves (`amount` field in the SPL token account layout).
+- **Feasibility**: **Highly Feasible**. All standard Web3 nodes support this directly.
+- **Cost**: $0 (Standard public RPC requests).
+- **Latency**: ~80ms to 150ms.
+
+### B. Fallback REST Option
+- **Mechanism**: If Borsh decoding fails or is unstable, query Raydium's public API: `GET https://api.raydium.io/v2/ammV3/ammInfo?ids={poolAddress}`.
+- **Feasibility**: **Highly Feasible**. Raydium's public API returns JSON reserves.
+- **Cost**: $0 (Free public API).
+- **Caching**: Vault balances are cached for **60 seconds** to prevent duplicate RPC calls for concurrent scans on the same token.
+

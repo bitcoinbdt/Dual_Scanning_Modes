@@ -111,6 +111,53 @@ where wallets are sorted ascending by balance
 For EVM chains where `holdersStatus = 'unavailable'`, skip Gini and return
 `status: 'insufficient_data'`.
 
+#### ✅ C-015 RESOLVED — EVM Gini Always Returns `insufficient_data`
+
+**Problem was**: Most EVM tokens (especially new micro-caps on Base and BSC) do
+not have `HolderInfo[]` in the Elevator collectors, making Gini useless for EVM.
+
+**Resolution — EVM Holder Distribution Fallback**:
+When the Elevator returns `holdersStatus = 'unavailable'` for an EVM token,
+the backend attempts a fallback query to the block explorer API:
+
+```typescript
+// Fallback: Etherscan / BscScan token holder list
+// GET /api?module=token&action=tokenholderlist&contractaddress={addr}&page=1&offset=100
+// Returns: [ { TokenHolderAddress, TokenHolderQuantity }, ... ]
+
+async function fetchEVMHolders(
+  tokenAddress: string,
+  chainId: string
+): Promise<HolderInfo[] | null> {
+  const explorerUrl = EXPLORER_API_MAP[chainId]; // e.g. api.etherscan.io
+  const res = await fetch(
+    `${explorerUrl}?module=token&action=tokenholderlist` +
+    `&contractaddress=${tokenAddress}&page=1&offset=100&apikey=${process.env.EXPLORER_API_KEY}`
+  );
+  const data = await res.json();
+  if (data.status !== '1') return null;
+  return data.result.map((h: any) => ({
+    address: h.TokenHolderAddress,
+    balance: BigInt(h.TokenHolderQuantity),
+  }));
+}
+```
+
+| Chain | Explorer API | Free Tier |
+|---|---|---|
+| Ethereum | `api.etherscan.io` | 5 req/sec |
+| BSC | `api.bscscan.com` | 5 req/sec |
+| Base | `api.basescan.org` | 5 req/sec |
+| Polygon | `api.polygonscan.com` | 5 req/sec |
+
+**Fallback cascade**:
+1. Use Elevator `HolderInfo[]` if available.
+2. If not, query block explorer API for top-100 holders.
+3. If that also fails (rate limit / unsupported chain), return `status: 'insufficient_data'`.
+
+**Cache**: Explorer holder list is cached for **30 minutes** to avoid excessive API usage.
+
+
 ### UI Display
 ```
 Holder Gini: 0.73  [High Concentration]
@@ -159,3 +206,30 @@ Exit Impact Simulation:
 | `lib/deep_scan/engines/VolumeConcentrationAnalyzer.ts` | **[MODIFY]** Add Gini coefficient computation alongside existing HHI |
 | `lib/deep_scan/engines/AmmSlippageSimulator.ts` | **[MODIFY]** Extend from 2 position sizes to 5-tier ladder |
 | `lib/deep_scan/types.ts` | **[MODIFY]** Add `contractRisk: ContractRiskResult` to `DeepScanResult` |
+
+---
+
+## 7. Technical Feasibility, Cost & Implementation Details
+
+### A. EVM / GoPlus Risk Wiring
+- **Mechanism**: The GoPlus security query is already implemented. The logic change is purely in `RiskScoringEngine.ts` to add standard conditional checks:
+  ```typescript
+  if (params.isProxy) overallScore += 8;
+  if (params.isBlacklisted) overallScore += 10;
+  ```
+  - **Feasibility**: **Highly Feasible**. Changes are in local logic only.
+  - **Cost**: $0 (0 additional external requests).
+
+### B. Solana Authority Verification
+- **Mechanism**: Standard RPC `getParsedAccountInfo` returns mint details (including `mintAuthority` and `freezeAuthority` addresses). If these values are `null`, the authorities are revoked.
+  - **Feasibility**: **Highly Feasible**. Data is already fetched during the Solana scan; it only needs mapping to risk signals.
+  - **Cost**: $0 (Uses standard RPC calls).
+
+### C. Gini Coefficient & Slippage Ladder Calculations
+- **Gini**: Local in-memory math sorting `HolderInfo[]` in ascending order:
+  - Time complexity: $O(N \log N)$ where $N \le 100$ top holders. Complete execution is $<1$ millisecond.
+- **Slippage Ladder**: Mathematical formula loop executed 5 times instead of 2.
+  - Time complexity: $O(1)$. Complete execution is $<0.5$ milliseconds.
+  - **Feasibility**: **Highly Feasible**. No external API calls are made for these calculations.
+  - **Cost**: $0.
+

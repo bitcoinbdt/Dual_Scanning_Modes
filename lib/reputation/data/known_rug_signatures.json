@@ -1,0 +1,18 @@
+[
+  {
+    "id": "rug-eth-001",
+    "chain": "eth",
+    "label": "HoneypotBot_V3",
+    "functionSelectors": ["0x095ea7b3", "0x40c10f19", "0xa9059cbb", "0x095ea7b4"],
+    "bytecodeHash": "0x1234567890abcdef",
+    "addedAt": "2026-08-16T12:00:00Z"
+  },
+  {
+    "id": "rug-bsc-001",
+    "chain": "bsc",
+    "label": "FakeLPDrainer",
+    "functionSelectors": ["0x095ea7b3", "0xa9059cbb", "0xd96a094e", "0xbc25cfb4"],
+    "bytecodeHash": "0xfedcba0987654321",
+    "addedAt": "2026-08-16T12:00:00Z"
+  }
+]

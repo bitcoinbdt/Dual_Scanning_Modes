@@ -39,8 +39,8 @@ export const DEEP_SCAN_CONFIG = {
   amm: {
     /** Canonical V2 constant-product default fee (0.3%) applied when pool fee is unknown */
     defaultSwapFee: 0.003,
-    /** Default trade position sizes (USD) to simulate */
-    defaultPositionSizesUsd: [1_000, 5_000, 10_000, 25_000, 50_000, 100_000],
+    /** Default trade position sizes (USD) to simulate — 5-tier ladder (T1–T5) */
+    defaultPositionSizesUsd: [1_000, 5_000, 25_000, 100_000, 500_000],
     /** Price impact risk limits (%) */
     priceImpactRisk: {
       low: 1,

@@ -30,6 +30,26 @@ candle.volume > mean_volume * 3.0   AND   |close - open| / open > 0.15
 These are candidate "event" candles — high-volume, high-movement moments that
 could be organic or information-driven.
 
+#### ✅ C-006 RESOLVED — OHLCV Candle Resolution & Data Source
+
+**Candle Resolution**: Use **5-minute candles** exclusively.
+- 1-minute candles produce too many false-positive spikes (normal noise).
+- 1-hour candles are too coarse to find the 300-second pre-event accumulation window.
+- 5-minute candles balance signal quality with the lookback window granularity.
+
+**OHLCV Data Source by Chain**:
+| Chain | Primary Source | Fallback |
+|---|---|---|
+| Solana | Birdeye OHLCV API: `GET /defi/ohlcv?address={mint}&type=5m&time_from={ts}&time_to={ts}` | GeckoTerminal OHLCV |
+| EVM (ETH/BSC) | GeckoTerminal OHLCV: `GET /networks/{chain}/pools/{pool}/ohlcv/minute?aggregate=5` | DexScreener chart data |
+
+
+
+**Cache**: OHLCV data is already collected by the Elevator and stored in the scan session context. The insider accumulation detector reads from this in-memory cache — **no additional API calls are required**.
+
+If candle data is unavailable (new token with < 6h of history), return `status: 'insufficient_data'` immediately.
+
+
 ### Step 2 — Look Back 5–10 Minutes Before Each Event
 For each identified event candle, scan the transaction batch for buys that
 occurred in the **preceding 300 seconds** (5 minutes):
@@ -171,3 +191,18 @@ Always include a confidence note in the report:
 
 **Minimum viable data**: 500+ transactions, 6+ hours of OHLCV history.
 If not met → `status: 'insufficient_data'` with reason string.
+
+---
+
+## 9. Technical Feasibility, Cost & Implementation Details
+
+### A. Local CPU & Memory Footprint
+- **Data Footprint**: 10,000 transactions containing basic types (hashes, addresses, timestamps, amounts) require roughly **5MB** of RAM. This is negligible in a Node.js/Next.js serverless execution environment.
+- **Computational Cost**:
+  - Identifying candles that meet the spike threshold: $O(M)$ where $M \le 200$ candles. Execution time: $<0.1\text{ms}$.
+  - Lookback window mapping: Filter 10,000 transactions for each spike event. With an average of 3 spike events, this is $3 \times 10,000 = 30,000$ loop operations. Execution time: $\approx 2\text{ms}$.
+  - Wallet clustering: In-memory hash mapping of buy timestamps. Execution time: $\approx 1\text{ms}$.
+- **Feasibility**: **Highly Feasible**. The entire detector algorithm completes in under **5ms** of CPU time.
+- **Cost**: $0 (0 external API calls are required).
+- **Limitation**: Depends on the quality of the ingested transaction batch. If the transaction window contains gaps or missing entries, clusters will not be fully populated.
+

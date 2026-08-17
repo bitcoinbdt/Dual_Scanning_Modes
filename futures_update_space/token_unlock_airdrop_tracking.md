@@ -78,3 +78,49 @@ CREATE TABLE token_unlock_schedules (
 CREATE INDEX idx_unlock_imminent ON token_unlock_schedules(next_unlock_at ASC) 
   WHERE next_unlock_at >= NOW();
 ```
+
+---
+
+## 5. Technical Feasibility, Cost & Implementation Details
+
+### A. Airdrop / ICO Distribution Tracing
+- **Mechanism**: Perform in-memory transaction audit on the transaction list:
+  - If a single address (e.g. deployer or presale claim contract) transfers tokens to over 20 unique recipient wallets within a 5-minute block-0 window, the transaction is marked as a **distribution event**.
+  - Sum the transfer amounts to find the total distributed percentage:
+    $$\text{Airdrop \%} = \left( \frac{\sum \text{Airdropped Token Amounts}}{\text{Total Supply}} \right) \times 100$$
+- **Feasibility**: **Highly Feasible**. Uses in-memory array filtering on the loaded transactions.
+- **Cost**: $0 (0 external API queries).
+
+### B. Vesting Lock Inquiries
+- **EVM (PinkLock, Sablier, Team Finance)**:
+  - **Mechanism**: Standard lockers maintain public contract addresses on-chain. We check if the token contract itself or locker registry contracts hold balances of the scanned token.
+  - **Feasibility**: **Feasible**. For a robust implementation, we compile a static list of the top 5 locking contract addresses on each EVM chain (e.g. PinkLock, Unicrypt, Sablier) and run a batch `balanceOf` query.
+  - **Cost**: $0 (Standard public RPC batch query).
+- **Solana (Streamflow)**:
+  - #### ✅ C-007 RESOLVED — Streamflow SDK vs Public API Clarification
+  - **Problem was**: The spec implied Streamflow has a public free REST API — it does not.
+  - **Correct Approach**: Streamflow is an **on-chain Solana program**. We query it by reading program accounts directly using the Solana RPC, not via a Streamflow API key.
+  - **Implementation**:
+    ```typescript
+    // Streamflow program ID on Solana mainnet
+    const STREAMFLOW_PROGRAM_ID = 'strmqZ7p4zPQzRqpgNMbW2s1zCdHPF1cMkBCAwJWyEr';
+
+    // Find all vesting stream accounts for a given token mint
+    const streamAccounts = await connection.getProgramAccounts(
+      new PublicKey(STREAMFLOW_PROGRAM_ID),
+      {
+        filters: [
+          { dataSize: 496 }, // Known stream account size
+          { memcmp: { offset: 40, bytes: mintAddress } } // Filter by token mint
+        ]
+      }
+    );
+    // Parse each stream account's raw data to extract:
+    // - start_time, end_time, amount_per_period, period, cliff_amount
+    ```
+  - **No API key required** — uses standard public RPC calls.
+  - **Fallback**: If `getProgramAccounts` returns empty, the token has no Streamflow vesting. Check top holders via `connection.getTokenLargestAccounts()` — accounts owned by the Streamflow program will still appear there.
+  - **Feasibility**: **Highly Feasible**.
+  - **Cost**: $0 (Uses standard Helius / Solana RPC account queries).
+- **Limitation**: Custom/unlisted vesting contracts will show up as "Top Holders" rather than flagged lockers. Gini coefficient analysis handles this by showing high holder concentration regardless of whether it is officially labeled as a lock.
+

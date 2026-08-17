@@ -80,6 +80,22 @@ export function calculateRiskScore(params: {
   buyerQuality: BuyerQualityResult;
   capitalEfficiency: CapitalEfficiencyResult;
   isHoneypot?: boolean;
+  // ── EVM GoPlus contract risk flags (CTR-001–007) ──
+  evmContractRisk?: {
+    isProxy?: boolean;           // CTR-001: upgradeable proxy
+    transferPausable?: boolean;  // CTR-002: owner can pause transfers
+    isBlacklisted?: boolean;     // CTR-003: owner can blacklist wallets
+    ownerChangeBalance?: boolean;// CTR-004: owner can modify balances
+    canTakeBackOwnership?: boolean; // CTR-005: renounced but re-takeable
+    isMintable?: boolean;        // CTR-006: unlimited mint authority
+    tradingCooldown?: boolean;   // CTR-007: trade cooldown
+  };
+  // ── Solana authority flags (SOL-CTR-001–003) ──
+  solanaAuthorityRisk?: {
+    mintAuthorityActive?: boolean;   // SOL-CTR-001: can mint more tokens
+    freezeAuthorityActive?: boolean; // SOL-CTR-002: can freeze wallets
+    upgradeAuthorityActive?: boolean;// SOL-CTR-003: program upgradeable (new token only)
+  };
 }): ExplainableRiskScore {
   const subScores: SubScore[] = [];
   const topRisks: RiskSignal[] = [];
@@ -356,6 +372,66 @@ export function calculateRiskScore(params: {
   }
 
   // ─────────────────────────────────────────────
+  // 7b. Contract Risk Signals (EVM CTR-001–007 & Solana SOL-CTR-001–003)
+  // ─────────────────────────────────────────────
+  // These are additive penalty points added directly to overallScore AFTER
+  // the weighted normalization step below. They represent objective on-chain
+  // facts (authority flags) rather than behavioural patterns, so they are
+  // applied as flat additions rather than weighted sub-scores.
+  let contractRiskPenalty = 0;
+
+  const ctr = params.evmContractRisk;
+  if (ctr) {
+    if (ctr.isProxy) {
+      contractRiskPenalty += 8;
+      topRisks.push({ riskId: 'CTR-001', riskName: 'Upgradeable Proxy Contract', severity: 'medium', status: 'active', evidenceIds: [], description: 'Contract is an upgradeable proxy. The owner can silently alter token logic after deployment.', confidence: 95 });
+    }
+    if (ctr.transferPausable) {
+      contractRiskPenalty += 12;
+      topRisks.push({ riskId: 'CTR-002', riskName: 'Transfer Pause Function', severity: 'high', status: 'active', evidenceIds: [], description: 'Owner can pause all token transfers at any time, trapping holders.', confidence: 95 });
+    }
+    if (ctr.isBlacklisted) {
+      contractRiskPenalty += 10;
+      topRisks.push({ riskId: 'CTR-003', riskName: 'Blacklist Function Enabled', severity: 'high', status: 'active', evidenceIds: [], description: 'Owner can blacklist specific wallets, preventing them from transferring tokens.', confidence: 95 });
+    }
+    if (ctr.ownerChangeBalance) {
+      contractRiskPenalty += 20;
+      topRisks.push({ riskId: 'CTR-004', riskName: 'Owner Can Modify Balances', severity: 'critical', status: 'active', evidenceIds: [], description: 'Contract contains a function allowing the owner to directly alter any wallet\'s token balance.', confidence: 98 });
+    }
+    if (ctr.canTakeBackOwnership) {
+      contractRiskPenalty += 15;
+      topRisks.push({ riskId: 'CTR-005', riskName: 'Ownership Re-takeable Despite Renouncement', severity: 'high', status: 'active', evidenceIds: [], description: 'Ownership appears renounced but a hidden function allows the original deployer to reclaim it.', confidence: 90 });
+      // Cancel the renounced-ownership mitigator if present (CTR-005 nullifies the -10 reduction)
+      const renouncedIdx = mitigators.findIndex(m => m.name === 'Renounced Ownership');
+      if (renouncedIdx !== -1) mitigators.splice(renouncedIdx, 1);
+    }
+    if (ctr.isMintable) {
+      contractRiskPenalty += 12;
+      topRisks.push({ riskId: 'CTR-006', riskName: 'Unlimited Mint Authority Active', severity: 'high', status: 'active', evidenceIds: [], description: 'Owner can mint an unlimited number of new tokens, enabling supply dilution or rug-pull.', confidence: 95 });
+    }
+    if (ctr.tradingCooldown) {
+      contractRiskPenalty += 3;
+      topRisks.push({ riskId: 'CTR-007', riskName: 'Trading Cooldown Restriction', severity: 'low', status: 'active', evidenceIds: [], description: 'Contract enforces a timed delay between consecutive buy or sell transactions.', confidence: 90 });
+    }
+  }
+
+  const sol = params.solanaAuthorityRisk;
+  if (sol) {
+    if (sol.mintAuthorityActive) {
+      contractRiskPenalty += 12;
+      topRisks.push({ riskId: 'SOL-CTR-001', riskName: 'Mint Authority Not Revoked', severity: 'high', status: 'active', evidenceIds: [], description: 'Token mint authority is still active. The deployer can create additional supply at any time.', confidence: 95 });
+    }
+    if (sol.freezeAuthorityActive) {
+      contractRiskPenalty += 10;
+      topRisks.push({ riskId: 'SOL-CTR-002', riskName: 'Freeze Authority Not Revoked', severity: 'high', status: 'active', evidenceIds: [], description: 'Token freeze authority is still active. The deployer can freeze any holder\'s token account.', confidence: 95 });
+    }
+    if (sol.upgradeAuthorityActive) {
+      contractRiskPenalty += 6;
+      topRisks.push({ riskId: 'SOL-CTR-003', riskName: 'Program Upgrade Authority Active', severity: 'medium', status: 'active', evidenceIds: [], description: 'The underlying token program is upgradeable. Logic may be altered post-deployment.', confidence: 80 });
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // 8. Normalized weighted score (measured modules only)
   // ─────────────────────────────────────────────
   const measuredSubScores = subScores.filter(s => s.dataAvailability === 'measured');
@@ -377,6 +453,9 @@ export function calculateRiskScore(params: {
     // Apply mitigators
     const totalReduction = mitigators.reduce((sum, m) => sum + m.reductionPoints, 0);
     overallScore = Math.max(0, overallScore - totalReduction);
+
+    // Apply contract risk penalty (CTR/SOL-CTR flat additive points) — capped at 100
+    overallScore = Math.min(100, overallScore + contractRiskPenalty);
   }
 
   if (verifiedHoneypot) {

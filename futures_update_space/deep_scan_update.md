@@ -83,3 +83,115 @@ graph TD
 ### B. Micro-Cap / Meme / Launchpad Engine
 * **Focused Metrics**: Runs the full suite of micro-intelligence: Whale Exit Simulation, Sniper detection, Wash Trading Loop extraction, Gini coefficient concentration, and Liquidity Locks.
 
+### C. UI Presentation Rule: No Raw Transaction List
+* **Backend Data Only**: The 10,000 fetched transactions are strictly processed server-side/in-memory to run statistical calculations.
+* **UI Presentation**: The UI **never renders a raw transaction history list or table**. It only displays aggregated, sorted results and warning indicators (such as a list of the top 50 buyers, sniper flags, wash trading loops, or CEX exit sweeps). Rendering 10,000 rows would severely lag the user's browser and clutter the report.
+
+---
+
+## 5. Technical Feasibility, Cost & Implementation Details
+
+### A. Feasibility of Fetching 10,000 Transactions
+Fetching 10,000 transactions varies significantly by chain and API provider:
+
+1. **EVM (Ethereum, BSC, Base, etc.)**:
+   * **Mechanism**: Query BscScan/Etherscan API `/api?module=account&action=tokentx&address={token}&page=1&offset=10000&sort=desc`.
+   * **Feasibility**: **Highly Feasible**. A single free API call returns up to 10,000 historical transfers instantly in JSON format.
+   * **Cost**: $0 (Standard free-tier key, allows up to 5 requests per second).
+
+2. **Solana**:
+   * **Mechanism**: Direct RPC queries via standard Solana `getSignaturesForAddress` require pagination (100 signatures per page = 100 requests) followed by `getParsedTransactions` (10,000 calls), which is extremely slow and expensive.
+   * **Primary Solution — Birdeye Token Trades API**:
+     Query the **Birdeye Token Trades API**: `GET /defi/txs/token?address={address}&offset=0&limit=100` (paginated up to 10,000 using parallel batch fetching to optimize speed).
+     * **Parallel Page Fetching**:
+       ```typescript
+       // Fetch 10,000 txns in 10 parallel batches of 10 pages each (100 txns/page)
+       const BATCH_SIZE = 10;   // pages per parallel batch
+       const PAGE_LIMIT = 100;  // txns per page
+       const TARGET = 10000;
+       const totalPages = TARGET / PAGE_LIMIT;  // 100 pages
+
+       const allTx: any[] = [];
+       for (let batch = 0; batch < totalPages / BATCH_SIZE; batch++) {
+         const pagePromises = Array.from({ length: BATCH_SIZE }, (_, i) => {
+           const offset = (batch * BATCH_SIZE + i) * PAGE_LIMIT;
+           return fetchBirdeyePage(tokenAddress, offset, PAGE_LIMIT);
+         });
+         const results = await Promise.allSettled(pagePromises);
+         results.forEach(r => r.status === 'fulfilled' && allTx.push(...r.value));
+       }
+       ```
+     * **Feasibility**: **Highly Feasible**. Uses dedicated API key.
+     * **Latency**: ~1,500ms total.
+     * **Cost**: Birdeye API consumes credits. A 10,000-transaction sync costs roughly $0.02 - $0.05.
+   * **Fallback Solution — Helius `getTransactionsForAddress`**:
+     If Birdeye fails or rate limits, query Helius's custom RPC method `getTransactionsForAddress` which supports up to **1,000 parsed transactions per request** and uses cursor-based pagination.
+     * **Pagination Logic**:
+       ```typescript
+       // Fetch 10,000 parsed transactions in 10 paginated requests (1,000 txns/request)
+       const TARGET_LIMIT = 10000;
+       const PAGE_LIMIT = 1000;
+       const allTx: any[] = [];
+       let paginationToken: string | undefined = undefined;
+
+       for (let i = 0; i < TARGET_LIMIT / PAGE_LIMIT; i++) {
+         const response = await helius.rpc.getTransactionsForAddress(tokenAddress, {
+           limit: PAGE_LIMIT,
+           before: paginationToken,
+         });
+         
+         if (!response.transactions || response.transactions.length === 0) break;
+         allTx.push(...response.transactions);
+         
+         if (!response.paginationToken) break;
+         paginationToken = response.paginationToken;
+       }
+       ```
+     * **Cost**: Metered at 110 credits per page of 1,000. Fetching 10,000 transactions costs 1,100 credits.
+
+3. **Fallback Logic**:
+   - If both Birdeye and Helius fail or rate limit, dynamically downgrade to standard RPC signatures-only history retrieval capped at 500 transactions.
+
+
+### B. CEX Exit Heuristic Feasibility
+- **CEX Wallet Directory**: We maintain a static map of known centralized exchange hot wallets and sweep addresses (compiled from public explorer labels).
+
+  #### ✅ C-012 RESOLVED — CEX Hot Wallet List: Source & Maintenance
+
+  **Problem was**: No data source or update cadence was specified for the CEX hot wallet list.
+
+  **Initial Data Sources** (all free, public):
+  | Source | Method |
+  |---|---|
+  | [Etherscan Public Labels](https://etherscan.io/labelcloud) | Download "Exchange" label list via Etherscan label API |
+  | [Solscan Public Labels](https://solscan.io/accounts) | Filter accounts labeled "Exchange" from Solscan public explorer |
+  | [Binance Hot Wallets (public)](https://etherscan.io/accounts/label/binance) | Directly enumerable from Etherscan label pages |
+  | Community Arkham data | Cross-reference with Arkham Intelligence public entity pages |
+
+  **Storage**: Stored as `lib/cex/data/cex_wallets.json` — versioned file in the repo.
+  ```typescript
+  interface CexWalletEntry {
+    address: string;
+    chain: 'eth' | 'bsc' | 'solana';
+    exchange: string;        // e.g. "Binance"
+    walletType: 'hot' | 'deposit_sweep' | 'cold';
+    addedAt: string;         // ISO date
+  }
+  ```
+
+  **Maintenance Cadence**:
+  - **Monthly**: Developer manually adds newly discovered exchange wallet addresses from public explorer labels.
+  - **Auto-detection**: If 10+ users report the same `to` address as an exchange exit within 30 days, it is flagged for admin review and potential addition to the registry.
+  - **Acknowledged Limitation**: Fresh, unlabeled deposit addresses are missed until they sweep to the main hot wallet. This is explicitly noted in the scan result: *"CEX exit detection covers known exchange wallets only. Unlabeled deposit addresses may not be caught."*
+
+- **Cluster Matching**: Run in-memory clustering on the transaction batch:
+  ```typescript
+  const cexDeposits = transactions.filter(tx => tx.toExchange === true);
+  // Group by CEX deposit address
+  const sybilGroups = groupBy(cexDeposits, 'to');
+  ```
+- **Feasibility**: **Highly Feasible**. In-memory processing of 10,000 transactions takes <10ms and has no external cost.
+- **Limitation**: Only catches sweeps to known CEX addresses. Fresh, unlabeled deposit addresses will be missed until the exchange sweeps them to the main hot wallet (which occurs hours later).
+
+
+

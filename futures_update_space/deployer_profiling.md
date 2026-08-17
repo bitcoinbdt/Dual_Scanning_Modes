@@ -53,3 +53,41 @@ An overall **Deployer Risk Score (0-100)** is calculated based on:
 1. **Contract Creator Check**: Query blockchain explorer API to fetch contract creator and creation hash.
 2. **Check Past Deployments**: Query transaction history for `Contract Creation` logs.
 3. **Verify LP Token Locks**: Read standard locker interfaces (e.g., PinkLock, Unicrypt) for the deployer address.
+
+---
+
+## 4. Technical Feasibility, Cost & Implementation Details
+
+### A. Locating Deployer / Creator Address
+- **EVM**: Query Explorer API `/api?module=contract&action=getcontractcreation&contractaddresses={address}`.
+  - **Feasibility**: **Highly Feasible**. Returns creator address instantly.
+  - **Cost**: $0 (Standard free-tier key).
+- **Solana**: Query oldest mint transaction signature using standard RPC.
+  - **Feasibility**: **Highly Feasible**. Uses pagination to extract signature.
+  - **Cost**: $0 (Standard RPC node request).
+
+### B. Deployer History Auditing
+- **EVM**: Query Explorer API `/api?module=account&action=txlist&address={deployer}` to list all outgoing transactions. Filter for transactions where `to` is empty (contract creations).
+  - **Feasibility**: **Highly Feasible**. Explorer returns history instantly in one call.
+  - **Cost**: $0 (Uses standard free-tier key).
+- **Solana**: Query `getSignaturesForAddress(deployerAddress, { limit: 100 })` to fetch latest transactions. Scan metadata logs for `initialize` or `create` instructions.
+  - **Feasibility**: **Highly Feasible** when limited to a window of 100 transactions. Checking full historical token creations requires indexers like Helius.
+  - **Cost**: $0 (Uses standard RPC calls).
+- **Limitation**: Insiders use fresh burner wallets for each deployment. When a burner wallet is detected (age < 24h, 0 prior tokens), the reputation score falls back to "Unknown" but flags the wallet freshness.
+
+#### ✅ C-005 RESOLVED — Cross-Chain Deployer History Limitation
+
+**Problem was**: A rugger who deploys on BSC is not caught when they launch a new token on Ethereum Base, because the deployer history lookup is single-chain only.
+
+**Accepted Limitation**: Cross-chain wallet correlation is **out of scope for Phase 1**. The scanner operates per-chain only. This is explicitly acknowledged in the UI.
+
+**Phase 1 Behaviour** (what we implement):
+- Deployer history is checked on the **same chain** as the scanned token.
+- If deployer has no history on that chain (fresh wallet), the reputation falls back to `neutral` with a `wallet_fresh: true` flag.
+- The UI shows: *"New wallet — no history on this chain."*
+
+**Phase 2 Enhancement** (future, not blocking):
+- Integrate [Arkham Intelligence public entity labels](https://platform.arkhamintelligence.com/) or [Dune Analytics](https://dune.com) cross-chain wallet queries.
+- Maintain a local `cross_chain_deployers` table mapping known multi-chain deployer addresses, populated by admin curation over time.
+
+

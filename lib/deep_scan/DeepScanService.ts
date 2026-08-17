@@ -31,6 +31,14 @@ import { queryAlchemyHistoricalRpc } from '../providers/alchemy/historicalRpc';
 import { schedulePoolReservesIndexing, queryHistoricalReserves } from './historical/HistoricalPoolReservesIndexer';
 import { analyzeLiquidityStress } from './engines/LiquidityStressAnalyzer';
 import { analyzeHistoricalBehavior } from './engines/HistoricalBehaviorAnalyzer';
+import { Connection } from '@solana/web3.js';
+import { RaydiumPoolReader } from '../solana/RaydiumPoolReader';
+import { DeployerProfiler } from '../reputation/DeployerProfiler';
+import { TokenUnlockTracker } from '../traceability/TokenUnlockTracker';
+import { RugPatternMatcher } from '../reputation/RugPatternMatcher';
+import { InsiderAccumulationDetector } from './engines/InsiderAccumulationDetector';
+import { ExchangeListingAgent } from '../ai/ExchangeListingAgent';
+import { NewsAgent } from '../ai/NewsAgent';
 
 import { CollectorFactory, SupportedBlockchain } from '../elevator/collectors/CollectorFactory';
 import { HolderDataset } from '../elevator/collectors/types';
@@ -222,6 +230,14 @@ export class DeepScanService {
     const finalSpotPrice = meta?.spotPriceUsd ?? 0;
     const finalFdv = meta?.fdvUsd ?? (finalTotalSupply * finalSpotPrice);
     const finalLiquidity = meta?.totalLiquidityUsd ?? 0;
+
+    // ── Large-Cap Router Gate ──
+    // Tokens with FDV > $50M or volume24h > $10M are considered Large-Cap.
+    // Downstream engines (WhaleExit, HHI sniper warnings) self-bypass via this flag.
+    const isLargeCap = finalFdv > 50_000_000 || ((meta?.volume24hUsd ?? 0) > 10_000_000);
+    if (isLargeCap) {
+      console.log(`[DEEP SERVICE] 🔵 Large-Cap token detected (FDV: $${finalFdv.toLocaleString()}). Bypassing micro-cap risk heuristics.`);
+    }
     const initialPools = meta?.mainPools ?? [];
     const isHoneypot = meta?.securityFlags?.isHoneypot ?? false;
 
@@ -235,6 +251,27 @@ export class DeepScanService {
     );
     const fullyEnrichedPools = await enrichClmmPoolsWithSlot0(enrichedPools, network);
     const finalPools: (NormalizedPoolState | LiquidityPool)[] = fullyEnrichedPools;
+
+    // Step 1c: If Solana, enrich the primary Raydium pool with actual reserves using RaydiumPoolReader
+    if (network === 'solana') {
+      try {
+        const primaryV2 = finalPools.find(
+          p => 'poolType' in p && p.poolType === 'constant-product' && p.poolIdentifierType === 'address'
+        ) as NormalizedPoolState | undefined;
+        
+        if (primaryV2) {
+          const conn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+          const reserves = await RaydiumPoolReader.getPoolReserves(primaryV2.poolIdentifier, conn);
+          if (reserves) {
+            console.log(`[DEEP SERVICE] Enriched Solana pool reserves: base=${reserves.baseReserve.toString()}, quote=${reserves.quoteReserve.toString()}`);
+            primaryV2.tokenReserveRaw = Number(reserves.baseReserve) / (10 ** finalDecimals);
+            primaryV2.quoteReserveRaw = Number(reserves.quoteReserve) / 1e9; // SOL is 9 decimals standard
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[DEEP SERVICE] Solana pool reserve enrichment failed:`, err.message);
+      }
+    }
 
     // ─────────────────────────────────────────────
     // Step 2: Resolve Elevator Data (Scenario A/B)
@@ -250,7 +287,9 @@ export class DeepScanService {
       console.log(`[DEEP SERVICE] Elevator results missing (Scenario B). Ingesting transaction batch...`);
       elevatorReused = false;
       
-      const maxTx = input.maxTransactions ?? 100;
+      // Deep scans default to 10,000 transactions — this drives accurate HHI/Gini scoring.
+      // Callers may override with a smaller value for preview/quick modes.
+      const maxTx = input.maxTransactions ?? 10000;
       const chain = (network === 'solana' ? 'solana' : network === 'bsc' ? 'bsc' : 'eth') as SupportedBlockchain;
       
       const apiKeys = {
@@ -268,7 +307,7 @@ export class DeepScanService {
 
     // F-11: Cap transaction array to maxTransactions even in Scenario A.
     // Callers may pass arbitrarily large elevatorResult.transactions arrays.
-    const maxTxCap = input.maxTransactions ?? 100;
+    const maxTxCap = input.maxTransactions ?? 10000;
     const txs = (elevatorResult?.transactions ?? []).slice(0, maxTxCap);
     const ohlcv = elevatorResult?.ohlcv ?? [];
 
@@ -724,6 +763,27 @@ export class DeepScanService {
     // Calculate aggregated risk score
     // NOTE: Evidence IDs in engine results were written back from EvidenceMapper above,
     // so SubScore.evidenceIds and RiskSignal.evidenceIds now carry the real node IDs.
+    //
+    // ── Extract GoPlus / Solana authority flags from basicScanData (if available) ──
+    // basicScanData.securityInfo holds the raw GoPlus response for EVM tokens.
+    // For Solana, solanaScanner.ts stores mintFunction / freezable as string flags.
+    const secInfo = basicScanData?.securityInfo;
+    const evmContractRisk = (network !== 'solana' && secInfo) ? {
+      isProxy:              secInfo.is_proxy === '1',
+      transferPausable:     secInfo.transfer_pausable === '1',
+      isBlacklisted:        secInfo.is_blacklisted === '1',
+      ownerChangeBalance:   secInfo.owner_change_balance === '1',
+      canTakeBackOwnership: secInfo.can_take_back_ownership === '1',
+      isMintable:           secInfo.is_mintable === '1',
+      tradingCooldown:      secInfo.trading_cooldown === '1',
+    } : undefined;
+
+    const solanaAuthorityRisk = (network === 'solana' && basicScanData) ? {
+      mintAuthorityActive:   basicScanData.mintFunction === 'Enabled',
+      freezeAuthorityActive: basicScanData.freezable === 'Yes',
+      upgradeAuthorityActive: false, // requires separate program account check
+    } : undefined;
+
     const riskScoreResult = calculateRiskScore({
       ammSlippage: ammResult,
       volumeConcentration: hhiResult,
@@ -732,6 +792,8 @@ export class DeepScanService {
       buyerQuality: buyerQualityResult,
       capitalEfficiency: capitalResult,
       isHoneypot,
+      evmContractRisk,
+      solanaAuthorityRisk,
     });
 
     // ── Evidence ID integrity validation ──
@@ -963,6 +1025,105 @@ export class DeepScanService {
     // ─────────────────────────────────────────────
     // Step 7: Package Final Result
     // ─────────────────────────────────────────────
+    // ─────────────────────────────────────────────
+    // Phase 4: Run Reputation & Traceability Modules
+    // ─────────────────────────────────────────────
+    let deployerProfileResult: any = undefined;
+    let unlockScheduleResult: any = undefined;
+    let rugMatchResult: any = undefined;
+    let insiderAccumulationResult: any = undefined;
+
+    try {
+      // 1. Deployer Profiling (with 2s timeout handled internally by DeployerProfiler)
+      const deployerAddr = meta?.creatorAddress || basicScanData?.securityInfo?.creatorAddress || '';
+      if (deployerAddr) {
+        let solConn: Connection | undefined = undefined;
+        if (network === 'solana') {
+          solConn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+        }
+        deployerProfileResult = await DeployerProfiler.profile(deployerAddr, network, solConn);
+      }
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 4 Deployer Profiling failed (non-fatal):', err.message);
+    }
+
+    try {
+      // 2. Token Unlock & Vesting Schedule Tracking
+      let solConn: Connection | undefined = undefined;
+      if (network === 'solana') {
+        solConn = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+      }
+      unlockScheduleResult = await TokenUnlockTracker.getUnlockSchedule(
+        address,
+        network,
+        txs,
+        finalTotalSupply,
+        solConn
+      );
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 4 Token Unlock Tracking failed (non-fatal):', err.message);
+    }
+
+    try {
+      // 3. Rug Pattern Matching
+      const deployerAddr = meta?.creatorAddress || basicScanData?.securityInfo?.creatorAddress || '';
+      const bytecode = basicScanData?.bytecode || null;
+      if (deployerAddr) {
+        rugMatchResult = await RugPatternMatcher.analyze(
+          address,
+          deployerAddr,
+          bytecode,
+          network
+        );
+      }
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 4 Rug Pattern Matching failed (non-fatal):', err.message);
+    }
+
+    try {
+      // 4. Insider Accumulation Detection
+      const volume24h = meta?.volume24hUsd || 0;
+      insiderAccumulationResult = InsiderAccumulationDetector.analyze(
+        ohlcv,
+        txs,
+        finalSpotPrice,
+        volume24h
+      );
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 4 Insider Accumulation Detection failed (non-fatal):', err.message);
+    }
+
+    // ─────────────────────────────────────────────
+    // Phase 5: Run AI Agents in Parallel
+    // (Exchange Listing + News) — non-blocking via Promise.allSettled
+    // ─────────────────────────────────────────────
+    let exchangeListingResult: any = undefined;
+    let newsResult: any = undefined;
+
+    try {
+      const tokenName = meta?.name ?? 'Unknown Token';
+      const tokenSymbol = meta?.symbol ?? 'TOKEN';
+
+      const [listingSettled, newsSettled] = await Promise.allSettled([
+        ExchangeListingAgent.run(tokenName, tokenSymbol, address),
+        NewsAgent.run(tokenName, tokenSymbol),
+      ]);
+
+      if (listingSettled.status === 'fulfilled') {
+        exchangeListingResult = listingSettled.value;
+      } else {
+        console.warn('[DEEP SERVICE] Phase 5 ExchangeListingAgent rejected:', listingSettled.reason?.message);
+      }
+
+      if (newsSettled.status === 'fulfilled') {
+        newsResult = newsSettled.value;
+      } else {
+        console.warn('[DEEP SERVICE] Phase 5 NewsAgent rejected:', newsSettled.reason?.message);
+      }
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Phase 5 AI agents failed (non-fatal):', err.message);
+    }
+
     const scanDurationMs = Date.now() - startTime;
 
     const result: DeepScanResult = {
@@ -996,6 +1157,12 @@ export class DeepScanService {
       smartMoney: smartMoneyResult,
       liquidityStress: liquidityStressResult,
       historicalBehavior: historicalBehaviorResult,
+      deployerProfile: deployerProfileResult,
+      tokenUnlockSchedule: unlockScheduleResult,
+      rugPatternMatch: rugMatchResult,
+      insiderAccumulation: insiderAccumulationResult,
+      exchangeListing: exchangeListingResult,
+      news: newsResult,
       riskScore: riskScoreResult,
       topRisks: riskScoreResult.topRisks,
       evidence: compiledEvidence,

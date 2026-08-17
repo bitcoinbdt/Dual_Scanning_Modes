@@ -82,10 +82,26 @@ export function simulateWhaleExit(
   spotPriceUsd: number,
   totalSupply: number
 ): WhaleExitResult {
+  // ── Large-Cap Bypass Gate ──
+  const fdv = totalSupply * spotPriceUsd;
+  if (fdv > 50_000_000) {
+    return {
+      status: 'insufficient_data',
+      reason: 'Whale exit simulation skipped for Large-Cap tokens.',
+      simulationDisclaimer: SIMULATION_DISCLAIMER,
+      targetWallets: [],
+      combinedObservedBalance: 0,
+      scenarios: [],
+      maxSeverity: 'low',
+      evidenceIds: [],
+    };
+  }
+
   // Normalize to NormalizedPoolState[]
   const normalizedPools: NormalizedPoolState[] = pools.map(p =>
     'poolType' in p ? p : toNormalizedPoolState(p)
   );
+
   // ── Validation ──
   if (!whales || whales.length === 0) {
     return {

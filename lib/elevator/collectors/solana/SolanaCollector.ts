@@ -16,7 +16,7 @@ import {
   CalculatedMetrics,
   NormalizedTransaction
 } from '../types';
-import { fetchOHLCV } from './birdeye';
+import { fetchOHLCV, fetchBirdeyeTransactions } from './birdeye';
 import { fetchTransactions as fetchSolanaTransactions } from './helius';
 import { buildWalletData as buildSolanaWalletData } from './walletEngine';
 import { calculateMetrics as calculateSolanaMetrics } from './metrics';
@@ -50,12 +50,52 @@ export class SolanaCollector implements IBlockchainCollector {
   }
 
   /**
-   * Fetch transactions from Helius and convert to universal format
+   * Fetch transactions (DEX trades) with Birdeye primary and Helius fallback
    */
   async fetchTransactions(address: string, maxTransactions: number): Promise<UniversalTransaction[]> {
-    console.log(`[SolanaCollector] Fetching transactions for ${address}...`);
+    console.log(`[SolanaCollector] Ingesting transactions for ${address} (max: ${maxTransactions})...`);
     
-    // Fetch Solana-specific transactions
+    // 1. Try Birdeye trades API (Primary)
+    try {
+      console.log(`[SolanaCollector] [Primary] Fetching via Birdeye Token Trades API...`);
+      const birdeyeTxs = await fetchBirdeyeTransactions(address, this.birdeyeApiKey, maxTransactions);
+      
+      if (birdeyeTxs && birdeyeTxs.length > 0) {
+        console.log(`[SolanaCollector] [Primary] Birdeye retrieved ${birdeyeTxs.length} transactions successfully`);
+        return birdeyeTxs.map((tx: any): UniversalTransaction => {
+          const isBuy = tx.side === 'buy';
+          const tokenAmount = tx.fromAddress?.toLowerCase() === address.toLowerCase() 
+            ? tx.fromAmount 
+            : tx.toAmount;
+            
+          const amount = tokenAmount || tx.toAmount || tx.fromAmount || 0;
+          const priceUsd = amount > 0 ? (tx.volumeUsd / amount) : undefined;
+          
+          return {
+            hash: tx.txHash,
+            timestamp: tx.blockUnixTime,
+            from: tx.fromAddress || '',
+            to: tx.toAddress || '',
+            amount: amount,
+            type: tx.side === 'buy' ? 'buy' : tx.side === 'sell' ? 'sell' : 'transfer',
+            token: {
+              address: address,
+            },
+            blockchain: 'solana',
+            isTrade: true,
+            priceUsd: priceUsd,
+            wallet: tx.owner,
+            raw: tx
+          };
+        });
+      }
+      console.warn(`[SolanaCollector] [Primary] Birdeye returned empty transactions. Falling back to Helius...`);
+    } catch (error: any) {
+      console.warn(`[SolanaCollector] [Primary] Birdeye transaction fetch failed: ${error.message}. Falling back to Helius...`);
+    }
+
+    // 2. Fallback to Helius transaction endpoint
+    console.log(`[SolanaCollector] [Fallback] Fetching via Helius Address Transactions API...`);
     const solanaTransactions = await fetchSolanaTransactions(
       address,
       this.heliusApiKey,

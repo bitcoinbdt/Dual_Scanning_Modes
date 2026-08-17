@@ -58,3 +58,61 @@ export async function fetchOHLCV(
   
   return items.map(normalizeOHLCV);
 }
+
+/**
+ * Fetch token transaction history from Birdeye
+ */
+export async function fetchBirdeyeTransactions(
+  address: string,
+  apiKey: string,
+  maxTransactions: number = 10000
+): Promise<any[]> {
+  const url = `${BIRDEYE_API_URL}/defi/txs/token`;
+  const BATCH_SIZE = 10;   // parallel requests per batch
+  const PAGE_LIMIT = 100;  // max limit allowed by Birdeye
+  const totalPages = Math.ceil(maxTransactions / PAGE_LIMIT);
+
+  const allTx: any[] = [];
+  
+  // We fetch page batches in parallel to respect rate limits while maintaining high performance
+  for (let batch = 0; batch < totalPages / BATCH_SIZE; batch++) {
+    const pagePromises = Array.from({ length: BATCH_SIZE }, (_, i) => {
+      const offset = (batch * BATCH_SIZE + i) * PAGE_LIMIT;
+      if (offset >= maxTransactions) return Promise.resolve([]);
+      
+      return axios.get(url, {
+        headers: {
+          'X-API-KEY': apiKey,
+          'x-chain': 'solana'
+        },
+        params: {
+          address: address,
+          offset: offset,
+          limit: PAGE_LIMIT
+        }
+      }).then(res => res.data?.data?.items || [])
+        .catch(err => {
+          console.warn(`[Birdeye Ingestion] Failed to fetch offset ${offset}:`, err.message);
+          return [];
+        });
+    });
+
+    const results = await Promise.allSettled(pagePromises);
+    let emptyPageCount = 0;
+    
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value) {
+        if (r.value.length === 0) emptyPageCount++;
+        allTx.push(...r.value);
+      }
+    });
+
+    // If all pages in the current batch returned empty results, we have hit the end of history
+    if (emptyPageCount === BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return allTx.slice(0, maxTransactions);
+}
+

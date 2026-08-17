@@ -66,6 +66,12 @@ checklist before implementation begins.
 | Solana Raydium Liquidity Stress | `solana_liquidity_stress.md` | P2 | 🟡 Spec written |
 | Historical Rug Pattern Matching | `rug_pattern_matching.md` | P2 | 🟡 Spec written |
 | Insider Accumulation Detection | `insider_accumulation.md` | P3 | 🟡 Spec written |
+| **AI: Exchange Listing Intelligence** | `ai_intelligence_layer.md` | P2 | 🟡 Spec written |
+| **AI: News Aggregation + Summary** | `ai_intelligence_layer.md` | P2 | 🟡 Spec written |
+| **AI: Gemini Primary / Groq Fallback** | `ai_intelligence_layer.md` | P2 | 🟡 Spec written |
+| **Step-by-Step Implementation Guide** | `step_by_step_implementation_guide.md` | P0 | 🟡 Spec written |
+| **Technical Friction Resolutions Guide** | `implementation_resolutions.md` | P0 | 🟡 Spec written |
+
 
 ---
 
@@ -132,7 +138,7 @@ a bonding curve, AMM pool, or CEX.
 **File**: `lib/deep_scan/engines/LiquidityStressAnalyzer.ts` line 52–57  
 **Problem**: Returns `status: 'insufficient_data'` for all Solana tokens —
 meaning the entire Solana deep scan has zero liquidity stress analysis.  
-**Spec**: Not yet documented — see Section 3 below.  
+**Spec**: `solana_liquidity_stress.md` — ✅ NEW-005 RESOLVED: spec is fully complete.  
 **Severity**: MEDIUM — Solana users get partial deep scan.
 
 ### GAP-009 — Large-Cap Tokens Not Differentiated  
@@ -179,7 +185,13 @@ Phase 3 — New Intelligence Modules
 Phase 4 — Advanced Professional Features
  11. 5-Tier Slippage Ladder (contract_risk_analysis.md §5)
  12. Gini Coefficient supplement to HHI
- 13. Solana Raydium Liquidity Stress (3A above — needs spec first)
- 14. Historical Rug Pattern Matching (3B above — needs spec first)
- 15. Insider Accumulation Detection (3C above — needs spec first)
+ 13. Solana Raydium Liquidity Stress — ✅ C-014 RESOLVED: spec already complete, see `solana_liquidity_stress.md`
+ 14. Historical Rug Pattern Matching — ✅ NEW-004 RESOLVED: spec complete, see `rug_pattern_matching.md`
+ 15. Insider Accumulation Detection — ✅ NEW-004 RESOLVED: spec complete, see `insider_accumulation.md`
+     NOTE (NEW-007): Insider accumulation DOES run for large-cap tokens per `insider_accumulation.md §5`.
+     The Large-Cap Engine bypass list in `deep_scan_update.md §4A` intentionally omits it.
 ```
+
+> ✅ **NEW-006 RESOLVED** — Canonical Deep Scan credit cost is **15 credits** (as specified in
+> `deep_scan_update.md §2`). The figure of "10 credits" in `both_scan_update.md §B` is a
+> legacy draft number and must be updated in that file. The authoritative value is 15.

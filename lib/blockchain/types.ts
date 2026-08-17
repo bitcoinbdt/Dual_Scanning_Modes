@@ -289,6 +289,8 @@ export interface OnChainData {
   washTradingPercentage?: number;
   cacheStatus?: 'hit' | 'miss';
   cachedAt?: string;
+  isPreGraduation?: boolean;
+  launchpadPlatform?: 'pump' | 'launchlab' | 'none';
   meta?: ScanMetadata;
 }
 

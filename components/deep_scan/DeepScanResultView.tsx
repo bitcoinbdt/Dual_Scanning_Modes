@@ -68,6 +68,57 @@ function riskGaugeColor(score: number): string {
   return '#ef4444';
 }
 
+
+interface TokenUnlockInfo {
+  totalLockedPercentage: number;
+  nextUnlockAt: string | null;
+  nextUnlockPercentage: number;
+  nextUnlockUsdValue: number | null;
+  badge: string;
+  vestingDetails: any;
+  airdropPercentage: number;
+}
+
+function UnlockCountdownBanner({ schedule }: { schedule: TokenUnlockInfo }) {
+  if (!schedule || !schedule.nextUnlockAt) return null;
+  const nextUnlockDate = new Date(schedule.nextUnlockAt);
+  const diffMs = nextUnlockDate.getTime() - Date.now();
+  if (diffMs <= 0) return null;
+
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = diffHours / 24;
+
+  const isCritical = diffHours < 24;
+  const isEmerging = diffHours < 72; // < 3 days
+
+  const colorClass = isCritical
+    ? 'bg-red-500/10 border-red-500/30 text-red-400'
+    : isEmerging
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+
+  const timeRemainingStr = diffDays >= 1
+    ? `${Math.floor(diffDays)}d ${Math.floor(diffHours % 24)}h remaining`
+    : `${Math.floor(diffHours)}h ${Math.floor((diffMs / (1000 * 60)) % 60)}m remaining`;
+
+  return (
+    <div className={`border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${colorClass}`}>
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+          {isCritical ? '🚨 CRITICAL UNLOCK RISK' : isEmerging ? '⚠️ EMERGING UNLOCK RISK' : '🛡️ Vesting Lock Active'}
+        </p>
+        <p className="text-xs text-white/70 mt-1">
+          {schedule.nextUnlockPercentage}% of supply ({schedule.nextUnlockUsdValue != null ? fmtUsd(schedule.nextUnlockUsdValue) : 'N/A'}) unlocks on{' '}
+          <strong>{nextUnlockDate.toLocaleString()}</strong>.
+        </p>
+      </div>
+      <div className="shrink-0 font-mono text-xs font-bold bg-white/5 border border-current px-2.5 py-1 rounded-lg">
+        {timeRemainingStr}
+      </div>
+    </div>
+  );
+}
+
 // ─── Risk Score Gauge ──────────────────────────────────────────────────────────
 
 function RiskGauge({ score, level }: { score: number; level: RiskLevel }) {
@@ -178,6 +229,7 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
         ))}
       </div>
 
+
       {intel.dataLimitations && intel.dataLimitations.length > 0 && (
         <div className="rounded-lg p-3 border border-amber-500/20" style={{ background: 'rgba(245,158,11,0.06)' }}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-2">Data Limitations</p>
@@ -186,6 +238,95 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
               <li key={i} className="text-xs text-amber-200/70">• {l}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* CEX Listings Section */}
+      {data.exchangeListing && (
+        <div className="rounded-xl p-4 bg-white/5 border border-white/[0.08] space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Centralized Exchange (CEX) Listings</p>
+          {data.exchangeListing.status === 'error' ? (
+            <p className="text-xs text-red-400/80">CEX listing verification failed.</p>
+          ) : data.exchangeListing.listings.length === 0 ? (
+            <p className="text-xs text-white/40 font-mono">No CEX listing announcements found in the last 30 days or scheduled in the next 30 days.</p>
+          ) : (
+            <div className="space-y-2">
+              {data.exchangeListing.listings.map((l, i) => (
+                <div key={i} className="flex flex-wrap items-center justify-between gap-2 p-2 bg-white/[0.02] border border-white/5 rounded-lg text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white/90">{l.exchange}</span>
+                    <span className="text-white/20">•</span>
+                    <span className="text-white/50 capitalize font-mono">{l.listingType}</span>
+                    {l.sourceUrl && (
+                      <a href={l.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                        Announcement ↗
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 font-mono">
+                    {l.priceAtListingUsd && (
+                      <span className="text-white/70">Price: ${l.priceAtListingUsd.toFixed(4)}</span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      l.listingStatus === 'confirmed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                      l.listingStatus === 'live' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' :
+                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {l.listingStatus.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.exchangeListing.summary && (
+            <p className="text-xs text-white/60 leading-relaxed italic mt-2 border-t border-white/5 pt-2">
+              &ldquo;{data.exchangeListing.summary}&rdquo;
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* AI News Intelligence Section */}
+      {data.news && (
+        <div className="rounded-xl p-4 bg-white/5 border border-white/[0.08] space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Recent News & Protocol Intelligence</p>
+          {data.news.status === 'error' ? (
+            <p className="text-xs text-red-400/80">News intelligence retrieval failed.</p>
+          ) : data.news.articles.length === 0 ? (
+            <p className="text-xs text-white/40 font-mono">No significant news articles detected in the last 7 days.</p>
+          ) : (
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              {data.news.articles.map((art, i) => (
+                <div key={i} className="flex flex-col gap-1 p-2 bg-white/[0.02] border border-white/5 rounded-lg text-xs">
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="font-semibold text-white/80">{art.title}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 font-mono ${
+                      art.sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400' :
+                      art.sentiment === 'negative' ? 'bg-red-500/10 text-red-400' :
+                      'bg-white/5 text-white/40'
+                    }`}>
+                      {art.sentiment.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-white/40 mt-1 font-mono">
+                    {art.sourceName && <span>{art.sourceName}</span>}
+                    {art.publishedDate && <span>• {art.publishedDate}</span>}
+                    {art.url && (
+                      <a href={art.url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                        Read More ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.news.summary && (
+            <p className="text-xs text-white/70 leading-relaxed border-t border-white/5 pt-2">
+              <strong>AI News Analysis:</strong> {data.news.summary}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -547,22 +688,27 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
               <tbody>
                 {amm.simulations.map((s: PositionSizeResult, i) => {
                   const rc = riskColor(s.exitRiskLevel);
+                  const isOk = s.status === 'ok' && s.slippagePct < 90;
                   return (
                     <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                       <td className="py-2 px-3 text-white/80">{fmtUsd(s.positionSizeUsd)}</td>
-                      <td className="py-2 px-3 text-right" style={{ color: s.status === 'ok' ? rc.hex : undefined }}>
-                        {s.status === 'ok' ? fmtPct(s.priceImpactPct) : '—'}
+                      <td className="py-2 px-3 text-right" style={{ color: isOk ? rc.hex : undefined }}>
+                        {isOk ? fmtPct(s.priceImpactPct) : 'N/A'}
                       </td>
-                      <td className="py-2 px-3 text-right" style={{ color: s.status === 'ok' ? rc.hex : undefined }}>
-                        {s.status === 'ok' ? fmtPct(s.slippagePct) : '—'}
+                      <td className="py-2 px-3 text-right" style={{ color: isOk ? rc.hex : undefined }}>
+                        {isOk ? fmtPct(s.slippagePct) : 'N/A'}
                       </td>
                       <td className="py-2 px-3 text-right text-white/70">
-                        {s.status === 'ok' ? `$${s.executionPriceUsd?.toFixed(6)}` : '—'}
+                        {isOk ? `$${s.executionPriceUsd?.toFixed(6)}` : 'N/A'}
                       </td>
                       <td className="py-2 px-3 text-right">
-                        {s.exitRiskLevel && (
+                        {isOk && s.exitRiskLevel ? (
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${rc.bg} ${rc.text}`}>
                             {s.exitRiskLevel.toUpperCase()}
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/5 text-white/40 font-mono">
+                            N/A
                           </span>
                         )}
                       </td>
@@ -754,6 +900,20 @@ interface DeepScanResultViewProps {
 export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>('intel');
   const [showLimitations, setShowLimitations] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    const snapId = result.snapshotId;
+    if (!snapId) return;
+
+    const shareUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/scan/${snapId}`
+      : `/scan/${snapId}`;
+
+    navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const rs     = result.riskScore;
   const meta   = result.tokenMetadata;
@@ -776,9 +936,19 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
         />
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Shield className="w-4 h-4 text-purple-400" />
-              <span className="text-xs font-bold uppercase tracking-widest text-purple-400">Deep Intelligence Report</span>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-purple-400" />
+                <span className="text-xs font-bold uppercase tracking-widest text-purple-400">Deep Intelligence Report</span>
+              </div>
+              {result.snapshotId && (
+                <button
+                  onClick={handleCopyLink}
+                  className="px-2 py-0.5 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/30 text-[10px] font-bold tracking-wide uppercase transition-all shadow-md active:scale-95 flex items-center gap-1 ml-2"
+                >
+                  {copied ? '✓ Copied' : '🔗 Copy Share Link'}
+                </button>
+              )}
             </div>
             <h2 className="text-2xl font-black text-white">
               {meta?.name ?? '—'} <span className="text-white/40">/</span> <span className="font-mono text-lg text-white/70">{meta?.symbol ?? '—'}</span>
@@ -864,6 +1034,10 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
             </p>
           </div>
         </div>
+      )}
+
+      {result.tokenUnlockSchedule && (
+        <UnlockCountdownBanner schedule={result.tokenUnlockSchedule} />
       )}
 
       {/* Tab Navigation */}
