@@ -259,6 +259,67 @@ export default async function SharedScanPage({ params, searchParams }: PageProps
         </div>
       )}
 
+      {/* Socials Presence Section */}
+      {result?.socials && (
+        <div style={{
+          background: '#111827',
+          border: '1px solid #1f2937',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+        }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Project Presence &amp; Socials
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+            {result.socials.links.website && (
+              <div style={{ fontSize: '13px' }}>
+                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Website</div>
+                <a href={result.socials.links.website} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
+                  {result.socials.links.website}
+                </a>
+                <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                  Liveness: {result.socials.websiteAlive ? 'Live' : 'Dead/Error'}
+                  {result.socials.websiteDomainAgeDays !== null && ` · Age: ${result.socials.websiteDomainAgeDays}d`}
+                </div>
+              </div>
+            )}
+            {result.socials.links.twitter && (
+              <div style={{ fontSize: '13px' }}>
+                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Twitter</div>
+                <a href={result.socials.links.twitter} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
+                  {result.socials.links.twitter}
+                </a>
+                {result.socials.twitterAccountAgeDays !== null && (
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    Account Age: {result.socials.twitterAccountAgeDays}d
+                  </div>
+                )}
+              </div>
+            )}
+            {result.socials.links.github && (
+              <div style={{ fontSize: '13px' }}>
+                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>GitHub</div>
+                <a href={result.socials.links.github} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
+                  {result.socials.links.github}
+                </a>
+                {result.socials.githubLastCommitDays !== null && (
+                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+                    Last Commit: {result.socials.githubLastCommitDays}d ago
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ fontSize: '13px' }}>
+              <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Link Consistency</div>
+              <div style={{ color: result.socials.consistency.consistent ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                {result.socials.consistency.consistent ? 'Agreed Across Sources' : 'Conflicting Links Detected'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{ textAlign: 'center', marginTop: '32px', color: '#334155', fontSize: '12px' }}>
         Powered by OnChain Scanner · This is a historical snapshot and does not represent current market conditions.

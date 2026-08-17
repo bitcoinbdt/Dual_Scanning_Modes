@@ -39,6 +39,8 @@ import { RugPatternMatcher } from '../reputation/RugPatternMatcher';
 import { InsiderAccumulationDetector } from './engines/InsiderAccumulationDetector';
 import { ExchangeListingAgent } from '../ai/ExchangeListingAgent';
 import { NewsAgent } from '../ai/NewsAgent';
+import { SocialMetadataCollector } from '../social/SocialMetadataCollector';
+import { SocialRiskMapper } from '../social/SocialRiskMapper';
 
 import { CollectorFactory, SupportedBlockchain } from '../elevator/collectors/CollectorFactory';
 import { HolderDataset } from '../elevator/collectors/types';
@@ -613,10 +615,38 @@ export class DeepScanService {
     // 8. Liquidity Fragmentation (Phase 4)
     const fragmentationResult = analyzeLiquidityFragmentation(finalPools);
 
+    // 8.5. Social Presence Signals (Off-chain Verification)
+    let socialMetadataResult: any = undefined;
+    let socialSignals: any[] = [];
+    try {
+      socialMetadataResult = await SocialMetadataCollector.getSocialMetadata(address, network);
+      if (socialMetadataResult) {
+        socialSignals = SocialRiskMapper.evaluate(socialMetadataResult);
+      }
+    } catch (err: any) {
+      console.warn('[DEEP SERVICE] Social presence signals collection failed (non-fatal):', err.message);
+    }
+
     // ─────────────────────────────────────────────
     // Step 5: Evidence & Risk Score Synthesis
     // ─────────────────────────────────────────────
     const evidenceNodes: EvidenceNode[] = [];
+
+    if (socialMetadataResult) {
+      const socialNode = EvidenceMapper.buildSocialEvidence({
+        websiteAlive: socialMetadataResult.websiteAlive,
+        twitterAgeDays: socialMetadataResult.twitterAccountAgeDays,
+        domainAgeDays: socialMetadataResult.websiteDomainAgeDays,
+        githubCommitDays: socialMetadataResult.githubLastCommitDays,
+        consistent: socialMetadataResult.consistency.consistent,
+        source: socialMetadataResult.source,
+      });
+      evidenceNodes.push(socialNode);
+      // Map evidenceIds for the generated risk signals
+      socialSignals.forEach((s: any) => {
+        s.evidenceIds = [socialNode.evidenceId];
+      });
+    }
 
     // ── Evidence identity contract ──
     // EvidenceMapper.build*() is the sole owner of evidence IDs.
@@ -794,6 +824,7 @@ export class DeepScanService {
       isHoneypot,
       evmContractRisk,
       solanaAuthorityRisk,
+      socialSignals,
     });
 
     // ── Evidence ID integrity validation ──
@@ -1163,6 +1194,7 @@ export class DeepScanService {
       insiderAccumulation: insiderAccumulationResult,
       exchangeListing: exchangeListingResult,
       news: newsResult,
+      socials: socialMetadataResult,
       riskScore: riskScoreResult,
       topRisks: riskScoreResult.topRisks,
       evidence: compiledEvidence,

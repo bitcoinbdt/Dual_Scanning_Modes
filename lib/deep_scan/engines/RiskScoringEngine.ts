@@ -96,6 +96,7 @@ export function calculateRiskScore(params: {
     freezeAuthorityActive?: boolean; // SOL-CTR-002: can freeze wallets
     upgradeAuthorityActive?: boolean;// SOL-CTR-003: program upgradeable (new token only)
   };
+  socialSignals?: RiskSignal[];
 }): ExplainableRiskScore {
   const subScores: SubScore[] = [];
   const topRisks: RiskSignal[] = [];
@@ -432,6 +433,29 @@ export function calculateRiskScore(params: {
   }
 
   // ─────────────────────────────────────────────
+  // 7.5. Apply Social Risk Penalty & Signals
+  // ─────────────────────────────────────────────
+  let socialPenalty = 0;
+  if (params.socialSignals) {
+    for (const signal of params.socialSignals) {
+      topRisks.push({
+        riskId: signal.riskId || `SOC-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        riskName: signal.riskName,
+        severity: signal.severity,
+        status: 'active',
+        evidenceIds: signal.evidenceIds || [],
+        description: signal.description,
+        confidence: 90,
+      });
+
+      if (signal.severity === 'critical') socialPenalty += 20;
+      else if (signal.severity === 'high') socialPenalty += 12;
+      else if (signal.severity === 'medium') socialPenalty += 6;
+      else if (signal.severity === 'low') socialPenalty += 2;
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // 8. Normalized weighted score (measured modules only)
   // ─────────────────────────────────────────────
   const measuredSubScores = subScores.filter(s => s.dataAvailability === 'measured');
@@ -454,8 +478,8 @@ export function calculateRiskScore(params: {
     const totalReduction = mitigators.reduce((sum, m) => sum + m.reductionPoints, 0);
     overallScore = Math.max(0, overallScore - totalReduction);
 
-    // Apply contract risk penalty (CTR/SOL-CTR flat additive points) — capped at 100
-    overallScore = Math.min(100, overallScore + contractRiskPenalty);
+    // Apply contract risk penalty (CTR/SOL-CTR flat additive points) + social penalty — capped at 100
+    overallScore = Math.min(100, overallScore + contractRiskPenalty + socialPenalty);
   }
 
   if (verifiedHoneypot) {

@@ -298,6 +298,33 @@ export function buildBuyerQualityEvidence(params: {
 }
 
 // ─────────────────────────────────────────────
+// Social presence evidence
+// ─────────────────────────────────────────────
+
+export function buildSocialEvidence(params: {
+  websiteAlive: boolean | null;
+  twitterAgeDays: number | null;
+  domainAgeDays: number | null;
+  githubCommitDays: number | null;
+  consistent: boolean;
+  source: string;
+}): EvidenceNode {
+  return {
+    evidenceId: makeId('social-signals'),
+    fact: `Off-chain presence loaded via ${params.source}. Website alive: ${params.websiteAlive ?? 'unknown'}. Twitter Account Age: ${params.twitterAgeDays != null ? params.twitterAgeDays + ' days' : 'unknown'}. Domain age: ${params.domainAgeDays != null ? params.domainAgeDays + ' days' : 'unknown'}. Github last commit: ${params.githubCommitDays != null ? params.githubCommitDays + ' days' : 'unknown'}.`,
+    metric: `Consistency: ${params.consistent ? 'Agreed across sources' : 'CONFLICT DETECTED'}`,
+    pattern: 'Off-chain Social Metadata Verification',
+    signal: params.consistent ? 'CONSISTENT_SOCIALS' : 'INCONSISTENT_SOCIALS',
+    traderImpact: params.consistent
+      ? 'Social link audit confirms all indexers and directory sources point to identical web endpoints.'
+      : 'Phishing warning: Social link audit found conflicting website or twitter links between indexers.',
+    confidence: 90,
+    sources: ['dexscreener', 'coingecko', 'whois_public', 'github_api'],
+    generatedAt: Math.floor(Date.now() / 1000),
+  };
+}
+
+// ─────────────────────────────────────────────
 // Utility: collect all EvidenceNodes into a deduplicated list
 // ─────────────────────────────────────────────
 

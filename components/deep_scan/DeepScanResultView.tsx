@@ -241,6 +241,124 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
         </div>
       )}
 
+      {/* Project Presence Section */}
+      {data.socials && (
+        <div className="rounded-xl p-4 bg-white/5 border border-white/[0.08] space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-widest text-purple-400">Project Presence & Off-Chain Trust</p>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+              data.socials.consistency.consistent
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            }`}>
+              {data.socials.consistency.consistent ? 'Consistency: Agreed' : '⚠️ Link Conflicts'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {/* Website info */}
+            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide">Website</p>
+                {data.socials.links.website ? (
+                  <a href={data.socials.links.website} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
+                    {data.socials.links.website}
+                  </a>
+                ) : (
+                  <p className="text-white/30 font-mono mt-1">Not Found</p>
+                )}
+              </div>
+              {data.socials.links.website && (
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5 text-[10px] font-mono">
+                  <span className={`px-1.5 py-0.5 rounded ${
+                    data.socials.websiteAlive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                  }`}>
+                    {data.socials.websiteAlive ? 'Live (HEAD 200)' : 'Dead / Down'}
+                  </span>
+                  {data.socials.websiteDomainAgeDays !== null && (
+                    <span className="text-white/40">Domain age: {data.socials.websiteDomainAgeDays}d</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Twitter info */}
+            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide">Twitter</p>
+                {data.socials.links.twitter ? (
+                  <a href={data.socials.links.twitter} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
+                    {data.socials.links.twitter}
+                  </a>
+                ) : (
+                  <p className="text-white/30 font-mono mt-1">Not Found</p>
+                )}
+              </div>
+              {data.socials.links.twitter && (
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5 text-[10px] font-mono">
+                  <span className="text-white/40">
+                    {data.socials.twitterAccountAgeDays !== null
+                      ? `Account Age: ${data.socials.twitterAccountAgeDays}d`
+                      : 'Age unknown (API key not configured)'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Telegram & Discord */}
+            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg">
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5">Social Channels</p>
+              <div className="space-y-1.5 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-white/50">Telegram:</span>
+                  {data.socials.links.telegram ? (
+                    <a href={data.socials.links.telegram} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                      Joined ↗
+                    </a>
+                  ) : (
+                    <span className="text-white/30">None</span>
+                  )}
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-white/50">Discord:</span>
+                  {data.socials.links.discord ? (
+                    <a href={data.socials.links.discord} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">
+                      Joined ↗
+                    </a>
+                  ) : (
+                    <span className="text-white/30">None</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* GitHub Info */}
+            <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide font-sans">GitHub Repository</p>
+                {data.socials.links.github ? (
+                  <a href={data.socials.links.github} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
+                    {data.socials.links.github}
+                  </a>
+                ) : (
+                  <p className="text-white/30 font-mono mt-1">None</p>
+                )}
+              </div>
+              {data.socials.links.github && data.socials.githubLastCommitDays !== null && (
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5 text-[10px] font-mono">
+                  <span className={`px-1.5 py-0.5 rounded ${
+                    data.socials.githubLastCommitDays > 90 ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+                  }`}>
+                    {data.socials.githubLastCommitDays > 90 ? 'Stale' : 'Active'}
+                  </span>
+                  <span className="text-white/40">Last commit: {data.socials.githubLastCommitDays}d ago</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CEX Listings Section */}
       {data.exchangeListing && (
         <div className="rounded-xl p-4 bg-white/5 border border-white/[0.08] space-y-3">

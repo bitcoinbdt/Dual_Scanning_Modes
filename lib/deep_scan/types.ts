@@ -815,6 +815,8 @@ export interface DeepScanResult {
   // ── Phase 5: AI Agents ──
   exchangeListing?: import('../ai/ExchangeListingAgent').ExchangeListingResult;
   news?: import('../ai/NewsAgent').NewsResult;
+  // ── Social Signals Module ──
+  socials?: import('../social/SocialMetadataCollector').SocialMetadataResult;
   riskScore: ExplainableRiskScore;
   // ── Synthesis ──
   topRisks: RiskSignal[];
