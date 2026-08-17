@@ -271,10 +271,14 @@ export class SocialMetadataCollector {
         const owner = repoMatch ? repoMatch[1] : null;
         const repo = repoMatch ? repoMatch[2] : null;
         if (owner && repo) {
+          const headers: Record<string, string> = { 'User-Agent': 'OnChain-Scanner-Agent' };
+          if (process.env.GITHUB_TOKEN) {
+            headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+          }
           const gitRes = await axios.get(
             `https://api.github.com/repos/${owner}/${repo}/commits?per_page=1`,
             {
-              headers: { 'User-Agent': 'OnChain-Scanner-Agent' },
+              headers,
               timeout: 2000,
             }
           );
