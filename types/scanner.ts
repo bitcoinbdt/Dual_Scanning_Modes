@@ -20,6 +20,7 @@ export interface LiquidityPool {
 
 export interface OnChainData {
   address: string;
+  network?: string;
   tokenName: string;
   symbol: string;
   totalSupply: number;
