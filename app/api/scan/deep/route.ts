@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       network: detection.chain,
       elevatorResult,
       tokenMetadata,
-      maxTransactions: 100, // Scenario B limit
+      maxTransactions: 10000, // Spec: Deep Scans ingest up to 10,000 transactions; dynamically falls back to all available if fewer exist
       sessionId: scanId,    // Use same scanId as sessionId
       userId: user.id,  // P1-1: scope cache per authenticated user to prevent cross-user collisions
     });

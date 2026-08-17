@@ -10,23 +10,23 @@ export interface CollectorConfig {
 export function getCollectorConfig(creditsSpent: number): CollectorConfig {
   if (creditsSpent <= 5) {
     return {
-      maxTransactions: 50,
+      maxTransactions: 200,
       tier: 'quick_peek'
     };
   } else if (creditsSpent <= 10) {
     return {
-      maxTransactions: 100,
+      maxTransactions: 1000,
       tier: 'standard'
     };
   } else if (creditsSpent <= 20) {
     return {
-      maxTransactions: 200,
+      maxTransactions: 5000,
       tier: 'professional'
     };
   } else {
     // 30 credits or more
     return {
-      maxTransactions: 500,
+      maxTransactions: 10000,
       tier: 'institutional'
     };
   }

@@ -114,7 +114,7 @@ export class DeployerProfiler {
     }
 
     const pubkey = new PublicKey(address);
-    const signatures = await connection.getSignaturesForAddress(pubkey, { limit: 100 });
+    const signatures = await connection.getSignaturesForAddress(pubkey, { limit: 1000 });
 
     if (signatures.length === 0) {
       return {
