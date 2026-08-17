@@ -247,7 +247,7 @@ export class SocialMetadataCollector {
         if (domain) {
           // Use who-dat domain lookup service
           const whoisRes = await axios.get(`https://who-dat.as93.net/${domain}`, { timeout: 2500 });
-          const created = whoisRes.data?.domain?.created ?? whoisRes.data?.created;
+          const created = whoisRes.data?.dates?.created ?? whoisRes.data?.domain?.created ?? whoisRes.data?.created;
           if (created) {
             const ageMs = Date.now() - new Date(created).getTime();
             websiteDomainAgeDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
