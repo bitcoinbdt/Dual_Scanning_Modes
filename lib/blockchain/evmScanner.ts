@@ -12,35 +12,6 @@ import { fetchMarketDataWithFallback } from './marketDataFallback';
 import { OnChainData, StaticData, ChainId } from './types';
 
 // Public RPCs round-robin configuration
-const PUBLIC_RPCS: Record<string, string[]> = {
-  '1': [
-    'https://eth.llamarpc.com',
-    'https://rpc.ankr.com/eth',
-    'https://cloudflare-eth.com'
-  ],
-  '56': [
-    'https://bsc-dataseed.binance.org/',
-    'https://rpc.ankr.com/bsc',
-    'https://binance.llamarpc.com'
-  ],
-  '137': [
-    'https://polygon-rpc.com/',
-    'https://rpc.ankr.com/polygon'
-  ],
-  '42161': [
-    'https://arb1.arbitrum.io/rpc',
-    'https://rpc.ankr.com/arbitrum'
-  ],
-  '8453': [
-    'https://mainnet.base.org',
-    'https://base.llamarpc.com'
-  ],
-  '10': [
-    'https://mainnet.optimism.io',
-    'https://optimism.llamarpc.com'
-  ]
-};
-
 const CHAIN_NAMES: Record<string, string> = {
   '1': 'Ethereum',
   '56': 'BSC',
@@ -49,6 +20,85 @@ const CHAIN_NAMES: Record<string, string> = {
   '8453': 'Base',
   '10': 'Optimism'
 };
+
+/**
+ * Dynamically resolves list of RPC endpoints for a chain,
+ * prioritizing private Alchemy keys if set, then reliable public RPCs.
+ */
+export function getChainRPCs(chainId: string): string[] {
+  const rpcs: string[] = [];
+  const alchemyKey = process.env.ALCHEMY_API_KEY;
+
+  if (alchemyKey) {
+    const alchemyPrefixes: Record<string, string> = {
+      '1': 'https://eth-mainnet.g.alchemy.com/v2/',
+      '137': 'https://polygon-mainnet.g.alchemy.com/v2/',
+      '42161': 'https://arb-mainnet.g.alchemy.com/v2/',
+      '8453': 'https://base-mainnet.g.alchemy.com/v2/',
+      '10': 'https://opt-mainnet.g.alchemy.com/v2/',
+    };
+    if (alchemyPrefixes[chainId]) {
+      rpcs.push(`${alchemyPrefixes[chainId]}${alchemyKey}`);
+    }
+  }
+
+  const publicMap: Record<string, string[]> = {
+    '1': [
+      'https://eth.drpc.org',
+      'https://1rpc.io/eth',
+      'https://ethereum-rpc.publicnode.com',
+      'https://rpc.payload.de',
+      'https://eth-mainnet.public.blastapi.io',
+      'https://gateway.tenderly.co/public/mainnet',
+      'https://rpc.ankr.com/eth',
+      'https://eth.llamarpc.com',
+      'https://cloudflare-eth.com'
+    ],
+    '56': [
+      'https://bsc.drpc.org',
+      'https://1rpc.io/bnb',
+      'https://bsc-rpc.publicnode.com',
+      'https://bsc-dataseed.binance.org/',
+      'https://bsc-dataseed1.binance.org/',
+      'https://rpc.ankr.com/bsc',
+      'https://binance.llamarpc.com'
+    ],
+    '137': [
+      'https://polygon.drpc.org',
+      'https://1rpc.io/matic',
+      'https://polygon-bor-rpc.publicnode.com',
+      'https://polygon-rpc.com/',
+      'https://rpc.ankr.com/polygon'
+    ],
+    '42161': [
+      'https://arbitrum.drpc.org',
+      'https://1rpc.io/arb',
+      'https://arbitrum-one-rpc.publicnode.com',
+      'https://arb1.arbitrum.io/rpc',
+      'https://rpc.ankr.com/arbitrum'
+    ],
+    '8453': [
+      'https://base.drpc.org',
+      'https://1rpc.io/base',
+      'https://base-rpc.publicnode.com',
+      'https://mainnet.base.org',
+      'https://base.llamarpc.com'
+    ],
+    '10': [
+      'https://optimism.drpc.org',
+      'https://1rpc.io/op',
+      'https://optimism-rpc.publicnode.com',
+      'https://mainnet.optimism.io',
+      'https://optimism.llamarpc.com'
+    ]
+  };
+
+  if (publicMap[chainId]) {
+    rpcs.push(...publicMap[chainId]);
+  }
+
+  return rpcs;
+}
 
 // Generic ERC20 ABI
 const ERC20_ABI = [
@@ -73,12 +123,12 @@ async function safeCallString(contract: ethers.Contract, method: string): Promis
  * Get provider with simple round-robin (random pick for zero cost distribution)
  */
 function getProvider(chainId: string): ethers.JsonRpcProvider {
-  const rpcs = PUBLIC_RPCS[chainId];
+  const rpcs = getChainRPCs(chainId);
   if (!rpcs || rpcs.length === 0) {
     throw new Error(`Unsupported chain ID for public RPC: ${chainId}`);
   }
-  const rpc = rpcs[Math.floor(Math.random() * rpcs.length)];
-  return new ethers.JsonRpcProvider(rpc);
+  const rpc = rpcs[0];
+  return new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
 }
 
 /**
@@ -86,13 +136,15 @@ function getProvider(chainId: string): ethers.JsonRpcProvider {
  * Checks where the contract bytecode is deployed.
  */
 export async function autoDetectChainId(address: string): Promise<string> {
-  const chains = Object.keys(PUBLIC_RPCS);
+  const chains = ['1', '56', '137', '42161', '8453', '10'];
   const results = await Promise.all(
     chains.map(async (chainId) => {
-      const rpcs = PUBLIC_RPCS[chainId] || [];
+      const rpcs = getChainRPCs(chainId);
       for (const rpc of rpcs) {
         try {
-          const provider = new ethers.JsonRpcProvider(rpc, undefined, { staticNetwork: true });
+          const fetchReq = new ethers.FetchRequest(rpc);
+          fetchReq.timeout = 3000;
+          const provider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
           const code = await provider.getCode(address);
           if (code && code !== '0x' && code !== '0x0') {
             return chainId;
@@ -119,15 +171,16 @@ export async function scanEVMToken(
 ): Promise<OnChainData> {
   let chainId = requestedChainId;
   
-  if (chainId === 'evm' || !PUBLIC_RPCS[chainId]) {
+  const availableRpcs = getChainRPCs(chainId);
+  if (chainId === 'evm' || availableRpcs.length === 0) {
     console.log(`[EVM] 🌐 Auto-detecting chain for ${address}...`);
     chainId = await autoDetectChainId(address);
-    console.log(`[EVM] 🌐 Auto-detected chain: ${chainId} (${CHAIN_NAMES[chainId]})`);
+    console.log(`[EVM] 🌐 Auto-detected chain: ${chainId} (${CHAIN_NAMES[chainId] || chainId})`);
   }
 
-  console.log(`[EVM] 🔍 Scanning token ${address} via Public RPCs (Resolved chain: ${chainId})...`);
+  console.log(`[EVM] 🔍 Scanning token ${address} via RPCs (Resolved chain: ${chainId})...`);
   
-  const rpcs = PUBLIC_RPCS[chainId] || [];
+  const rpcs = getChainRPCs(chainId);
   if (rpcs.length === 0) {
     throw new Error(`Unsupported chain ID for public RPC: ${chainId}`);
   }
@@ -138,21 +191,25 @@ export async function scanEVMToken(
 
   for (const rpcUrl of rpcs) {
     try {
-      console.log(`[EVM] Probing RPC node: ${rpcUrl}`);
-      const tempProvider = new ethers.JsonRpcProvider(rpcUrl, undefined, { staticNetwork: true });
+      const isPrivate = rpcUrl.includes('alchemy.com');
+      console.log(`[EVM] Probing RPC node: ${isPrivate ? 'Alchemy Private RPC' : rpcUrl}`);
+      const fetchReq = new ethers.FetchRequest(rpcUrl);
+      fetchReq.timeout = 4000; // 4 second probe timeout
+      const tempProvider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
       await tempProvider.getBlockNumber(); // lightweight probe
       provider = tempProvider;
       contract = new ethers.Contract(address, ERC20_ABI, provider);
-      console.log(`[EVM] Active RPC node selected: ${rpcUrl}`);
+      console.log(`[EVM] Active RPC node selected: ${isPrivate ? 'Alchemy Private RPC' : rpcUrl}`);
       break;
     } catch (err: any) {
-      console.warn(`[EVM] RPC node probe failed: ${rpcUrl} - ${err.message}`);
+      const isPrivate = rpcUrl.includes('alchemy.com');
+      console.warn(`[EVM] RPC node probe failed: ${isPrivate ? 'Alchemy Private RPC' : rpcUrl} - ${err.message}`);
       lastError = err;
     }
   }
 
   if (!provider || !contract) {
-    throw new Error(`All public RPC nodes failed for chain ${chainId}. Last error: ${lastError?.message}`);
+    throw new Error(`All RPC nodes failed for chain ${chainId}. Last error: ${lastError?.message}`);
   }
 
   // Step 1: Check cache for static data
