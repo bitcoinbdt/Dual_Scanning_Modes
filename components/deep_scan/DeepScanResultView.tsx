@@ -634,6 +634,7 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
                         {wh.whales.map((whale: WhaleEntry, i: number) => {
                           const flowColor = whale.netFlow > 0 ? 'text-emerald-400' : whale.netFlow < 0 ? 'text-red-400' : 'text-white/40';
                           const flowSign  = whale.netFlow > 0 ? '+' : '';
+                          const holdingsUsd = whale.observedBatchBalance * data.marketSummary.priceUsd;
                           return (
                             <div
                               key={i}
@@ -647,8 +648,8 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
                                 >
                                   {fmtAddr(whale.wallet)}
                                 </p>
-                                <span className={`text-[10px] font-mono font-bold shrink-0 ${flowColor}`}>
-                                  {flowSign}{fmtNum(whale.netFlow, 0)}
+                                <span className="text-[10px] font-mono font-bold text-white/80 shrink-0">
+                                  {fmtUsd(holdingsUsd)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1">
@@ -660,6 +661,9 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
                                 </span>
                                 <span className="text-[9px] text-white/20">
                                   {whale.txCount} txs
+                                </span>
+                                <span className={`text-[9px] font-medium ${flowColor}`}>
+                                  {whale.netFlow === 0 ? 'dormant' : `${flowSign}${fmtNum(whale.netFlow, 0)} flow`}
                                 </span>
                               </div>
                             </div>
