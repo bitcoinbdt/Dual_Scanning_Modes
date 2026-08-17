@@ -24,6 +24,8 @@ export async function queryAI(
   systemInstruction?: string,
   timeoutMs = 10_000
 ): Promise<AIProviderResult> {
+  let geminiError = '';
+
   // 1. Try Gemini (primary)
   try {
     const result = await queryGemini(prompt, systemInstruction, timeoutMs);
@@ -31,19 +33,24 @@ export async function queryAI(
       return { provider: 'gemini', text: result.text, raw: result };
     }
   } catch (err: any) {
-    console.warn(`[AI PROVIDER] Gemini failed: ${err.message}. Falling back to Groq...`);
+    geminiError = err.message || 'Gemini returned an empty response';
+    console.warn(`[AI PROVIDER] Gemini primary failed: ${geminiError}`);
   }
 
-  // 2. Fallback to Groq
-  try {
-    const result = await queryGroq(prompt, systemInstruction, timeoutMs);
-    if (result.text) {
-      return { provider: 'groq', text: result.text, raw: result };
+  // 2. Fallback to Groq (only if GROQ_API_KEY is explicitly configured)
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey && groqKey.trim().length > 0) {
+    try {
+      console.log('[AI PROVIDER] Trying Groq fallback...');
+      const result = await queryGroq(prompt, systemInstruction, timeoutMs);
+      if (result.text) {
+        return { provider: 'groq', text: result.text, raw: result };
+      }
+    } catch (err: any) {
+      console.warn(`[AI PROVIDER] Groq fallback also failed: ${err.message}.`);
+      return { provider: 'none', text: '', error: `Gemini: ${geminiError} | Groq: ${err.message}` };
     }
-  } catch (err: any) {
-    console.warn(`[AI PROVIDER] Groq fallback also failed: ${err.message}.`);
-    return { provider: 'none', text: '', error: err.message };
   }
 
-  return { provider: 'none', text: '', error: 'Both AI providers returned empty responses.' };
+  return { provider: 'none', text: '', error: geminiError || 'Gemini provider returned an empty response.' };
 }
