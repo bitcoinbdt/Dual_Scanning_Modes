@@ -9,6 +9,59 @@ import { cacheStaticData, getStaticData } from './cache';
 import { fetchMarketDataWithFallback } from './marketDataFallback';
 import { OnChainData, StaticData } from './types';
 import { detectSolanaLaunchpad, getPumpFunBondingCurvePda, readPumpFunCurveState } from '../solana/PumpFunCurveReader';
+import { fetchTokenCreationInfo } from '../elevator/collectors/solana/birdeye';
+
+/**
+ * Get Solana token creator and deployment date
+ */
+async function getCreationInfo(
+  address: string,
+  connection?: Connection
+): Promise<{ creatorAddress?: string; deploymentDate?: string }> {
+  let creatorAddress: string | undefined = undefined;
+  let deploymentDate: string | undefined = undefined;
+
+  const birdeyeKey = process.env.BIRDEYE_API_KEY;
+  if (birdeyeKey) {
+    try {
+      const creationInfo = await fetchTokenCreationInfo(address, birdeyeKey, 'solana');
+      if (creationInfo) {
+        if (creationInfo.deployer) creatorAddress = creationInfo.deployer;
+        if (creationInfo.timestamp) {
+          deploymentDate = new Date(creationInfo.timestamp * 1000).toISOString();
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Creation Info] Birdeye fetch failed: ${err.message}`);
+    }
+  }
+
+  // Fallback for Solana
+  if (!creatorAddress && connection) {
+    try {
+      const pubkey = new PublicKey(address);
+      const accountInfo = await connection.getParsedAccountInfo(pubkey);
+      if (accountInfo.value && accountInfo.value.data && 'parsed' in accountInfo.value.data) {
+        const info = (accountInfo.value.data as any).parsed.info;
+        if (info.mintAuthority) {
+          creatorAddress = info.mintAuthority;
+        }
+      }
+      
+      // Try to find the oldest tx to approximate deployment date
+      const signatures = await connection.getSignaturesForAddress(pubkey, { limit: 1000 });
+      if (signatures.length > 0) {
+        const oldestTx = signatures[signatures.length - 1];
+        const oldestTime = oldestTx.blockTime ? oldestTx.blockTime * 1000 : Date.now();
+        deploymentDate = new Date(oldestTime).toISOString();
+      }
+    } catch (err: any) {
+      console.warn(`[Creation Info] Solana fallback failed: ${err.message}`);
+    }
+  }
+
+  return { creatorAddress, deploymentDate };
+}
 
 // Public Solana RPCs round-robin
 const PUBLIC_RPCS = [
@@ -150,6 +203,8 @@ export async function scanSolanaBondingCurveToken(
     totalSupply = supplyRes.value.uiAmount || 1000000000;
   } catch (e) {}
 
+  const creationInfo = await getCreationInfo(address, connection);
+
   return {
     address,
     tokenName: staticData.tokenName,
@@ -169,6 +224,8 @@ export async function scanSolanaBondingCurveToken(
     mintFunction: 'Enabled', // Enabled during curve phase
     freezable: 'No',
     liquidityLocked: false,
+    creatorAddress: creationInfo.creatorAddress,
+    deploymentDate: creationInfo.deploymentDate,
     cacheStatus: isFirstScan ? 'miss' : 'hit',
     cachedAt: staticData.cachedAt,
     isPreGraduation: !complete,
@@ -330,6 +387,8 @@ export async function scanSolanaToken(address: string): Promise<OnChainData> {
 
   if (staticData) completedSources.push('static_data');
 
+  const creationInfo = await getCreationInfo(address, connection);
+
   const combinedData: OnChainData = {
     address,
     tokenName: staticData?.tokenName || "Unknown Solana Token",
@@ -349,6 +408,8 @@ export async function scanSolanaToken(address: string): Promise<OnChainData> {
     mintFunction: dynamicData.mintFunction,
     freezable: dynamicData.freezable,
     liquidityLocked: false,
+    creatorAddress: creationInfo.creatorAddress,
+    deploymentDate: creationInfo.deploymentDate,
     cacheStatus: isFirstScan ? 'miss' : 'hit',
     cachedAt: staticData?.cachedAt,
     meta: {

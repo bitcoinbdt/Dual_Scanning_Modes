@@ -3,6 +3,8 @@ import { scanToken, validateAddress } from '@/lib/blockchain/tokenScanner';
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import crypto from 'crypto';
+import { getStaticData } from '@/lib/blockchain/cache';
+import { RugPatternMatcher } from '@/lib/reputation/RugPatternMatcher';
 
 export async function POST(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

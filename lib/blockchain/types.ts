@@ -299,6 +299,8 @@ export interface OnChainData {
   securityInfo?: SecurityData | null;
   liquidityInfo?: LiquidityInfo;
   washTradingPercentage?: number;
+  creatorAddress?: string;
+  deploymentDate?: string;
   cacheStatus?: 'hit' | 'miss';
   cachedAt?: string;
   isPreGraduation?: boolean;
@@ -316,6 +318,7 @@ export interface ScanResult {
       chainId: string | null;
       cacheStatus: 'hit' | 'miss';
       scanDuration: number;
+      isPreGraduation?: boolean;
     };
   };
   timestamp: string;

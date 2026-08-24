@@ -42,7 +42,8 @@ export async function scanToken(address: string, chainId: string = '1'): Promise
           network: isSolana ? 'solana' : 'evm',
           chainId: isSolana ? null : chainId,
           cacheStatus: onChainData.cacheStatus || 'miss',
-          scanDuration: Date.now() - startTime
+          scanDuration: Date.now() - startTime,
+          isPreGraduation: onChainData.isPreGraduation || false
         }
       },
       timestamp: new Date().toISOString()

@@ -151,4 +151,38 @@ export async function fetchBirdeyeTransactions(
   return allTx.slice(0, maxTransactions);
 }
 
+/**
+ * Fetch token creation information from Birdeye
+ * @param address - Token address
+ * @param apiKey - Birdeye API key
+ * @param chain - Target blockchain (default: 'solana')
+ */
+export async function fetchTokenCreationInfo(
+  address: string,
+  apiKey: string,
+  chain: string = 'solana'
+): Promise<{ deployer: string | null; txHash: string | null; timestamp: number | null } | null> {
+  const url = `${BIRDEYE_API_URL}/defi/token_creation_info`;
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'X-API-KEY': apiKey,
+        'x-chain': chain
+      },
+      params: { address }
+    });
+    const data = response.data?.data;
+    if (data) {
+      return {
+        deployer: data.deployer || null,
+        txHash: data.tx_hash || null,
+        timestamp: data.timestamp ? Number(data.timestamp) : null
+      };
+    }
+  } catch (err: any) {
+    console.warn(`[Birdeye] Token creation info lookup failed for ${address} on ${chain}:`, err.message);
+  }
+  return null;
+}
+
 

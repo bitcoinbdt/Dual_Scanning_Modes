@@ -24,7 +24,24 @@ export const TokenOverviewCard = ({ token }: { token: OnChainData }) => {
               {new Date().toLocaleString('en-US', { timeZoneName: 'short' })}
             </div>
           </div>
-          <p className="text-slate-500 font-mono text-[10px] md:text-sm break-all mt-1">{token.address}</p>
+          <div className="flex flex-col gap-1 mt-2 text-[10px] md:text-xs font-mono text-slate-400">
+            <p className="break-all">
+              <span className="text-white/30 uppercase font-bold tracking-wider mr-1">Token:</span>
+              {token.address}
+            </p>
+            {token.creatorAddress && (
+              <p className="break-all">
+                <span className="text-white/30 uppercase font-bold tracking-wider mr-1">Deployer:</span>
+                {token.creatorAddress}
+              </p>
+            )}
+            {token.deploymentDate && (
+              <p>
+                <span className="text-white/30 uppercase font-bold tracking-wider mr-1">Deployed:</span>
+                {new Date(token.deploymentDate).toLocaleString()}
+              </p>
+            )}
+          </div>
         </div>
         
         {/* Quick Stats Badges */}

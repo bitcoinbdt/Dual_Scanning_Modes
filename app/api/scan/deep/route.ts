@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       network: detection.chain,
       elevatorResult,
       tokenMetadata,
-      maxTransactions: 10000, // Spec: Deep Scans ingest up to 10,000 transactions; dynamically falls back to all available if fewer exist
+      maxTransactions: 1000, // Cost-optimised: 1,000 tx fits in one Helius/Birdeye call and covers typical trading windows
       sessionId: scanId,    // Use same scanId as sessionId
       userId: user.id,  // P1-1: scope cache per authenticated user to prevent cross-user collisions
     });

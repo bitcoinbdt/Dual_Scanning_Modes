@@ -213,6 +213,13 @@ export interface VolumeConcentrationResult {
   volumePriceDivergence: boolean;
   /** 0–100 organic score (100 = fully organic distribution) */
   organicScore: number;
+  /**
+   * Gini coefficient over the holder balance array (0 = perfect equality, 1 = total inequality).
+   * Only present when holdersStatus is 'available' and holder data was supplied.
+   */
+  giniCoefficient?: number;
+  /** Human-readable label for gini level: 'distributed' | 'moderate' | 'concentrated' | 'extreme' */
+  giniLevel?: 'distributed' | 'moderate' | 'concentrated' | 'extreme';
   evidenceIds: string[];
 }
 
@@ -774,6 +781,7 @@ export interface DeepScanResult {
   outcome?: ScanOutcome;
   scanId: string;
   timestamp: number;
+  criticalBlocker?: boolean;
   tokenMetadata: {
     address: string;
     name: string;

@@ -20,7 +20,7 @@ import {
   ModuleStatus,
   normalizeAddress,
 } from '../types';
-import { UniversalTransaction } from '../../elevator/collectors/types';
+import { UniversalTransaction, HolderInfo } from '../../elevator/collectors/types';
 import { DEEP_SCAN_CONFIG } from '../config';
 
 function round(n: number, dp = 4): number {
@@ -71,16 +71,59 @@ function computeHHI(
 }
 
 /**
+ * Compute the Gini coefficient over an array of holder balances.
+ *
+ * Gini = (2 * Σ i*xi) / (n * Σ xi) − (n+1)/n
+ * where xi are balances sorted ascending and i is the 1-based rank.
+ *
+ * Returns null if the holder array is empty or all balances are zero.
+ */
+function computeGiniCoefficient(holders: HolderInfo[]): number | null {
+  const balances = holders
+    .map((h) => h.balance)
+    .filter((b) => b > 0);
+
+  if (balances.length === 0) return null;
+
+  // Sort ascending for the Lorenz area formula
+  balances.sort((a, b) => a - b);
+
+  const n = balances.length;
+  const total = balances.reduce((sum, b) => sum + b, 0);
+  if (total === 0) return null;
+
+  let numerator = 0;
+  for (let i = 0; i < n; i++) {
+    numerator += (i + 1) * balances[i];
+  }
+
+  const gini = (2 * numerator) / (n * total) - (n + 1) / n;
+  return round(Math.max(0, Math.min(1, gini)), 6);
+}
+
+/** Classify a Gini value into a human-readable label. */
+function classifyGini(gini: number): 'distributed' | 'moderate' | 'concentrated' | 'extreme' {
+  if (gini < 0.4) return 'distributed';
+  if (gini < 0.6) return 'moderate';
+  if (gini < 0.8) return 'concentrated';
+  return 'extreme';
+}
+
+/**
  * Analyze volume concentration using HHI.
  *
  * @param transactions     - Normalized transaction batch from Elevator
  * @param washTraderWallets - Wallets flagged by Elevator's basic wash detector (REUSED)
+ * @param cexWallets        - CEX wallets to exclude from HHI
+ * @param contractWallets   - Contract/system wallets to exclude from HHI
+ * @param holders           - Optional holder snapshot for Gini computation (Solana only)
  */
 export function analyzeVolumeConcentration(
   transactions: UniversalTransaction[],
   washTraderWallets: Set<string> = new Set(),
   cexWallets: Set<string> = new Set(),
-  contractWallets: Set<string> = new Set()
+  contractWallets: Set<string> = new Set(),
+  holders?: HolderInfo[]
 ): VolumeConcentrationResult {
   if (!transactions || transactions.length === 0) {
     return {
@@ -251,6 +294,17 @@ export function analyzeVolumeConcentration(
     sellerHHI.hhi * organicWeights.sellerHhi;
   const organicScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
+  // ── Gini Coefficient over holder snapshot (Solana only — optional) ──
+  let giniCoefficient: number | undefined;
+  let giniLevel: 'distributed' | 'moderate' | 'concentrated' | 'extreme' | undefined;
+  if (holders && holders.length > 0) {
+    const gini = computeGiniCoefficient(holders);
+    if (gini !== null) {
+      giniCoefficient = gini;
+      giniLevel = classifyGini(gini);
+    }
+  }
+
   return {
     status: 'ok',
     totalBuyVolumeUsd: round(totalBuyVolumeUsd, 2),
@@ -266,6 +320,8 @@ export function analyzeVolumeConcentration(
     washVolumeRatio,
     volumePriceDivergence,
     organicScore,
+    giniCoefficient,
+    giniLevel,
     evidenceIds: ['volume-hhi-buyers', 'volume-hhi-sellers'],
   };
 }

@@ -183,50 +183,79 @@ export class DeepScanService {
     console.log(`[DEEP SERVICE] Starting scan for token ${address} on ${network}...`);
 
     // ─────────────────────────────────────────────
-    // Step 1: Resolve Basic / Token Metadata
+    // Step 1: Execute Complete Basic Scan Synchronously
     // ─────────────────────────────────────────────
-    let meta: any = input.tokenMetadata;
     let basicScanData: any = null;
-
-    if (!meta) {
-      // ── BOUNDARY COMPATIBILITY FALLBACK: Basic Token Metadata ──
-      // This is a backward-compatibility path for Scenario B where the caller has
-      // not provided tokenMetadata from a prior Basic Scan. While the Basic Scanner
-      // owns token metadata, we invoke it here as a fallback to prevent failure.
-      console.log(`[DEEP SERVICE] Basic metadata missing. Querying basic token scanner...`);
-      try {
-        if (network === 'solana') {
-          basicScanData = await scanSolanaToken(address);
-        } else {
-          // EVM chain ID fallback (eth/bsc)
-          const chainId = network === 'bsc' ? '56' : '1';
-          basicScanData = await scanEVMToken(address, chainId);
-        }
-        
-        meta = {
-          name: basicScanData.tokenName,
-          symbol: basicScanData.symbol,
-          decimals: basicScanData.decimals,
-          totalSupply: basicScanData.totalSupply,
-          fdvUsd: basicScanData.liquidityInfo?.fdv ?? null,
-          spotPriceUsd: basicScanData.liquidityInfo?.basePriceUsd ?? 0,
-          totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
-          volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
-          mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
-          crossChainPools: basicScanData.liquidityInfo?.crossChainPools ?? [],
-          totalCrossChainLiquidityUsd: basicScanData.liquidityInfo?.totalCrossChainLiquidityUsd ?? basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
-          creatorAddress: basicScanData.securityInfo?.creatorAddress ?? undefined,
-          securityFlags: {
-            isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
-            hasMintFunction: basicScanData.mintFunction === 'Enabled',
-            canBePaused: basicScanData.freezable === 'Yes',
-          },
-          timestamp: basicScanData.liquidityInfo?.timestamp,
-          source: basicScanData.liquidityInfo?.source,
-        };
-      } catch (err: any) {
-        console.error(`[DEEP SERVICE] Basic metadata scan failed:`, err.message);
+    try {
+      if (network === 'solana') {
+        basicScanData = await scanSolanaToken(address);
+      } else {
+        const chainId = input.chainId || (network === 'bsc' ? '56' : '1');
+        basicScanData = await scanEVMToken(address, chainId);
       }
+    } catch (err: any) {
+      console.error(`[DEEP SERVICE] Synchronous Basic Scan failed:`, err.message);
+    }
+
+    let meta: any = input.tokenMetadata;
+    if (basicScanData) {
+      meta = {
+        name: basicScanData.tokenName,
+        symbol: basicScanData.symbol,
+        decimals: basicScanData.decimals,
+        totalSupply: basicScanData.totalSupply,
+        fdvUsd: basicScanData.liquidityInfo?.fdv ?? null,
+        spotPriceUsd: basicScanData.liquidityInfo?.basePriceUsd ?? 0,
+        totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
+        volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
+        mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
+        crossChainPools: basicScanData.liquidityInfo?.crossChainPools ?? [],
+        totalCrossChainLiquidityUsd: basicScanData.liquidityInfo?.totalCrossChainLiquidityUsd ?? basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
+        creatorAddress: basicScanData.creatorAddress ?? basicScanData.securityInfo?.creatorAddress ?? undefined,
+        deploymentDate: basicScanData.deploymentDate,
+        isPreGraduation: basicScanData.isPreGraduation || false,
+        securityFlags: {
+          isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
+          hasMintFunction: basicScanData.mintFunction === 'Enabled',
+          canBePaused: basicScanData.freezable === 'Yes',
+        },
+        timestamp: basicScanData.liquidityInfo?.timestamp,
+        source: basicScanData.liquidityInfo?.source,
+        bytecode: basicScanData.bytecode || null,
+      };
+    }
+
+    // Determine early overrides and critical blockers
+    let isRugPull = false;
+    const isHoneypot = meta?.securityFlags?.isHoneypot ?? false;
+    const isPreGraduation = meta?.isPreGraduation || false;
+
+    if (basicScanData) {
+      const deployerAddr = meta?.creatorAddress || basicScanData.creatorAddress || basicScanData.securityInfo?.creatorAddress || '';
+      const bytecode = meta?.bytecode || basicScanData.bytecode || null;
+      if (deployerAddr) {
+        try {
+          const rugCheck = await RugPatternMatcher.analyze(address, deployerAddr, bytecode, network);
+          isRugPull = rugCheck.isRugPull;
+        } catch (err: any) {
+          console.warn(`[DEEP SERVICE] Early rug check failed:`, err.message);
+        }
+      }
+    }
+
+    const criticalBlocker = isHoneypot || isRugPull;
+
+    // Determine dynamic transaction cap based on token age
+    let maxTxCap = input.maxTransactions;
+    if (maxTxCap === undefined) {
+      let isYoung = false;
+      if (meta?.deploymentDate) {
+        const depTime = new Date(meta.deploymentDate).getTime();
+        const ageDays = (Date.now() - depTime) / (1000 * 60 * 60 * 24);
+        isYoung = ageDays < 7;
+      }
+      maxTxCap = isYoung ? 1000 : 200;
+      console.log(`[DEEP SERVICE] maxTransactions omitted. Calculated token age is ${meta?.deploymentDate ? 'known' : 'unknown'}. Setting cap to: ${maxTxCap}`);
     }
 
     // Fallbacks if metadata is empty or failed
@@ -244,7 +273,6 @@ export class DeepScanService {
       console.log(`[DEEP SERVICE] 🔵 Large-Cap token detected (FDV: $${finalFdv.toLocaleString()}). Bypassing micro-cap risk heuristics.`);
     }
     const initialPools = meta?.mainPools ?? [];
-    const isHoneypot = meta?.securityFlags?.isHoneypot ?? false;
 
     // Step 1b: Enrich pools with V2 reserves and V3 slot0
     const enrichedPools = await enrichPoolsWithAlchemyReserves(
@@ -294,7 +322,7 @@ export class DeepScanService {
       
       // Deep scans default to 10,000 transactions — this drives accurate HHI/Gini scoring.
       // Callers may override with a smaller value for preview/quick modes.
-      const maxTx = input.maxTransactions ?? 10000;
+      const maxTx = maxTxCap;
       const chain = (network === 'solana' ? 'solana' : network === 'bsc' ? 'bsc' : 'eth') as SupportedBlockchain;
       
       const apiKeys = {
@@ -312,7 +340,6 @@ export class DeepScanService {
 
     // F-11: Cap transaction array to maxTransactions even in Scenario A.
     // Callers may pass arbitrarily large elevatorResult.transactions arrays.
-    const maxTxCap = input.maxTransactions ?? 10000;
     const txs = (elevatorResult?.transactions ?? []).slice(0, maxTxCap);
     const ohlcv = elevatorResult?.ohlcv ?? [];
 
@@ -418,7 +445,7 @@ export class DeepScanService {
     const ammResult = simulateAmmSlippage(finalPools, finalSpotPrice, posSizes);
 
     // 2. Volume HHI — now excludes CEX and contract wallets from HHI computation
-    const hhiResult = analyzeVolumeConcentration(txs, washTraderWallets, cexWallets, contractWallets);
+    const hhiResult = analyzeVolumeConcentration(txs, washTraderWallets, cexWallets, contractWallets, batchHolders);
 
     // 3. Whale Behavior
     const whaleResult = analyzeWhaleBehavior(
@@ -817,6 +844,12 @@ export class DeepScanService {
       upgradeAuthorityActive: false, // requires separate program account check
     } : undefined;
 
+    const deployerAddr = meta?.creatorAddress || basicScanData?.creatorAddress || basicScanData?.securityInfo?.creatorAddress || '';
+    const deployerWhale = whaleResult.status === 'ok' ? whaleResult.whales.find(
+      w => normalizeAddress(w.wallet) === normalizeAddress(deployerAddr)
+    ) : undefined;
+    const deployerHoldingsPct = deployerWhale ? deployerWhale.supplySharePct : 0;
+
     const riskScoreResult = calculateRiskScore({
       ammSlippage: ammResult,
       volumeConcentration: hhiResult,
@@ -828,6 +861,11 @@ export class DeepScanService {
       evmContractRisk,
       solanaAuthorityRisk,
       socialSignals,
+      isLargeCap,
+      isRugPull,
+      totalLiquidityUsd: finalLiquidity,
+      isPreGraduation,
+      deployerHoldingsPct,
     });
 
     // ── Evidence ID integrity validation ──
@@ -1165,6 +1203,7 @@ export class DeepScanService {
       outcome,
       scanId,
       timestamp: Date.now(),
+      criticalBlocker,
       tokenMetadata: {
         address,
         name: meta?.name ?? 'Unknown Token',

@@ -97,6 +97,17 @@ export function calculateRiskScore(params: {
     upgradeAuthorityActive?: boolean;// SOL-CTR-003: program upgradeable (new token only)
   };
   socialSignals?: RiskSignal[];
+  // ── Safety override inputs ──
+  /** Token flagged as rug-pull by RugPatternMatcher — forces score to 100 */
+  isRugPull?: boolean;
+  /** Total pool liquidity in USD — forces score to 100 if < 100 USD (unless pre-graduation) */
+  totalLiquidityUsd?: number;
+  /** True when token is still on a bonding curve / presale (skip liquidity check) */
+  isPreGraduation?: boolean;
+  /** Deployer's current % holdings of total supply — forces score to 100 if > 50 */
+  deployerHoldingsPct?: number;
+  /** True if the token is a Large-Cap token (bypasses micro-cap heuristics like HHI warnings, exit simulator) */
+  isLargeCap?: boolean;
 }): ExplainableRiskScore {
   const subScores: SubScore[] = [];
   const topRisks: RiskSignal[] = [];
@@ -158,15 +169,20 @@ export function calculateRiskScore(params: {
   let whaleExitConfidence = 0;
 
   if (whaleExitAvail === 'measured') {
-    const scenario50 = params.whaleExit.scenarios.find(s => s.label === '50%');
-    if (scenario50) {
-      if (scenario50.status === 'ok') {
-        const drop = scenario50.priceDeltaPct;
-        whaleExitScore = drop < 10 ? 15 : drop < 25 ? 40 : drop < 50 ? 75 : 100;
-      } else {
-        whaleExitScore = 100;
+    if (params.isLargeCap === true) {
+      whaleExitScore = 0;
+      whaleExitConfidence = 95;
+    } else {
+      const scenario50 = params.whaleExit.scenarios.find(s => s.label === '50%');
+      if (scenario50) {
+        if (scenario50.status === 'ok') {
+          const drop = scenario50.priceDeltaPct;
+          whaleExitScore = drop < 10 ? 15 : drop < 25 ? 40 : drop < 50 ? 75 : 100;
+        } else {
+          whaleExitScore = 100;
+        }
+        whaleExitConfidence = 70; // local batch data
       }
-      whaleExitConfidence = 70; // local batch data
     }
   }
 
@@ -181,7 +197,7 @@ export function calculateRiskScore(params: {
     dataAvailability: whaleExitAvail,
   });
 
-  if (whaleExitAvail === 'measured' && whaleExitScore >= 35) {
+  if (whaleExitAvail === 'measured' && whaleExitScore >= 35 && params.isLargeCap !== true) {
     topRisks.push({
       riskId: 'whale-selloff-cascade',
       riskName: 'Vulnerable Whale Concentration',
@@ -202,8 +218,13 @@ export function calculateRiskScore(params: {
   let volumeConfidence = 0;
 
   if (volAvail === 'measured') {
-    volumeScore = 100 - params.volumeConcentration.organicScore;
-    volumeConfidence = params.volumeConcentration.uniqueBuyers >= 10 ? 80 : 55;
+    if (params.isLargeCap === true) {
+      volumeScore = 0;
+      volumeConfidence = 95;
+    } else {
+      volumeScore = 100 - params.volumeConcentration.organicScore;
+      volumeConfidence = params.volumeConcentration.uniqueBuyers >= 10 ? 80 : 55;
+    }
   }
 
   subScores.push({
@@ -217,7 +238,7 @@ export function calculateRiskScore(params: {
     dataAvailability: volAvail,
   });
 
-  if (volAvail === 'measured' && volumeScore >= 30) {
+  if (volAvail === 'measured' && volumeScore >= 30 && params.isLargeCap !== true) {
     topRisks.push({
       riskId: 'skewed-volume-concentration',
       riskName: 'Highly Concentrated Volume',
@@ -243,9 +264,11 @@ export function calculateRiskScore(params: {
     } else if (params.whaleBehavior.phase === 'accumulation') {
       whaleBehScore = 15;
     } else if (params.whaleBehavior.phase === 'dormant') {
-      whaleBehScore = 30; // low-to-moderate risk from dormant whales
+      // Score scales with how much supply dormant whales hold.
+      // A 5% supply share → score 10; a 25%+ share → score 50 (capped).
+      whaleBehScore = Math.min(50, Math.round(params.whaleBehavior.totalWhaleSupplySharePct * 2));
     } else {
-      // neutral
+      // neutral / no active direction
       whaleBehScore = 40;
     }
     whaleBehConfidence = 65;
@@ -508,6 +531,45 @@ export function calculateRiskScore(params: {
     });
   }
 
+  if (params.isRugPull === true) {
+    overallScore = 100;
+    topRisks.unshift({
+      riskId: 'rugpull-verified',
+      riskName: 'Verified Rug Pull Pattern',
+      severity: 'critical',
+      status: 'active',
+      evidenceIds: [],
+      description: 'Historical deployer behavior, wallet history, or bytecode matches known rug-pull signatures.',
+      confidence: 100,
+    });
+  }
+
+  if (params.totalLiquidityUsd !== undefined && params.totalLiquidityUsd < 100 && params.isPreGraduation !== true) {
+    overallScore = 100;
+    topRisks.unshift({
+      riskId: 'extremely-low-liquidity',
+      riskName: 'Extremely Low Liquidity',
+      severity: 'critical',
+      status: 'active',
+      evidenceIds: [],
+      description: `Token liquidity ($${params.totalLiquidityUsd.toFixed(2)}) is below $100. Trade execution is highly dangerous.`,
+      confidence: 100,
+    });
+  }
+
+  if (params.deployerHoldingsPct !== undefined && params.deployerHoldingsPct > 50) {
+    overallScore = 100;
+    topRisks.unshift({
+      riskId: 'excessive-deployer-holdings',
+      riskName: 'Excessive Deployer Holdings',
+      severity: 'critical',
+      status: 'active',
+      evidenceIds: [],
+      description: `Deployer wallet holds ${params.deployerHoldingsPct.toFixed(1)}% of total supply, presenting extreme dump risk.`,
+      confidence: 100,
+    });
+  }
+
   const roundedOverallScore = Math.round(overallScore);
   const riskLevel = classifyRiskLevel(roundedOverallScore);
 
@@ -521,8 +583,12 @@ export function calculateRiskScore(params: {
     ? Math.round(measuredSubScores.reduce((sum, s) => sum + s.confidence, 0) / availableModuleCount)
     : 0;
 
-  // Sufficient data: at least one module produced a measured score
-  const sufficientData = availableModuleCount > 0 || verifiedHoneypot;
+  // Sufficient data: at least one module produced a measured score or any override is active
+  const sufficientData = availableModuleCount > 0 ||
+    verifiedHoneypot ||
+    params.isRugPull === true ||
+    (params.totalLiquidityUsd !== undefined && params.totalLiquidityUsd < 100 && params.isPreGraduation !== true) ||
+    (params.deployerHoldingsPct !== undefined && params.deployerHoldingsPct > 50);
 
   // Score completeness
   const scoreCompleteness: ExplainableRiskScore['scoreCompleteness'] =

@@ -10,6 +10,8 @@ import { cacheStaticData, cacheSecurityData, getStaticData, getSecurityData } fr
 import { fetchGoPlusSecurity, getFallbackSecurityData } from './goPlusSecurity';
 import { fetchMarketDataWithFallback } from './marketDataFallback';
 import { OnChainData, StaticData, ChainId } from './types';
+import axios from 'axios';
+import { fetchTokenCreationInfo } from '../elevator/collectors/solana/birdeye';
 
 // Public RPCs round-robin configuration
 const CHAIN_NAMES: Record<string, string> = {
@@ -105,8 +107,46 @@ const ERC20_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
-  "function totalSupply() view returns (uint256)"
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address owner) view returns (uint256)"
 ];
+
+// Static registry of known EVM presale platform factory addresses
+const EVM_PRESALE_FACTORIES: Record<string, string[]> = {
+  '56': [ // BSC
+    '0x7ee9139ad4cd4efb26c6d03d36e2d1945f0d98ac', // PinkSale BSC
+    '0xd99d1c33f9fc3444f8101754abc46c52416550d1', // DXSale BSC
+  ],
+  '1': [ // Ethereum
+    '0x7ee9139ad4cd4efb26c6d03d36e2d1945f0d98ac', // PinkSale ETH
+  ],
+};
+
+/**
+ * Detection: check if token's largest holder is a known presale factory
+ */
+export async function detectEVMPresale(
+  tokenAddress: string,
+  chainId: string,
+  provider: ethers.JsonRpcProvider
+): Promise<{ isPresale: boolean; presaleContract: string | null }> {
+  const factories = EVM_PRESALE_FACTORIES[chainId] ?? [];
+  const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+
+  for (const factory of factories) {
+    try {
+      const balance: bigint = await tokenContract.balanceOf(factory);
+      const totalSupply: bigint = await tokenContract.totalSupply();
+      // If factory holds > 10% of total supply, presale is active
+      if (totalSupply > 0n && (balance * 100n) / totalSupply > 10n) {
+        return { isPresale: true, presaleContract: factory };
+      }
+    } catch (e) {
+      // ignore read failures on custom tokens
+    }
+  }
+  return { isPresale: false, presaleContract: null };
+}
 
 /**
  * Fallback to fetch string values safely
@@ -347,6 +387,88 @@ export async function scanEVMToken(
   if (marketData && marketData.tokenNameOverride) finalTokenName = marketData.tokenNameOverride;
   if (marketData && marketData.symbolOverride) finalSymbol = marketData.symbolOverride;
 
+  // Fetch creator/deployer and deployment date
+  let creatorAddress = securityData?.creatorAddress || undefined;
+  let deploymentDate: string | undefined = undefined;
+
+  const birdeyeKey = process.env.BIRDEYE_API_KEY;
+  if (birdeyeKey) {
+    try {
+      const birdeyeChainMap: Record<string, string> = {
+        '1': 'ethereum',
+        'eth': 'ethereum',
+        '56': 'bsc',
+        'bsc': 'bsc',
+        '8453': 'base',
+        'base': 'base',
+        '137': 'polygon',
+        'polygon': 'polygon'
+      };
+      const beChain = birdeyeChainMap[chainId] || 'ethereum';
+      const creationInfo = await fetchTokenCreationInfo(address, birdeyeKey, beChain);
+      if (creationInfo) {
+        if (creationInfo.deployer) creatorAddress = creationInfo.deployer;
+        if (creationInfo.timestamp) {
+          deploymentDate = new Date(creationInfo.timestamp * 1000).toISOString();
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[EVM Creation Info] Birdeye fetch failed: ${err.message}`);
+    }
+  }
+
+  // Fallback for EVM deploymentDate via Explorer API
+  if (!deploymentDate) {
+    try {
+      const EXPLORER_API_MAP: Record<string, { url: string; keyEnvVar: string }> = {
+        '1': { url: 'https://api.etherscan.io/api', keyEnvVar: 'ETHERSCAN_API_KEY' },
+        'eth': { url: 'https://api.etherscan.io/api', keyEnvVar: 'ETHERSCAN_API_KEY' },
+        '56': { url: 'https://api.bscscan.com/api', keyEnvVar: 'BSCSCAN_API_KEY' },
+        'bsc': { url: 'https://api.bscscan.com/api', keyEnvVar: 'BSCSCAN_API_KEY' },
+        '8453': { url: 'https://api.basescan.org/api', keyEnvVar: 'BASESCAN_API_KEY' },
+        'base': { url: 'https://api.basescan.org/api', keyEnvVar: 'BASESCAN_API_KEY' },
+        '137': { url: 'https://api.polygonscan.com/api', keyEnvVar: 'POLYGONSCAN_API_KEY' },
+        'polygon': { url: 'https://api.polygonscan.com/api', keyEnvVar: 'POLYGONSCAN_API_KEY' },
+      };
+      const apiInfo = EXPLORER_API_MAP[chainId];
+      if (apiInfo) {
+        const apiKey = process.env[apiInfo.keyEnvVar] || '';
+        const res = await axios.get(apiInfo.url, {
+          params: {
+            module: 'account',
+            action: 'txlist',
+            address: address,
+            startblock: 0,
+            endblock: 99999999,
+            page: 1,
+            offset: 1,
+            sort: 'asc',
+            apikey: apiKey
+          },
+          timeout: 4000
+        });
+        const firstTx = res.data?.result?.[0];
+        if (firstTx && firstTx.timeStamp) {
+          deploymentDate = new Date(Number(firstTx.timeStamp) * 1000).toISOString();
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[EVM Creation Info] Explorer fallback failed: ${err.message}`);
+    }
+  }
+
+  // Detect EVM presale platforms (PinkSale / DXSale)
+  let isPreGraduation = false;
+  try {
+    const presaleCheck = await detectEVMPresale(address, chainId, provider);
+    if (presaleCheck.isPresale) {
+      isPreGraduation = true;
+      console.log(`[EVM] Token is in pre-graduation/presale phase (PinkSale/DXSale detected).`);
+    }
+  } catch (err: any) {
+    console.warn(`[EVM Presale Detection] Failed: ${err.message}`);
+  }
+
   const combinedData: OnChainData = {
     address,
     tokenName: finalTokenName,
@@ -362,11 +484,14 @@ export async function scanEVMToken(
     securityInfo: securityData,
     liquidityInfo: marketData,
     washTradingPercentage,
+    creatorAddress,
+    deploymentDate,
     taxBuy: securityData ? `${securityData.buyTax.toFixed(1)}%` : "0%",
     taxSell: securityData ? `${securityData.sellTax.toFixed(1)}%` : "0%",
     mintFunction: securityData?.hasMintFunction ? 'Enabled' : 'Disabled',
     freezable: securityData?.canBePaused ? 'Yes' : 'No',
     liquidityLocked: false,
+    isPreGraduation,
     cacheStatus: isFirstScan ? 'miss' : 'hit',
     cachedAt: staticData?.cachedAt,
     meta: {
