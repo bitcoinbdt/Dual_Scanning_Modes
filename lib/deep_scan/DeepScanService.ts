@@ -183,56 +183,61 @@ export class DeepScanService {
     console.log(`[DEEP SERVICE] Starting scan for token ${address} on ${network}...`);
 
     // ─────────────────────────────────────────────
-    // Step 1: Execute Complete Basic Scan Synchronously
+    // Step 1: Resolve Token Metadata
     // ─────────────────────────────────────────────
+    // Prefer caller-supplied tokenMetadata (Scenario A — Elevator data reuse).
+    // Only fall back to the Basic Scanner when no metadata was passed in (Scenario B).
+    let meta: any = input.tokenMetadata ?? null;
     let basicScanData: any = null;
-    try {
-      if (network === 'solana') {
-        basicScanData = await scanSolanaToken(address);
-      } else {
-        const chainId = input.chainId || (network === 'bsc' ? '56' : '1');
-        basicScanData = await scanEVMToken(address, chainId);
+
+    if (!meta) {
+      console.log(`[DEEP SERVICE] tokenMetadata missing. Running basic scanner as fallback...`);
+      try {
+        if (network === 'solana') {
+          basicScanData = await scanSolanaToken(address);
+        } else {
+          const chainId = input.chainId || (network === 'bsc' ? '56' : '1');
+          basicScanData = await scanEVMToken(address, chainId);
+        }
+        meta = {
+          name: basicScanData.tokenName,
+          symbol: basicScanData.symbol,
+          decimals: basicScanData.decimals,
+          totalSupply: basicScanData.totalSupply,
+          fdvUsd: basicScanData.liquidityInfo?.fdv ?? null,
+          spotPriceUsd: basicScanData.liquidityInfo?.basePriceUsd ?? 0,
+          totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
+          volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
+          mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
+          crossChainPools: basicScanData.liquidityInfo?.crossChainPools ?? [],
+          totalCrossChainLiquidityUsd: basicScanData.liquidityInfo?.totalCrossChainLiquidityUsd ?? basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
+          creatorAddress: basicScanData.creatorAddress ?? basicScanData.securityInfo?.creatorAddress ?? undefined,
+          deploymentDate: basicScanData.deploymentDate,
+          isPreGraduation: basicScanData.isPreGraduation || false,
+          securityFlags: {
+            isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
+            hasMintFunction: basicScanData.mintFunction === 'Enabled',
+            canBePaused: basicScanData.freezable === 'Yes',
+          },
+          timestamp: basicScanData.liquidityInfo?.timestamp,
+          source: basicScanData.liquidityInfo?.source,
+          bytecode: basicScanData.bytecode || null,
+        };
+      } catch (err: any) {
+        console.error(`[DEEP SERVICE] Basic metadata fallback scan failed:`, err.message);
       }
-    } catch (err: any) {
-      console.error(`[DEEP SERVICE] Synchronous Basic Scan failed:`, err.message);
     }
 
-    let meta: any = input.tokenMetadata;
-    if (basicScanData) {
-      meta = {
-        name: basicScanData.tokenName,
-        symbol: basicScanData.symbol,
-        decimals: basicScanData.decimals,
-        totalSupply: basicScanData.totalSupply,
-        fdvUsd: basicScanData.liquidityInfo?.fdv ?? null,
-        spotPriceUsd: basicScanData.liquidityInfo?.basePriceUsd ?? 0,
-        totalLiquidityUsd: basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
-        volume24hUsd: basicScanData.liquidityInfo?.volume24hUsd ?? null,
-        mainPools: basicScanData.liquidityInfo?.mainPools ?? [],
-        crossChainPools: basicScanData.liquidityInfo?.crossChainPools ?? [],
-        totalCrossChainLiquidityUsd: basicScanData.liquidityInfo?.totalCrossChainLiquidityUsd ?? basicScanData.liquidityInfo?.totalLiquidityUsd ?? 0,
-        creatorAddress: basicScanData.creatorAddress ?? basicScanData.securityInfo?.creatorAddress ?? undefined,
-        deploymentDate: basicScanData.deploymentDate,
-        isPreGraduation: basicScanData.isPreGraduation || false,
-        securityFlags: {
-          isHoneypot: basicScanData.securityInfo?.isHoneypot ?? false,
-          hasMintFunction: basicScanData.mintFunction === 'Enabled',
-          canBePaused: basicScanData.freezable === 'Yes',
-        },
-        timestamp: basicScanData.liquidityInfo?.timestamp,
-        source: basicScanData.liquidityInfo?.source,
-        bytecode: basicScanData.bytecode || null,
-      };
-    }
-
-    // Determine early overrides and critical blockers
-    let isRugPull = false;
+    // Determine early overrides and critical blockers using existing metadata.
+    // RugPatternMatcher runs non-blocking later in Phase 4 if needed.
     const isHoneypot = meta?.securityFlags?.isHoneypot ?? false;
     const isPreGraduation = meta?.isPreGraduation || false;
+    let isRugPull = false;
 
+    // Early rug check only when we have bytecode/deployer available (Scenario B fallback path)
     if (basicScanData) {
-      const deployerAddr = meta?.creatorAddress || basicScanData.creatorAddress || basicScanData.securityInfo?.creatorAddress || '';
-      const bytecode = meta?.bytecode || basicScanData.bytecode || null;
+      const deployerAddr = meta?.creatorAddress || basicScanData.securityInfo?.creatorAddress || '';
+      const bytecode = basicScanData.bytecode || null;
       if (deployerAddr) {
         try {
           const rugCheck = await RugPatternMatcher.analyze(address, deployerAddr, bytecode, network);

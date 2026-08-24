@@ -221,3 +221,8 @@ function scanIdFromRequest(req: NextRequest): string | undefined {
   const searchParams = req.nextUrl.searchParams;
   return searchParams.get('sessionId') || undefined;
 }
+
+// Deep Scan is a long-running operation — increase Vercel function timeout.
+// Without this, the default 10s limit causes a 504 on every request.
+// Requires Vercel Pro or higher; hobby plan caps at 60s.
+export const maxDuration = 300;
