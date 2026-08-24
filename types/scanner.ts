@@ -33,6 +33,9 @@ export interface OnChainData {
   taxBuy: string;
   taxSell: string;
   washTradingPercentage?: number;
+  creatorAddress?: string;
+  deploymentDate?: string;
+  isPreGraduation?: boolean;
   recentTransactions: Transaction[];
   networkHealth: {
     lastBlock: string;
