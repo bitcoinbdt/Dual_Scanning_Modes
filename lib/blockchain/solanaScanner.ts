@@ -85,7 +85,10 @@ export async function getSolanaConnection(): Promise<Connection> {
       const isPrivate = rpc.includes('helius-rpc.com');
       console.log(`[SOLANA] Probing RPC node: ${isPrivate ? 'Helius Private RPC' : rpc}`);
       const conn = new Connection(rpc, 'confirmed');
-      await conn.getSlot(); // lightweight probe call
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Probe request timed out (2.5s limit)')), 2500)
+      );
+      await Promise.race([conn.getSlot(), timeoutPromise]);
       console.log(`[SOLANA] Active RPC node selected: ${isPrivate ? 'Helius Private RPC' : rpc}`);
       return conn;
     } catch (err: any) {

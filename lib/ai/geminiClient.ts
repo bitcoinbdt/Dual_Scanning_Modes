@@ -50,6 +50,11 @@ export async function queryGemini(
     } catch (err: any) {
       lastError = err;
       const errMsg = err.message || '';
+      const isTimeout = errMsg.toLowerCase().includes('timed out') || errMsg.toLowerCase().includes('timeout');
+      if (isTimeout) {
+        console.warn(`[GEMINI] Request timed out for model ${model}. Aborting further model attempts to prevent gateway timeout.`);
+        throw err;
+      }
       
       // If quota (429) limit is hit or search grounding fails due to API restrictions, retry without it
       if (errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted')) {
@@ -60,6 +65,10 @@ export async function queryGemini(
         } catch (retryErr: any) {
           lastError = retryErr;
           console.warn(`[GEMINI] Retry without grounding also failed for ${model}: ${retryErr.message}`);
+          const isRetryTimeout = (retryErr.message || '').toLowerCase().includes('timed out') || (retryErr.message || '').toLowerCase().includes('timeout');
+          if (isRetryTimeout) {
+            throw retryErr;
+          }
         }
       } else {
         console.warn(`[GEMINI] Model ${model} failed: ${errMsg}. Trying next model...`);

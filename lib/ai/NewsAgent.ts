@@ -74,7 +74,7 @@ export class NewsAgent {
 
     try {
       const prompt = buildPrompt(tokenName, tokenSymbol);
-      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 12_000);
+      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 4_000);
 
       if (aiResult.provider === 'none') {
         return {
