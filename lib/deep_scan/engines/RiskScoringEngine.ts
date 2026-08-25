@@ -583,11 +583,13 @@ export function calculateRiskScore(params: {
     ? Math.round(measuredSubScores.reduce((sum, s) => sum + s.confidence, 0) / availableModuleCount)
     : 0;
 
-  // Sufficient data: at least one module produced a measured score or any override is active
+  // Sufficient data: at least one module produced a measured score or any override is active.
+  // NOTE: totalLiquidityUsd must be > 0 for the low-liquidity override to trigger — exactly $0
+  // means no pool exists or data is missing entirely, which is NOT sufficient to make a determination.
   const sufficientData = availableModuleCount > 0 ||
     verifiedHoneypot ||
     params.isRugPull === true ||
-    (params.totalLiquidityUsd !== undefined && params.totalLiquidityUsd < 100 && params.isPreGraduation !== true) ||
+    (params.totalLiquidityUsd !== undefined && params.totalLiquidityUsd > 0 && params.totalLiquidityUsd < 100 && params.isPreGraduation !== true) ||
     (params.deployerHoldingsPct !== undefined && params.deployerHoldingsPct > 50);
 
   // Score completeness

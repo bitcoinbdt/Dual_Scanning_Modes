@@ -39,7 +39,13 @@ export async function queryGemini(
   timeoutMs = 15_000
 ): Promise<GeminiResponse> {
   const client = getClient();
-  const models = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
+  const models = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-flash-latest',
+    'gemini-flash-lite-latest',
+  ];
   let lastError: any = null;
 
   for (const model of models) {
