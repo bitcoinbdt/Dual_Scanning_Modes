@@ -297,7 +297,10 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
             {/* Website info */}
             <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide">Website</p>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide flex items-center gap-1">
+                  <span>Website</span>
+                  <InfoTooltip text="The official website registered on chain or detected in indexes, validated for DNS status and domain creation age." />
+                </p>
                 {data.socials.links.website ? (
                   <a href={data.socials.links.website} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
                     {data.socials.links.website}
@@ -323,7 +326,10 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
             {/* Twitter info */}
             <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide">Twitter</p>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide flex items-center gap-1">
+                  <span>Twitter</span>
+                  <InfoTooltip text="Official Twitter/X handle associated with the token project and its age since creation." />
+                </p>
                 {data.socials.links.twitter ? (
                   <a href={data.socials.links.twitter} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
                     {data.socials.links.twitter}
@@ -345,7 +351,10 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
 
             {/* Telegram & Discord */}
             <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg">
-              <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5">Social Channels</p>
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                <span>Social Channels</span>
+                <InfoTooltip text="Community engagement channels like Telegram and Discord detected across scan indexes." />
+              </p>
               <div className="space-y-1.5 font-mono">
                 <div className="flex justify-between">
                   <span className="text-white/50">Telegram:</span>
@@ -373,7 +382,10 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
             {/* GitHub Info */}
             <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg flex flex-col justify-between">
               <div>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide font-sans">GitHub Repository</p>
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wide font-sans flex items-center gap-1">
+                  <span>GitHub Repository</span>
+                  <InfoTooltip text="Open-source codebase repository linked to this project, including its latest development commit age." />
+                </p>
                 {data.socials.links.github ? (
                   <a href={data.socials.links.github} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline font-mono mt-1 break-all block">
                     {data.socials.links.github}
@@ -491,6 +503,15 @@ function IntelligencePanel({ data }: { data: DeepScanResult }) {
 
 // ─── Panel: Risk Breakdown ─────────────────────────────────────────────────────
 
+const RISK_MODULE_DESCRIPTIONS: Record<string, string> = {
+  ammSlippage: "Evaluates trading price impact and slippage across standard constant-product AMM pool sizing.",
+  buyerQuality: "Profiles buyer behavior and wallet trust scores, flagging snipers, bots, or sybils.",
+  capitalEfficiency: "Measures capital efficiency and fully diluted valuation (FDV) relative to available liquidity reserves.",
+  volumeConcentration: "Measures volume distribution inequality among all traders using the Herfindahl-Hirschman Index (HHI).",
+  whaleExit: "Simulates price impact and cascade selloff risks if top whales were to liquidate their holdings.",
+  whaleBehavior: "Tracks accumulation/distribution phases and net flow momentum of high-net-worth wallet address cohorts."
+};
+
 function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
   const rs = data.riskScore;
   if (!rs) return (
@@ -541,7 +562,12 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
           return (
             <div key={s.module} className="rounded-lg p-3 border border-white/[0.08]" style={{ background: 'rgba(255,255,255,0.03)' }}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-white/80">{s.label}</span>
+                <span className="text-xs font-semibold text-white/80 flex items-center gap-1">
+                  <span>{s.label}</span>
+                  {RISK_MODULE_DESCRIPTIONS[s.module] && (
+                    <InfoTooltip text={RISK_MODULE_DESCRIPTIONS[s.module]} />
+                  )}
+                </span>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-white/40 flex items-center gap-0.5">
                     w={fmtPct(s.weight * 100, 0)}
