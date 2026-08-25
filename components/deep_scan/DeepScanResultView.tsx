@@ -543,7 +543,10 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-white/80">{s.label}</span>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-white/40">w={fmtPct(s.weight * 100, 0)}</span>
+                  <span className="text-[10px] text-white/40 flex items-center gap-0.5">
+                    w={fmtPct(s.weight * 100, 0)}
+                    <InfoTooltip text="Proportional weight/influence of this risk engine on the overall safety score." />
+                  </span>
                   {isMeasured ? (
                     <span className="text-xs font-mono font-bold" style={{ color: barColor }}>{s.score.toFixed(0)}</span>
                   ) : (
@@ -575,8 +578,9 @@ function RiskBreakdownPanel({ data }: { data: DeepScanResult }) {
           );
         })}
       </div>
-      <div className="text-right">
+      <div className="text-right flex items-center justify-end gap-0.5">
         <span className="text-[10px] text-white/30">Overall model confidence: {fmtPct(rs.confidence, 0)}</span>
+        <InfoTooltip text="Reliability percentage of this risk score, calculated from the completeness and freshness of the underlying on-chain data." />
       </div>
     </div>
   );
@@ -623,15 +627,18 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([
-                { label: 'Active Whales',     value: wh.activeWhaleCount?.toString() ?? 'N/A' },
-                { label: 'Supply Share',      value: fmtPct(wh.totalWhaleSupplySharePct) },
-                { label: 'Phase',             value: wh.phase ?? '—', extra: phaseIcon },
-                { label: 'Net Inflow',        value: fmtNum(wh.whaleNetInflow, 0), positive: true },
-                { label: 'Net Outflow',       value: fmtNum(wh.whaleNetOutflow, 0), positive: false },
-                { label: 'Distribution Risk', value: wh.isDistributionRisk ? 'YES' : 'NO', warn: wh.isDistributionRisk },
-              ] as Array<{ label: string; value: string; extra?: React.ReactNode; positive?: boolean; warn?: boolean }>).map((item) => (
+                { label: 'Active Whales',     value: wh.activeWhaleCount?.toString() ?? 'N/A', tooltip: 'Wallets holding a significant portion of the tracked token supply that have been active in the scanned transaction window.' },
+                { label: 'Supply Share',      value: fmtPct(wh.totalWhaleSupplySharePct), tooltip: 'The combined percentage of the total token supply held by the tracked whale wallets.' },
+                { label: 'Phase',             value: wh.phase ?? '—', extra: phaseIcon, tooltip: 'Market phase classification (Accumulation, Distribution, or Dormant) based on whale net trading activity.' },
+                { label: 'Net Inflow',        value: fmtNum(wh.whaleNetInflow, 0), positive: true, tooltip: 'The total volume of tokens transferred into tracked whale wallets during the scanned block range.' },
+                { label: 'Net Outflow',       value: fmtNum(wh.whaleNetOutflow, 0), positive: false, tooltip: 'The total volume of tokens transferred out of tracked whale wallets during the scanned block range.' },
+                { label: 'Distribution Risk', value: wh.isDistributionRisk ? 'YES' : 'NO', warn: wh.isDistributionRisk, tooltip: 'Whether whales are actively distributing/selling their holdings, representing a sell-off cascade risk.' },
+              ] as Array<{ label: string; value: string; tooltip: string; extra?: React.ReactNode; positive?: boolean; warn?: boolean }>).map((item) => (
                 <div key={item.label} className="rounded-lg p-3 bg-white/5 border border-white/[0.08] flex flex-col gap-1">
-                  <span className="text-[10px] text-white/40 uppercase tracking-widest">{item.label}</span>
+                  <span className="text-[10px] text-white/40 uppercase tracking-widest flex items-center gap-1">
+                    <span>{item.label}</span>
+                    <InfoTooltip text={item.tooltip} />
+                  </span>
                   <span className={`text-sm font-bold font-mono flex items-center gap-1 ${
                     item.warn ? 'text-red-400' :
                     item.positive === true  ? 'text-emerald-400' :
@@ -735,12 +742,15 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
             {/* G-3: 3-column HHI grid — buyer / seller / combined */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([
-                { label: 'Buyer HHI',    hhi: vc.buyerHHI },
-                { label: 'Seller HHI',   hhi: vc.sellerHHI },
-                { label: 'Combined HHI', hhi: vc.totalVolumeHHI },
-              ] as Array<{ label: string; hhi: typeof vc.buyerHHI }>).map(({ label, hhi }) => (
+                { label: 'Buyer HHI',    hhi: vc.buyerHHI, tooltip: 'Herfindahl-Hirschman Index for buyers. Measures concentration: below 1,500 is diverse, above 2,500 indicates high buyer concentration.' },
+                { label: 'Seller HHI',   hhi: vc.sellerHHI, tooltip: 'Herfindahl-Hirschman Index for sellers. High concentration means a few wallets dominate sell volume.' },
+                { label: 'Combined HHI', hhi: vc.totalVolumeHHI, tooltip: 'Combined volume concentration index. A high score suggests a small group of wallets controls the trading activity.' },
+              ] as Array<{ label: string; hhi: typeof vc.buyerHHI; tooltip: string }>).map(({ label, hhi, tooltip }) => (
                 <div key={label} className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08]">
-                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2">{label}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2 flex items-center gap-1">
+                    <span>{label}</span>
+                    <InfoTooltip text={tooltip} />
+                  </p>
                   <p className="text-2xl font-mono font-bold text-white">{hhi?.hhi?.toFixed(4) ?? 'N/A'}</p>
                   <p className={`text-xs mt-1 capitalize ${
                     hhi?.concentrationLevel === 'extreme'  ? 'text-red-400'    :
@@ -754,14 +764,17 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
             <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
               <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Volume Metrics Summary</p>
               {([
-                { label: 'Buy Volume',          value: fmtUsd(vc.totalBuyVolumeUsd),                  color: 'text-emerald-400' },
-                { label: 'Sell Volume',         value: fmtUsd(vc.totalSellVolumeUsd),                 color: 'text-red-400'     },
-                { label: 'Buy/Sell Ratio',      value: vc.buySellRatio?.toFixed(2) ?? 'N/A',          color: 'text-white/90'    },
-                { label: 'Organic Score',       value: fmtPct(vc.organicScore),                        color: 'text-purple-400' },
-                { label: 'Wash Vol (Elevator)', value: fmtPct((vc.washVolumeRatio ?? 0) * 100),       color: 'text-amber-400'   },
-              ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
-                <div key={label} className="flex justify-between text-xs">
-                  <span className="text-white/60">{label}</span>
+                { label: 'Buy Volume',          value: fmtUsd(vc.totalBuyVolumeUsd),                  color: 'text-emerald-400', tooltip: 'Total buy volume in USD detected within the scanned transaction window.' },
+                { label: 'Sell Volume',         value: fmtUsd(vc.totalSellVolumeUsd),                 color: 'text-red-400',     tooltip: 'Total sell volume in USD detected within the scanned transaction window.' },
+                { label: 'Buy/Sell Ratio',      value: vc.buySellRatio?.toFixed(2) ?? 'N/A',          color: 'text-white/90',    tooltip: 'Buy volume divided by sell volume. Values > 1 indicate bullish pressure, < 1 indicates sell pressure.' },
+                { label: 'Organic Score',       value: fmtPct(vc.organicScore),                        color: 'text-purple-400', tooltip: 'Estimated probability that volume is driven by unique, natural participants rather than wash trading.' },
+                { label: 'Wash Vol (Elevator)', value: fmtPct((vc.washVolumeRatio ?? 0) * 100),       color: 'text-amber-400',   tooltip: 'Ratio of trading volume suspected to be wash trading or self-trading.' },
+              ] as Array<{ label: string; value: string; color: string; tooltip: string }>).map(({ label, value, color, tooltip }) => (
+                <div key={label} className="flex justify-between text-xs items-center">
+                  <span className="text-white/60 flex items-center gap-1">
+                    <span>{label}</span>
+                    <InfoTooltip text={tooltip} />
+                  </span>
                   <span className={`font-mono ${color}`}>{value}</span>
                 </div>
               ))}
@@ -787,13 +800,16 @@ function WhaleCohortPanel({ data }: { data: DeepScanResult }) {
           <div className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.08] space-y-2">
             <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3">Buyer Cohort Summary</p>
             {([
-              { label: 'Quality Score',    value: `${bq.buyerQualityScore?.toFixed(0) ?? 'N/A'} / 100`, color: 'text-purple-400' },
-              { label: 'Unique Buyers',    value: bq.cohortMetrics?.totalBuyers?.toString() ?? 'N/A',      color: 'text-white/80'   },
-              { label: 'Returning Buyers', value: fmtPct((bq.cohortMetrics?.returningBuyerRatio ?? 0) * 100), color: 'text-white/80' },
-              { label: 'Avg Buy Size',     value: fmtUsd(bq.cohortMetrics?.avgBuyValueUsd),               color: 'text-white/80'   },
-            ] as Array<{ label: string; value: string; color: string }>).map(({ label, value, color }) => (
-              <div key={label} className="flex justify-between text-xs">
-                <span className="text-white/60">{label}</span>
+              { label: 'Quality Score',    value: `${bq.buyerQualityScore?.toFixed(0) ?? 'N/A'} / 100`, color: 'text-purple-400', tooltip: 'Reputation score of current buyers. Higher scores indicate smart money or long-term hodlers.' },
+              { label: 'Unique Buyers',    value: bq.cohortMetrics?.totalBuyers?.toString() ?? 'N/A',      color: 'text-white/80',   tooltip: 'The total number of unique wallet addresses that executed buy orders.' },
+              { label: 'Returning Buyers', value: fmtPct((bq.cohortMetrics?.returningBuyerRatio ?? 0) * 100), color: 'text-white/80', tooltip: 'Percentage of buyers executing more than one buy order, indicating recurring interest.' },
+              { label: 'Avg Buy Size',     value: fmtUsd(bq.cohortMetrics?.avgBuyValueUsd),               color: 'text-white/80',   tooltip: 'The average USD value per buy transaction.' },
+            ] as Array<{ label: string; value: string; color: string; tooltip: string }>).map(({ label, value, color, tooltip }) => (
+              <div key={label} className="flex justify-between text-xs items-center">
+                <span className="text-white/60 flex items-center gap-1">
+                  <span>{label}</span>
+                  <InfoTooltip text={tooltip} />
+                </span>
                 <span className={`font-mono font-bold ${color}`}>{value}</span>
               </div>
             ))}
@@ -822,13 +838,16 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {([
-          { label: 'Pool Liquidity', value: fmtUsd(totalMultichainUsd) },
-          { label: 'FDV',            value: fmtUsd(cap.fdvUsd) },
-          { label: 'FDV/Liq Ratio', value: cap.fdvToLiquidityRatio != null ? `${cap.fdvToLiquidityRatio.toFixed(1)}x` : 'N/A' },
-          { label: 'Sensitivity',    value: cap.sensitivity ?? '—' },
-        ] as Array<{ label: string; value: string }>).map(({ label, value }) => (
+          { label: 'Pool Liquidity', value: fmtUsd(totalMultichainUsd), tooltip: 'Total USD value locked across all tracked liquidity pools on all chains.' },
+          { label: 'FDV',            value: fmtUsd(cap.fdvUsd), tooltip: 'Fully Diluted Valuation. Market cap if the entire max supply of tokens were in circulation.' },
+          { label: 'FDV/Liq Ratio', value: cap.fdvToLiquidityRatio != null ? `${cap.fdvToLiquidityRatio.toFixed(1)}x` : 'N/A', tooltip: 'FDV divided by total pool liquidity. Higher ratios mean a small selloff can cause a steep drop.' },
+          { label: 'Sensitivity',    value: cap.sensitivity ?? '—', tooltip: 'How easily execution price changes based on trade size. Classifies constant-product impact.' },
+        ] as Array<{ label: string; value: string; tooltip: string }>).map(({ label, value, tooltip }) => (
           <div key={label} className="rounded-lg p-3 bg-white/5 border border-white/[0.08]">
-            <p className="text-[10px] uppercase tracking-widest text-white/40">{label}</p>
+            <p className="text-[10px] uppercase tracking-widest text-white/40 flex items-center gap-1 justify-between">
+              <span>{label}</span>
+              <InfoTooltip text={tooltip} />
+            </p>
             <p className="text-sm font-bold font-mono text-white/90 mt-1">{value}</p>
           </div>
         ))}
@@ -878,8 +897,18 @@ function LiquidityPanel({ data }: { data: DeepScanResult }) {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left py-2 px-3 text-white/40 font-medium">Position</th>
-                  <th className="text-right py-2 px-3 text-white/40 font-medium">Price Impact</th>
-                  <th className="text-right py-2 px-3 text-white/40 font-medium">Slippage</th>
+                  <th className="text-right py-2 px-3 text-white/40 font-medium">
+                    <span className="flex items-center gap-1 justify-end">
+                      Price Impact
+                      <InfoTooltip text="The difference between market spot price and expected execution price due to constant-product reserve ratios." />
+                    </span>
+                  </th>
+                  <th className="text-right py-2 px-3 text-white/40 font-medium">
+                    <span className="flex items-center gap-1 justify-end">
+                      Slippage
+                      <InfoTooltip text="Expected shift in execution price resulting from trade size and pool reserve depth." />
+                    </span>
+                  </th>
                   <th className="text-right py-2 px-3 text-white/40 font-medium">Exec. Price</th>
                   <th className="text-right py-2 px-3 text-white/40 font-medium">Risk</th>
                 </tr>
