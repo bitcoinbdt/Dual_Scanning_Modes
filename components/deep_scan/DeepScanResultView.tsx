@@ -18,6 +18,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import type {
   DeepScanResult,
   EvidenceNode,
@@ -1201,16 +1202,29 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
           </div>
         </div>
         <div className="relative mt-4 pt-4 border-t border-white/[0.06] flex flex-wrap gap-4 text-[10px] text-white/30">
-          <span>Txns: <span className="text-white/60">{result.dataQuality?.transactionCount ?? 'N/A'}</span></span>
-          <span>Candles: <span className="text-white/60">{result.dataQuality?.ohlcvCandleCount ?? 'N/A'}</span></span>
-          <span>Confidence: <span className="text-white/60">{fmtPct(result.overallConfidence ?? 0, 0)}</span></span>
-          <span>Duration: <span className="text-white/60">{result.scanDurationMs ? (result.scanDurationMs / 1000).toFixed(1) + 's' : 'N/A'}</span></span>
+          <span className="flex items-center gap-0.5">
+            Txns: <span className="text-white/60">{result.dataQuality?.transactionCount ?? 'N/A'}</span>
+            <InfoTooltip text="Total number of on-chain swap transactions ingested and analysed during this scan. A higher count improves pattern accuracy." />
+          </span>
+          <span className="flex items-center gap-0.5">
+            Candles: <span className="text-white/60">{result.dataQuality?.ohlcvCandleCount ?? 'N/A'}</span>
+            <InfoTooltip text="Number of OHLCV (Open / High / Low / Close / Volume) price candles fetched. Used for market-regime classification and trend detection." />
+          </span>
+          <span className="flex items-center gap-0.5">
+            Confidence: <span className="text-white/60">{fmtPct(result.overallConfidence ?? 0, 0)}</span>
+            <InfoTooltip text="Overall confidence score of the risk assessment — the percentage of analytical modules that returned sufficient data. Higher is more reliable." />
+          </span>
+          <span className="flex items-center gap-0.5">
+            Duration: <span className="text-white/60">{result.scanDurationMs ? (result.scanDurationMs / 1000).toFixed(1) + 's' : 'N/A'}</span>
+            <InfoTooltip text="Total wall-clock time taken to complete the deep scan, including all data collection, analysis, and AI inference steps." />
+          </span>
           {result.dataQuality?.elevatorDataReused && <span className="text-cyan-400/60">↺ Elevator data reused</span>}
           {result.dataQuality?.staleDataWarning   && <span className="text-amber-400/70" title="Multiple data sources are stale">⚠ Stale data</span>}
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isMarketDataStale && <span className="text-amber-400/50" title="Market price/liquidity data is older than threshold">⚠ Stale price</span>}
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isOhlcvStale && <span className="text-amber-400/50" title="OHLCV candles are older than threshold">⚠ Stale candles</span>}
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isTransactionStale && <span className="text-amber-400/50" title="Recent transactions are older than threshold">⚠ Stale txs</span>}
         </div>
+
       </div>
 
       {result.dataQuality?.staleDataWarning && (
