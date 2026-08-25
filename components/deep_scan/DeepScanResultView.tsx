@@ -15,6 +15,8 @@ import {
   Minus,
   FileText,
   Globe,
+  Copy,
+  Check,
 } from 'lucide-react';
 import type {
   DeepScanResult,
@@ -116,6 +118,40 @@ function UnlockCountdownBanner({ schedule }: { schedule: TokenUnlockInfo }) {
       <div className="shrink-0 font-mono text-xs font-bold bg-white/5 border border-current px-2.5 py-1 rounded-lg">
         {timeRemainingStr}
       </div>
+    </div>
+  );
+}
+
+// ─── Copyable Deployer Address ─────────────────────────────────────────────────
+
+function CopyableDeployer({ address }: { address: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="text-xs flex items-center gap-1">
+      <span className="text-white/40">Deployer</span>
+      <span
+        className="font-mono font-bold text-white/70"
+        title={address}
+      >
+        {fmtAddr(address)}
+      </span>
+      <button
+        onClick={handleCopy}
+        title={copied ? 'Copied!' : 'Copy deployer address'}
+        className="ml-0.5 text-white/40 hover:text-white/80 transition-colors cursor-pointer"
+      >
+        {copied
+          ? <Check className="w-3 h-3 text-emerald-400" />
+          : <Copy className="w-3 h-3" />}
+      </button>
     </div>
   );
 }
@@ -1135,17 +1171,9 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
                 <span className="text-white/40">Regime </span>
                 <span className="font-mono font-bold text-cyan-400">{market?.marketRegime ?? 'N/A'}</span>
               </div>
-              {/* G-2: Creator / deployer address */}
+              {/* G-2: Creator / deployer address with copy button */}
               {meta?.creatorAddress && (
-                <div className="text-xs">
-                  <span className="text-white/40">Deployer </span>
-                  <span
-                    className="font-mono font-bold text-white/70"
-                    title={meta.creatorAddress}
-                  >
-                    {fmtAddr(meta.creatorAddress)}
-                  </span>
-                </div>
+                <CopyableDeployer address={meta.creatorAddress} />
               )}
             </div>
           </div>
