@@ -106,11 +106,16 @@ async function fetchPoolTrades(
   const url = `${GECKO_API}/networks/${slug}/pools/${poolAddress.toLowerCase()}/trades`;
 
   const trades: GeckoTrade[] = [];
-  let page = 1;
+  let lastTimestamp: number | null = null;
 
   while (trades.length < limit) {
     try {
-      const res = await fetch(`${url}?page=${page}&trade_volume_in_usd_greater_than=0`, {
+      let requestUrl = `${url}?trade_volume_in_usd_greater_than=0`;
+      if (lastTimestamp !== null) {
+        requestUrl += `&before_timestamp=${lastTimestamp}`;
+      }
+
+      const res = await fetch(requestUrl, {
         headers: { 'Accept': 'application/json;version=20230302' }
       });
 
@@ -124,11 +129,31 @@ async function fetchPoolTrades(
 
       if (batch.length === 0) break;
 
-      trades.push(...batch);
+      // Filter out duplicate IDs
+      const existingIds = new Set(trades.map((t) => t.id));
+      const newItems = batch.filter((t) => !existingIds.has(t.id));
+
+      if (newItems.length === 0) {
+        break;
+      }
+
+      trades.push(...newItems);
 
       if (batch.length < 100) break; // Last page
 
-      page++;
+      // Get the oldest trade's timestamp in Unix seconds for paginating backwards
+      const oldestTrade = batch[batch.length - 1];
+      const oldestTimeStr = oldestTrade?.attributes?.block_timestamp;
+      if (!oldestTimeStr) break;
+
+      const oldestTimeSec = Math.floor(new Date(oldestTimeStr).getTime() / 1000);
+
+      // Prevent infinite loop if timestamp does not decrease
+      if (lastTimestamp !== null && oldestTimeSec >= lastTimestamp) {
+        break;
+      }
+
+      lastTimestamp = oldestTimeSec;
       await sleep(DELAY_MS);
     } catch (err: any) {
       console.error('[GeckoTerminal] fetchPoolTrades error:', err.message);
@@ -138,6 +163,7 @@ async function fetchPoolTrades(
 
   return trades.slice(0, limit);
 }
+
 
 /**
  * Convert GeckoTerminal trades to UniversalTransaction format.
