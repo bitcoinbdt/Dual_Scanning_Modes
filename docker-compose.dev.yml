@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────
+# OnChain Alpha Scanner — Development Override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# This override:
+#   - Mounts source code as a volume for hot reload
+#   - Runs `next dev` instead of `node server.js`
+#   - Exposes the dev port directly (no Nginx needed in dev)
+#   - Reads secrets from .env.local (your existing dev file)
+# ─────────────────────────────────────────────────────────────────
+
+version: '3.9'
+
+services:
+
+  app:
+    # Build only the deps stage — skip the expensive full build
+    build:
+      target: deps
+    # Override the production CMD with the dev server
+    command: npm run dev
+    # Hot reload: mount the host source into the container
+    volumes:
+      - .:/app
+      # Prevent host node_modules from overwriting the container's
+      - /app/node_modules
+      # Prevent the host .next from conflicting with the container build
+      - /app/.next
+    # Expose dev port directly to the host (skip Nginx in dev)
+    ports:
+      - "5176:5176"
+    environment:
+      NODE_ENV: development
+      PORT: "5176"
+    # Use local dev secrets file instead of .env.docker
+    env_file:
+      - .env.local
+    # Disable the production healthcheck (dev server starts slower)
+    healthcheck:
+      disable: true
+
+  # Nginx is not needed in development — comment out or leave absent
+  nginx:
+    profiles:
+      - production-only   # This prevents nginx from starting in dev mode

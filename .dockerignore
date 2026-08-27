@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────────
+# .dockerignore — OnChain Alpha Scanner
+#
+# Excludes files from the Docker build context to:
+#   1. Speed up `docker build` (smaller context sent to daemon)
+#   2. Prevent secrets from leaking into the image layer
+#   3. Avoid cache busting from irrelevant file changes
+# ─────────────────────────────────────────────────────────────────
+
+# ── Dependencies (reinstalled fresh inside the container) ────────
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# ── Build output (rebuilt inside container) ──────────────────────
+.next
+out
+build
+
+# ── Git internals ────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+
+# ── Environment / Secrets — NEVER bake into the image ────────────
+.env
+.env.*
+!.env.docker.example
+
+# ── Editor & OS artefacts ─────────────────────────────────────────
+.DS_Store
+.vscode
+.idea
+*.pem
+Thumbs.db
+
+# ── Docs & planning files (not needed at runtime) ─────────────────
+*.md
+!README.md
+*.txt
+*.sql
+
+# ── Test & audit files ────────────────────────────────────────────
+test_*.ts
+audit_accuracy.ts
+scratch/
+coverage/
+*.tsbuildinfo
+
+# ── Dev-only directories ──────────────────────────────────────────
+data_collector/
+docs/
+futures_update_space/
+supabase-setup/
+
+# ── Misc build scripts ────────────────────────────────────────────
+build-*.ps1
+build-*.txt
+build-log.txt

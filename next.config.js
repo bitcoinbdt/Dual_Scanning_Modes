@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enables a self-contained build output used by the Docker multi-stage Dockerfile.
+  // The .next/standalone directory contains only what's needed to run the app in production.
+  output: 'standalone',
   reactStrictMode: true,
   // Suppress hydration warnings in development
   onDemandEntries: {

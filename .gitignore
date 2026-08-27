@@ -27,6 +27,11 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+# Docker runtime secrets file (copy from .env.docker.example — never commit)
+.env.docker
+
+# SSL certificates mounted into the Nginx container
+nginx/ssl/
 
 # vercel
 .vercel
