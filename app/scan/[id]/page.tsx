@@ -10,6 +10,9 @@ import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getSnapshot } from '@/lib/snapshots/snapshotService';
+import Navigation from '@/components/layout/Navigation';
+import Footer from '@/components/Footer';
+import CopyButton from '@/components/CopyButton';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -95,269 +98,242 @@ export default async function SharedScanPage({ params, searchParams }: PageProps
     '#22c55e';
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0a0a0f', color: '#e5e7eb', fontFamily: 'system-ui, sans-serif', padding: '24px' }}>
-      {/* Public Snapshot Banner */}
-      <div style={{
-        background: '#1e293b',
-        border: '1px solid #334155',
-        borderRadius: '8px',
-        padding: '12px 20px',
-        marginBottom: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '8px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#94a3b8' }}>📸 Public Snapshot</span>
-          <span style={{ fontSize: '13px', color: '#64748b' }}>•</span>
-          <span style={{ fontSize: '14px', color: '#94a3b8' }}>Scanned on <strong style={{ color: '#e2e8f0' }}>{scannedAtFormatted}</strong></span>
-        </div>
-        <span style={{ fontSize: '12px', color: '#475569', fontFamily: 'monospace' }}>ID: {id}</span>
-      </div>
-
-      {/* Token Header */}
-      <div style={{
-        background: '#111827',
-        border: '1px solid #1f2937',
-        borderRadius: '12px',
-        padding: '24px',
-        marginBottom: '20px',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#f1f5f9' }}>
-              {symbol} <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '18px' }}>— {tokenName}</span>
-            </h1>
-            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
-              {chain} · {snapshot.tokenAddress}
-            </p>
+    <div className="min-h-screen bg-themed text-themed flex flex-col">
+      <Navigation />
+      <main className="flex-grow pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
+        {/* Public Snapshot Banner */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 mb-6 rounded-xl border border-white/5 bg-slate-950/40 backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-sky-500"></span>
+            </span>
+            <span className="text-xs sm:text-sm font-semibold text-sky-400 tracking-wide uppercase">📸 Public Snapshot</span>
+            <span className="text-white/20 hidden sm:inline">•</span>
+            <span className="text-xs sm:text-sm text-muted-themed">
+              Scanned on <strong className="text-themed">{scannedAtFormatted}</strong>
+            </span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono bg-slate-900 border border-white/10 px-2 py-1 rounded text-muted-themed">
+              ID: {id}
+            </span>
+          </div>
+        </div>
 
-          {/* Risk Score Badge */}
-          {riskScore !== undefined && (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                background: riskColor + '1a',
-                border: `1px solid ${riskColor}`,
-                borderRadius: '8px',
-                padding: '8px 20px',
-              }}>
-                <div style={{ fontSize: '28px', fontWeight: 800, color: riskColor }}>{riskScore}</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                  {riskLevel} RISK
+        {/* Token Header Section */}
+        <div className="glass-card p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-2xl font-black text-themed tracking-tight">
+                  {symbol}
+                </h1>
+                <span className="text-white/20 text-lg hidden sm:inline">—</span>
+                <span className="text-lg text-muted-themed font-medium">{tokenName}</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-themed font-mono bg-slate-950/30 p-2 rounded-lg border border-white/5 w-fit">
+                <span className="uppercase font-bold text-sky-400">{chain}</span>
+                <span>·</span>
+                <span className="truncate max-w-[150px] sm:max-w-none">{snapshot.tokenAddress}</span>
+                <CopyButton text={snapshot.tokenAddress} />
+              </div>
+            </div>
+
+            {/* Risk Badge Container */}
+            {riskScore !== undefined && (
+              <div className="rgb-border shrink-0 self-center md:self-auto">
+                <div className="glass-strong px-6 py-3 rounded-2xl text-center min-w-[130px]">
+                  <div className="text-3xl font-black" style={{ color: riskColor }}>
+                    {riskScore}
+                  </div>
+                  <div className="text-[10px] font-bold text-muted-themed uppercase tracking-wider mt-1">
+                    {riskLevel} Risk
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Market Summary Metrics */}
+          {result?.marketSummary && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mt-6 p-4 bg-slate-950/35 border border-white/5 rounded-xl">
+              {[
+                { label: 'Price', value: result.marketSummary.priceUsd > 0 ? `$${result.marketSummary.priceUsd.toPrecision(4)}` : 'N/A' },
+                { label: 'FDV', value: result.marketSummary.fdvUsd > 0 ? `$${(result.marketSummary.fdvUsd / 1e6).toFixed(2)}M` : 'N/A' },
+                { label: '24h Volume', value: result.marketSummary.volume24hUsd != null ? `$${(result.marketSummary.volume24hUsd / 1e3).toFixed(1)}K` : 'N/A' },
+                { label: 'Liquidity', value: result.marketSummary.totalLiquidityUsd > 0 ? `$${(result.marketSummary.totalLiquidityUsd / 1e3).toFixed(1)}K` : 'N/A' },
+                { label: 'Regime', value: result.marketSummary.marketRegime ?? 'N/A' },
+              ].map(({ label, value }) => (
+                <div key={label} className="p-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-themed">{label}</div>
+                  <div className="text-base font-bold text-themed mt-1">{value}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Market Summary */}
-        {result?.marketSummary && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: '12px',
-            marginTop: '20px',
-            padding: '16px',
-            background: '#0f172a',
-            borderRadius: '8px',
-          }}>
-            {[
-              { label: 'Price', value: result.marketSummary.priceUsd > 0 ? `$${result.marketSummary.priceUsd.toPrecision(4)}` : 'N/A' },
-              { label: 'FDV', value: result.marketSummary.fdvUsd > 0 ? `$${(result.marketSummary.fdvUsd / 1e6).toFixed(2)}M` : 'N/A' },
-              { label: '24h Volume', value: result.marketSummary.volume24hUsd != null ? `$${(result.marketSummary.volume24hUsd / 1e3).toFixed(1)}K` : 'N/A' },
-              { label: 'Liquidity', value: result.marketSummary.totalLiquidityUsd > 0 ? `$${(result.marketSummary.totalLiquidityUsd / 1e3).toFixed(1)}K` : 'N/A' },
-              { label: 'Regime', value: result.marketSummary.marketRegime ?? 'N/A' },
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-                <div style={{ fontSize: '16px', fontWeight: 600, color: '#e2e8f0', marginTop: '2px' }}>{value}</div>
+        {/* Grid for two-column details */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column (Main Risk/Pools info) */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Top Risks */}
+            {Array.isArray(result?.topRisks) && result.topRisks.length > 0 && (
+              <div className="glass-card p-6">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-themed mb-4">Top Risk Signals</h2>
+                <div className="space-y-3">
+                  {result.topRisks.slice(0, 8).map((risk: any, i: number) => {
+                    const sevColor = risk.severity === 'critical' ? '#ef4444' : risk.severity === 'high' ? '#f97316' : risk.severity === 'medium' ? '#eab308' : '#22c55e';
+                    const sevText = risk.severity === 'critical' ? 'text-red-400 bg-red-500/10 border-red-500/20' : risk.severity === 'high' ? 'text-orange-400 bg-orange-500/10 border-orange-500/20' : risk.severity === 'medium' ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                    return (
+                      <div key={i} className="flex gap-3 items-start p-2.5 rounded-lg bg-slate-950/20 border border-white/5">
+                        <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 uppercase tracking-wide shrink-0 ${sevText}`}>
+                          {risk.severity}
+                        </span>
+                        <span className="text-sm text-themed leading-relaxed">{risk.riskName ?? risk.description}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )}
 
-      {/* Top Risks */}
-      {Array.isArray(result?.topRisks) && result.topRisks.length > 0 && (
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1f2937',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px',
-        }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Top Risk Signals
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {result.topRisks.slice(0, 8).map((risk: any, i: number) => {
-              const sevColor = risk.severity === 'critical' ? '#ef4444' : risk.severity === 'high' ? '#f97316' : risk.severity === 'medium' ? '#eab308' : '#22c55e';
-              return (
-                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '11px', background: sevColor + '22', color: sevColor, border: `1px solid ${sevColor}55`, borderRadius: '4px', padding: '2px 6px', whiteSpace: 'nowrap', marginTop: '1px' }}>
-                    {risk.severity?.toUpperCase()}
+            {/* Multichain Pools */}
+            {result?.marketSummary?.crossChainPools && result.marketSummary.crossChainPools.length > 0 && (
+              <div className="glass-card p-6">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-muted-themed">Multichain &amp; Cross-Chain Liquidity Pools</h2>
+                  <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded">
+                    Total: ${result.marketSummary.totalCrossChainLiquidityUsd?.toLocaleString() ?? result.marketSummary.totalLiquidityUsd?.toLocaleString()}
                   </span>
-                  <span style={{ fontSize: '14px', color: '#e2e8f0' }}>{risk.riskName ?? risk.description}</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* AI News Summary */}
-      {result?.news?.summary && result.news.status !== 'error' && (
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1f2937',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px',
-        }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Recent News
-          </h2>
-          <p style={{ margin: 0, color: '#cbd5e1', lineHeight: 1.6, fontSize: '14px' }}>{result.news.summary}</p>
-        </div>
-      )}
-
-      {/* Exchange Listing Summary */}
-      {result?.exchangeListing?.listings?.length > 0 && (
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1f2937',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px',
-        }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            CEX Listings
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {result.exchangeListing.listings.map((l: any, i: number) => (
-              <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '14px' }}>
-                <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{l.exchange}</span>
-                <span style={{ color: '#64748b' }}>·</span>
-                <span style={{ color: '#94a3b8' }}>{l.listingType}</span>
-                {l.listingDate && <span style={{ color: '#64748b' }}>· {l.listingDate}</span>}
-                <span style={{
-                  fontSize: '11px',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: l.listingStatus === 'confirmed' ? '#22c55e22' : '#eab30822',
-                  color: l.listingStatus === 'confirmed' ? '#22c55e' : '#eab308',
-                  border: `1px solid ${l.listingStatus === 'confirmed' ? '#22c55e55' : '#eab30855'}`,
-                }}>
-                  {l.listingStatus?.toUpperCase()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Multichain Pools Section */}
-      {result?.marketSummary?.crossChainPools && result.marketSummary.crossChainPools.length > 0 && (
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1f2937',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h2 style={{ margin: 0, fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Multichain &amp; Cross-Chain Liquidity Pools
-            </h2>
-            <span style={{ color: '#a855f7', fontWeight: 600, fontSize: '13px' }}>
-              Total: ${result.marketSummary.totalCrossChainLiquidityUsd?.toLocaleString() ?? result.marketSummary.totalLiquidityUsd?.toLocaleString()}
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {result.marketSummary.crossChainPools.map((p: any, i: number) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', background: '#1e293b', padding: '10px 14px', borderRadius: '8px' }}>
-                <div>
-                  <span style={{ color: '#f8fafc', fontWeight: 700, textTransform: 'uppercase', marginRight: '8px' }}>{p.chain}</span>
-                  <span style={{ color: '#c084fc', fontWeight: 600, marginRight: '8px' }}>{p.dex}</span>
-                  <span style={{ color: '#94a3b8' }}>{p.pair}</span>
-                </div>
-                <span style={{ color: '#4ade80', fontWeight: 700 }}>
-                  ${p.liquidityUsd?.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Socials Presence Section */}
-      {result?.socials && (
-        <div style={{
-          background: '#111827',
-          border: '1px solid #1f2937',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '20px',
-        }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Project Presence &amp; Socials
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-            {result.socials.links.website && (
-              <div style={{ fontSize: '13px' }}>
-                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Website</div>
-                <a href={result.socials.links.website} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
-                  {result.socials.links.website}
-                </a>
-                <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
-                  Liveness: {result.socials.websiteAlive ? 'Live' : 'Dead/Error'}
-                  {result.socials.websiteDomainAgeDays !== null && ` · Age: ${result.socials.websiteDomainAgeDays}d`}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {result.marketSummary.crossChainPools.map((p: any, i: number) => (
+                    <div key={i} className="flex justify-between items-center text-xs p-3 rounded-lg bg-slate-950/30 border border-white/5">
+                      <div>
+                        <span className="text-themed font-bold uppercase mr-2">{p.chain}</span>
+                        <span className="text-indigo-400 font-semibold mr-2">{p.dex}</span>
+                        <span className="text-muted-themed">{p.pair}</span>
+                      </div>
+                      <span className="text-emerald-400 font-bold">
+                        ${p.liquidityUsd?.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
-            {result.socials.links.twitter && (
-              <div style={{ fontSize: '13px' }}>
-                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Twitter</div>
-                <a href={result.socials.links.twitter} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
-                  {result.socials.links.twitter}
-                </a>
-                {result.socials.twitterAccountAgeDays !== null && (
-                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
-                    Account Age: {result.socials.twitterAccountAgeDays}d
+          </div>
+
+          {/* Right Column (News, Socials, Listings) */}
+          <div className="space-y-6">
+            {/* AI News */}
+            {result?.news?.summary && result.news.status !== 'error' && (
+              <div className="glass-card p-6">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-themed mb-3">Recent News Summary</h2>
+                <p className="text-sm text-themed/90 leading-relaxed bg-slate-950/20 p-3.5 rounded-lg border border-white/5">{result.news.summary}</p>
+              </div>
+            )}
+
+            {/* CEX Listings */}
+            {result?.exchangeListing?.listings?.length > 0 && (
+              <div className="glass-card p-6">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-themed mb-3">CEX Listings</h2>
+                <div className="space-y-2">
+                  {result.exchangeListing.listings.map((l: any, i: number) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2 text-xs p-2.5 rounded-lg bg-slate-950/20 border border-white/5 justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-themed font-bold">{l.exchange}</span>
+                        <span className="text-white/20">•</span>
+                        <span className="text-muted-themed">{l.listingType}</span>
+                        {l.listingDate && (
+                          <>
+                            <span className="text-white/20">•</span>
+                            <span className="text-muted-themed">{l.listingDate}</span>
+                          </>
+                        )}
+                      </div>
+                      <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 uppercase tracking-wide ${l.listingStatus === 'confirmed' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                        {l.listingStatus}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Socials */}
+            {result?.socials && (
+              <div className="glass-card p-6">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-themed mb-4">Project Presence &amp; Socials</h2>
+                <div className="space-y-4">
+                  {/* Website */}
+                  {result.socials.links.website && (
+                    <div className="text-xs pb-3 border-b border-white/5">
+                      <div className="text-muted-themed font-bold uppercase tracking-wider text-[9px] mb-1">Website</div>
+                      <a href={result.socials.links.website} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 font-semibold truncate block">
+                        {result.socials.links.website}
+                      </a>
+                      <div className="text-muted-themed text-[10px] mt-1 flex items-center gap-1">
+                        <span>Status:</span>
+                        <span className={result.socials.websiteAlive ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                          {result.socials.websiteAlive ? 'Live' : 'Offline'}
+                        </span>
+                        {result.socials.websiteDomainAgeDays !== null && (
+                          <>
+                            <span>•</span>
+                            <span>Age: {result.socials.websiteDomainAgeDays}d</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Twitter */}
+                  {result.socials.links.twitter && (
+                    <div className="text-xs pb-3 border-b border-white/5">
+                      <div className="text-muted-themed font-bold uppercase tracking-wider text-[9px] mb-1">Twitter</div>
+                      <a href={result.socials.links.twitter} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 font-semibold truncate block">
+                        {result.socials.links.twitter}
+                      </a>
+                      {result.socials.twitterAccountAgeDays !== null && (
+                        <div className="text-muted-themed text-[10px] mt-1">
+                          Account Age: {result.socials.twitterAccountAgeDays}d
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* GitHub */}
+                  {result.socials.links.github && (
+                    <div className="text-xs pb-3 border-b border-white/5">
+                      <div className="text-muted-themed font-bold uppercase tracking-wider text-[9px] mb-1">GitHub</div>
+                      <a href={result.socials.links.github} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 font-semibold truncate block">
+                        {result.socials.links.github}
+                      </a>
+                      {result.socials.githubLastCommitDays !== null && (
+                        <div className="text-muted-themed text-[10px] mt-1">
+                          Last Commit: {result.socials.githubLastCommitDays}d ago
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Consistency */}
+                  <div className="text-xs">
+                    <div className="text-muted-themed font-bold uppercase tracking-wider text-[9px] mb-1">Link Consistency</div>
+                    <div className={`font-bold ${result.socials.consistency.consistent ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {result.socials.consistency.consistent ? '✓ Agreed Across Sources' : '✗ Conflicting Links'}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
-            {result.socials.links.github && (
-              <div style={{ fontSize: '13px' }}>
-                <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>GitHub</div>
-                <a href={result.socials.links.github} target="_blank" rel="noopener noreferrer" style={{ color: '#a855f7', textDecoration: 'none' }}>
-                  {result.socials.links.github}
-                </a>
-                {result.socials.githubLastCommitDays !== null && (
-                  <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
-                    Last Commit: {result.socials.githubLastCommitDays}d ago
-                  </div>
-                )}
-              </div>
-            )}
-            <div style={{ fontSize: '13px' }}>
-              <div style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase' }}>Link Consistency</div>
-              <div style={{ color: result.socials.consistency.consistent ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-                {result.socials.consistency.consistent ? 'Agreed Across Sources' : 'Conflicting Links Detected'}
-              </div>
-            </div>
           </div>
         </div>
-      )}
-
-      {/* Footer */}
-      <div style={{ textAlign: 'center', marginTop: '32px', color: '#334155', fontSize: '12px' }}>
-        Powered by OnChain Scanner · This is a historical snapshot and does not represent current market conditions.
-      </div>
-    </main>
+      </main>
+      <Footer />
+    </div>
   );
 }
