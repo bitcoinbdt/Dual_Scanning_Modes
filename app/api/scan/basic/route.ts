@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import crypto from 'crypto';
 import { getStaticData } from '@/lib/blockchain/cache';
 import { RugPatternMatcher } from '@/lib/reputation/RugPatternMatcher';
+import { saveSnapshot } from '@/lib/snapshots/snapshotService';
 
 export async function POST(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -80,12 +81,33 @@ export async function POST(request: NextRequest) {
     // 4. Scan token — on failure, refund credits automatically
     try {
       const result = await scanToken(validation.address!, chain || '1');
+
+      // Save snapshot non-blocking — never prevents the scan result from being returned
+      let snapshotId: string | undefined;
+      try {
+        const scanData = result.data.onChainData;
+        const tokenSymbol: string | null = (scanData as any)?.symbol ?? null;
+        const tokenName: string | null = (scanData as any)?.name ?? null;
+        snapshotId = await saveSnapshot(
+          'basic',
+          validation.address!,
+          chain || '1',
+          tokenSymbol,
+          tokenName,
+          { onChainData: result.data.onChainData, metadata: result.data.metadata },
+          user.id
+        );
+      } catch (snapErr: any) {
+        console.warn('[Basic Scan API] Snapshot save failed (non-fatal):', snapErr.message);
+      }
+
       return NextResponse.json({
         success: true,
         data: result.data.onChainData,
         metadata: result.data.metadata,
         timestamp: result.timestamp,
         remainingCredits: newBalance,
+        snapshotId,
       });
     } catch (scanError: any) {
       // Refund credits since the scan failed

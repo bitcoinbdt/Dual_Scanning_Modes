@@ -64,16 +64,31 @@ export class TokenUnlockTracker {
 
     if (isSolana && solanaConnection) {
       try {
-        console.log(`[UNLOCK TRACKER] Scanning Streamflow vesting stream accounts on Solana...`);
-        const streamAccounts = await solanaConnection.getProgramAccounts(
-          new PublicKey(STREAMFLOW_PROGRAM_ID),
-          {
-            filters: [
-              { dataSize: 496 }, // Known stream account size
-              { memcmp: { offset: 40, bytes: tokenAddress } } // Filter by token mint
-            ]
-          }
-        );
+        // Wrap the heavy program-accounts RPC query in a 3-second timeout so
+        // the scan degrades gracefully when the public RPC node is slow or
+        // rate-limiting this type of expensive filter query.
+        const rpcTimeoutMs = 3_000;
+        const streamAccountsResult = await Promise.race([
+          solanaConnection.getProgramAccounts(
+            new PublicKey(STREAMFLOW_PROGRAM_ID),
+            {
+              filters: [
+                { dataSize: 496 }, // Known stream account size
+                { memcmp: { offset: 40, bytes: tokenAddress } } // Filter by token mint
+              ]
+            }
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Streamflow getProgramAccounts timed out after ${rpcTimeoutMs}ms`)),
+              rpcTimeoutMs
+            )
+          ),
+        ]).catch((err: Error) => {
+          console.warn(`[UNLOCK TRACKER] Streamflow RPC query bypassed: ${err.message}`);
+          return [] as Awaited<ReturnType<typeof solanaConnection.getProgramAccounts>>;
+        });
+        const streamAccounts = streamAccountsResult;
 
         if (streamAccounts.length > 0) {
           console.log(`[UNLOCK TRACKER] Found ${streamAccounts.length} Streamflow streams`);

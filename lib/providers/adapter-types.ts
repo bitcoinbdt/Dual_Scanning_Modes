@@ -212,7 +212,7 @@ export interface WalletHistoryRecord {
   reason?: string;
 
   /** Data provenance identifier. */
-  provenance: 'bitquery';
+  provenance: 'bitquery' | 'helius';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

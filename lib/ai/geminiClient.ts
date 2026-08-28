@@ -39,12 +39,15 @@ export async function queryGemini(
   timeoutMs = 15_000
 ): Promise<GeminiResponse> {
   const client = getClient();
+  // Prefer the fastest current-generation model first.
+  // gemini-3.5-flash is the primary target — supported by AQ. format API keys.
+  // Fall back progressively through the 3.x line, with gemini-2.0-flash as
+  // a last-resort emergency fallback until all 3.x models are confirmed stable.
   const models = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-flash-latest',
-    'gemini-flash-lite-latest',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.0-flash',
+    'gemini-2.0-flash', // Emergency fallback — remove after Gemini 3.x confirmed stable
   ];
   let lastError: any = null;
 

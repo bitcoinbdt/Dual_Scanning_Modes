@@ -16,6 +16,7 @@ import { verifyTransactions } from '@/lib/verification/verifyTransactions';
 import { detectWashTrading } from '@/lib/elevator/washTradingDetector';
 import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
 import crypto from 'crypto';
+import { saveSnapshot } from '@/lib/snapshots/snapshotService';
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -317,9 +318,8 @@ export async function POST(request: NextRequest) {
             .map((tx: any) => tx.exchangeName as string)
         );
 
-        return NextResponse.json({
-          success: true,
-          remainingCredits: newBalance,
+        // Prepare result payload for snapshot and response
+        const resultPayload = {
           rawData: {
             transactions: rawData.transactions,
             holders: rawData.holders,
@@ -357,21 +357,44 @@ export async function POST(request: NextRequest) {
               washWallets: washResult.summary.washWallets,
             }
           },
-      metadata: {
-        blockchain: rawData.blockchain, // Also include in metadata
-        detectedChain: detection.chain,
-        creditsSpent,
-        tier: config.tier,
-        transactionCount: rawData.transactions.length,
-        holderCount: rawData.holders.length,
-        walletCount: rawData.wallet_metrics.total_wallets,
-        timestamp: new Date().toISOString(),
-        metrics: {
-          RF17: rawData.metrics.RF17,
-          W5: rawData.metrics.W5
+          metadata: {
+            blockchain: rawData.blockchain, // Also include in metadata
+            detectedChain: detection.chain,
+            creditsSpent,
+            tier: config.tier,
+            transactionCount: rawData.transactions.length,
+            holderCount: rawData.holders.length,
+            walletCount: rawData.wallet_metrics.total_wallets,
+            timestamp: new Date().toISOString(),
+            metrics: {
+              RF17: rawData.metrics.RF17,
+              W5: rawData.metrics.W5
+            }
+          }
+        };
+
+        // Save snapshot non-blocking — never prevents the scan result from being returned
+        let snapshotId: string | undefined;
+        try {
+          snapshotId = await saveSnapshot(
+            'elevator',
+            address,
+            detection.chain,
+            'TOKEN',
+            null,
+            resultPayload,
+            userId
+          );
+        } catch (snapErr: any) {
+          console.warn('[Elevator Scan API] Snapshot save failed (non-fatal):', snapErr.message);
         }
-      }
-    });
+
+        return NextResponse.json({
+          success: true,
+          remainingCredits: newBalance,
+          snapshotId,
+          ...resultPayload
+        });
     
   } catch (error: any) {
     if (creditsDeducted && userId && !refundIssued) {

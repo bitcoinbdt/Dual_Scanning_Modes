@@ -571,6 +571,33 @@ async function runTests() {
   // ─────────────────────────────────────────────
   console.log('\n--- 10. Data Freshness & Scan Outcomes ---');
 
+  // ── Gemini fetch stub ──────────────────────────────────────────────────────
+  // The @google/genai SDK uses globalThis.fetch internally. We intercept it
+  // here so that NewsAgent and ExchangeListingAgent resolve immediately with a
+  // stub JSON payload instead of making live network calls to the Gemini API.
+  // This prevents test-suite timeouts, 404 model errors, and quota failures.
+  const _realFetch = globalThis.fetch;
+  const _geminiStubResponse = JSON.stringify({
+    candidates: [{
+      content: { parts: [{ text: JSON.stringify({ articles: [], summary: 'No news (test stub).' }) }] },
+      finishReason: 'STOP',
+    }],
+    usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+  });
+  (globalThis as any).fetch = async (_url: any, _init?: any): Promise<Response> => {
+    // Match only outbound Gemini API calls; pass everything else through.
+    const url = typeof _url === 'string' ? _url : (_url as Request).url ?? '';
+    if (url.includes('generativelanguage.googleapis.com') || url.includes('googleapis.com/v1beta')) {
+      return new Response(_geminiStubResponse, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return _realFetch(_url, _init);
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
+
   // Test 10.1: SUCCESS / PARTIAL_SUCCESS outcome mapping
   const testInput: DeepScanInput = {
     tokenAddress: '0xAddress',
@@ -1063,6 +1090,9 @@ async function runTests() {
     'source=fallback with no timestamp → marketDataFreshness is unknown');
   assert(fallbackSourceResult.dataQuality.freshness?.isMarketDataStale === true,
     'source=fallback with no timestamp → isMarketDataStale is true');
+
+  // Restore real fetch now that all runScan (Gemini-touching) tests are done.
+  (globalThis as any).fetch = _realFetch;
 
   // ─────────────────────────────────────────────
   // Test 14: Fix C — Cache Freshness Hardening

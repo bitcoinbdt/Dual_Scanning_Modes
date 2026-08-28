@@ -474,7 +474,7 @@ export class DeepScanService {
       const lookbackMs = WALLET_INTELLIGENCE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
       const sinceIso = new Date(Date.now() - lookbackMs).toISOString();
 
-      const intelligence = await enrichWhaleWallets(topWhales, sinceIso);
+      const intelligence = await enrichWhaleWallets(topWhales, sinceIso, network);
       if (intelligence.recordCount > 0) {
         whaleResult.walletIntelligence = intelligence;
 
