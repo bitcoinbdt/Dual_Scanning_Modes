@@ -12,6 +12,7 @@
  *   DECISION_SUPPORT — trader-oriented implication
  */
 import type { WalletHistoryRecord } from '../providers/adapter-types';
+import type { ContractSourceData } from '../blockchain/contractSourceService';
 
 // ─────────────────────────────────────────────
 // 1. Status / quality sentinels
@@ -828,6 +829,7 @@ export interface DeepScanResult {
   // ── Social Signals Module ──
   socials?: import('../social/SocialMetadataCollector').SocialMetadataResult;
   riskScore: ExplainableRiskScore;
+  contractSource?: ContractSourceData | null;
   // ── Synthesis ──
   topRisks: RiskSignal[];
   evidence: EvidenceNode[];

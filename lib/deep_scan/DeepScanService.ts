@@ -48,6 +48,7 @@ import { HolderDataset } from '../elevator/collectors/types';
 import { scanEVMToken } from '../blockchain/evmScanner';
 import { scanSolanaToken } from '../blockchain/solanaScanner';
 import { detectWashTrading } from '../elevator/washTradingDetector';
+import { fetchContractSource } from '../blockchain/contractSourceService';
 import { DEEP_SCAN_CONFIG } from './config';
 
 // ── Session cache with TTL eviction ──
@@ -1201,6 +1202,23 @@ export class DeepScanService {
       console.warn('[DEEP SERVICE] Phase 5 AI agents failed (non-fatal):', err.message);
     }
 
+    // Fetch contract source code (EVM only, fallback fetch if not provided in metadata/basicScanData)
+    let contractSource = null;
+    if (network !== 'solana') {
+      if (basicScanData && basicScanData.contractSource) {
+        contractSource = basicScanData.contractSource;
+      } else if (meta && meta.contractSource) {
+        contractSource = meta.contractSource;
+      } else {
+        try {
+          const chainId = input.chainId || (network === 'bsc' ? '56' : '1');
+          contractSource = await fetchContractSource(address, chainId);
+        } catch (err: any) {
+          console.warn(`[DEEP SERVICE] Asynchronous contract source lookup failed: ${err.message}`);
+        }
+      }
+    }
+
     const scanDurationMs = Date.now() - startTime;
 
     const result: DeepScanResult = {
@@ -1245,6 +1263,7 @@ export class DeepScanService {
       news: newsResult,
       socials: socialMetadataResult,
       riskScore: riskScoreResult,
+      contractSource,
       topRisks: riskScoreResult.topRisks,
       evidence: compiledEvidence,
       traderIntelligence: reportResult,

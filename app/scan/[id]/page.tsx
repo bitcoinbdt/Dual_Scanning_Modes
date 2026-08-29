@@ -1,14 +1,17 @@
-﻿/**
- * /scan/[id] -- Public Shareable Scan Result Page
+/**
+ * /scan/[id] -- Public Shareable Scan Result Page (Server Component)
  *
- * SSR page that loads a stored snapshot and renders the scan result with
- * a snapshot banner, Open Graph meta tags, and a "View live data" link.
+ * Fetches the snapshot from Supabase, generates OG meta tags, renders the
+ * snapshot banner, and delegates all client-side rendering to ScanResultClient.
  * Shows a clean 404 if the snapshot does not exist or has expired.
  */
 
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSnapshot, SnapshotRecord } from '@/lib/snapshots/snapshotService';
+import Navigation from '@/components/layout/Navigation';
+import Footer from '@/components/Footer';
+import ScanResultClient from './ScanResultClient';
 
 // --- Meta tag generator --------------------------------------------------
 
@@ -35,7 +38,7 @@ export async function generateMetadata(
     : 'Basic Scan';
 
   const scannedDate = new Date(snapshot.scannedAt).toUTCString();
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://scanner.app';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://scanner.coinxera.com';
   const ogImageUrl = `${baseUrl}/api/og/scan/${id}`;
   const pageUrl = `${baseUrl}/scan/${id}`;
 
@@ -59,25 +62,24 @@ export async function generateMetadata(
   };
 }
 
-// --- Snapshot banner component -------------------------------------------
+// --- Snapshot banner (server-rendered, no JS needed) ----------------------
 
 function SnapshotBanner({ snapshot }: { snapshot: SnapshotRecord }) {
-  const formattedDate = new Date(snapshot.scannedAt).toLocaleString('en-GB', {
+  const formattedDate = new Date(snapshot.scannedAt).toLocaleString('en-US', {
     day: 'numeric', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
     timeZone: 'UTC', timeZoneName: 'short',
   });
 
   return (
-    <div className="w-full bg-amber-950/30 border border-amber-700/40 rounded-lg px-4 py-3 mb-6 flex items-start gap-3">
-      <span className="text-amber-400 text-lg mt-0.5">📸</span>
+    <div className="w-full bg-amber-950/30 border border-amber-700/40 rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
+      <span className="text-amber-400 text-lg mt-0.5 shrink-0">📸</span>
       <div className="flex-1 min-w-0">
-        <p className="text-amber-300 font-medium text-sm">
+        <p className="text-amber-300 font-semibold text-sm">
           Snapshot · Scanned on {formattedDate}
         </p>
         <p className="text-amber-200/70 text-xs mt-0.5">
-          This result reflects on-chain data at the time of scanning. It is a
-          permanent, read-only record.
+          This result reflects on-chain data at the time of scanning. It is a permanent, read-only record.
         </p>
       </div>
     </div>
@@ -96,44 +98,26 @@ export default async function SharedScanPage(
     notFound();
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://scanner.app';
-  const tokenLabel = snapshot.tokenSymbol ?? snapshot.tokenAddress;
-  const freshScanUrl = `${baseUrl}/?address=${encodeURIComponent(snapshot.tokenAddress)}&chain=${snapshot.chain}`;
-
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-8 max-w-5xl mx-auto">
-      <SnapshotBanner snapshot={snapshot} />
+    <div className="min-h-screen bg-themed text-themed flex flex-col">
+      <Navigation />
+      <main className="flex-grow pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto">
+        <SnapshotBanner snapshot={snapshot} />
 
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{tokenLabel}</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            {snapshot.tokenName ?? snapshot.tokenAddress} ·{' '}
-            <span className="uppercase text-gray-500">{snapshot.chain}</span>
-          </p>
-        </div>
-        <a
-          href={freshScanUrl}
-          className="text-sm text-blue-400 hover:text-blue-300 underline underline-offset-2"
-        >
-          View live data →
-        </a>
-      </div>
-
-      {/* Result payload -- production builds swap this for real result components */}
-      <div className="rounded-xl bg-gray-900 border border-gray-800 p-6 overflow-auto">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-4 font-mono">
-          {snapshot.scanType} scan result
-        </p>
-        <pre className="text-xs text-gray-300 whitespace-pre-wrap break-all font-mono leading-relaxed">
-          {JSON.stringify(snapshot.resultJson, null, 2)}
-        </pre>
-      </div>
-
-      <p className="text-center text-gray-600 text-xs mt-8">
-        OnChain Alpha Scanner · Snapshot ID: {snapshot.id} · View count: {snapshot.viewCount}
-      </p>
-    </main>
+        {/* All client rendering (DeepScanResultView, FallbackSummaryCard) lives here */}
+        <ScanResultClient
+          snapshotId={snapshot.id}
+          scanType={snapshot.scanType}
+          chain={snapshot.chain}
+          tokenAddress={snapshot.tokenAddress}
+          tokenSymbol={snapshot.tokenSymbol}
+          tokenName={snapshot.tokenName}
+          viewCount={snapshot.viewCount}
+          result={snapshot.resultJson}
+        />
+      </main>
+      <Footer />
+    </div>
   );
 }
 

@@ -17,8 +17,10 @@ import {
   Globe,
   Copy,
   Check,
+  FileCode2,
 } from 'lucide-react';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { SourceCodeViewer } from '@/components/source/SourceCodeViewer';
 import type {
   DeepScanResult,
   EvidenceNode,
@@ -216,9 +218,24 @@ const TABS = [
   { id: 'whales',    label: 'Whale & Cohorts', icon: Users     },
   { id: 'liquidity', label: 'Liquidity',       icon: Droplets  },
   { id: 'evidence',  label: 'Evidence',        icon: FileText  },
+  { id: 'code',      label: 'Source Code',     icon: FileCode2 },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
+
+// ─── Panel: Source Code ────────────────────────────────────────────────────────
+
+function SourceCodePanel({ data, tokenAddress, chain }: { data: DeepScanResult; tokenAddress?: string; chain?: string }) {
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <SourceCodeViewer
+        contractSource={data.contractSource}
+        tokenAddress={tokenAddress || data.tokenMetadata?.address}
+        network={chain || data.marketSummary?.crossChainPools?.[0]?.chain || 'evm'}
+      />
+    </div>
+  );
+}
 
 // ─── Panel: Intelligence ───────────────────────────────────────────────────────
 
@@ -1149,9 +1166,10 @@ function EvidencePanel({ data }: { data: DeepScanResult }) {
 interface DeepScanResultViewProps {
   result: DeepScanResult;
   tokenAddress: string;
+  chain?: string;
 }
 
-export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewProps) {
+export function DeepScanResultView({ result, tokenAddress, chain }: DeepScanResultViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>('intel');
   const [showLimitations, setShowLimitations] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1330,6 +1348,7 @@ export function DeepScanResultView({ result, tokenAddress }: DeepScanResultViewP
           {activeTab === 'whales'    && <WhaleCohortPanel   data={result} />}
           {activeTab === 'liquidity' && <LiquidityPanel     data={result} />}
           {activeTab === 'evidence'  && <EvidencePanel      data={result} />}
+          {activeTab === 'code'      && <SourceCodePanel    data={result} tokenAddress={tokenAddress} chain={chain} />}
         </motion.div>
       </AnimatePresence>
 
