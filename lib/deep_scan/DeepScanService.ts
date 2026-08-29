@@ -1211,7 +1211,7 @@ export class DeepScanService {
         contractSource = meta.contractSource;
       } else {
         try {
-          const chainId = input.chainId || (network === 'bsc' ? '56' : '1');
+          const chainId = input.chainId || network || '56';
           contractSource = await fetchContractSource(address, chainId);
         } catch (err: any) {
           console.warn(`[DEEP SERVICE] Asynchronous contract source lookup failed: ${err.message}`);

@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -48,14 +48,18 @@ const CHAIN_ID_MAP: Record<string, string> = {
   'ethereum': '1',
   '56': '56',
   'bsc': '56',
+  'binance': '56',
   '137': '137',
   'polygon': '137',
+  'matic': '137',
   '8453': '8453',
   'base': '8453',
   '42161': '42161',
   'arbitrum': '42161',
+  'arb': '42161',
   '10': '10',
   'optimism': '10',
+  'opt': '10',
 };
 
 const ETHERSCAN_V2_BASE = 'https://api.etherscan.io/v2/api';
@@ -137,16 +141,25 @@ export async function fetchContractSource(
   }
 
   // 2. Resolve chain alias to numeric chainId
-  const numericChainId = CHAIN_ID_MAP[chainId.toLowerCase()];
+  const numericChainId = CHAIN_ID_MAP[chainId.toLowerCase()] || (chainId === 'evm' ? '56' : null);
   if (!numericChainId) {
     console.warn(`[SOURCE SERVICE] Unsupported chainId "${chainId}" — skipping`);
     return null;
   }
 
-  // 3. Require API key
-  const apiKey = process.env.ETHERSCAN_API_KEY || '';
+  // 3. Resolve API key with multiple fallbacks
+  const apiKey =
+    process.env.ETHERSCAN_API_KEY ||
+    process.env.BSCSCAN_API_KEY ||
+    process.env.POLYGONSCAN_API_KEY ||
+    process.env.BASESCAN_API_KEY ||
+    process.env.ARBISCAN_API_KEY ||
+    process.env.EXPLORER_API_KEY ||
+    process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY ||
+    '';
+
   if (!apiKey) {
-    console.warn('[SOURCE SERVICE] ETHERSCAN_API_KEY not set — skipping contract source lookup');
+    console.warn('[SOURCE SERVICE] No explorer API key configured in process.env (ETHERSCAN_API_KEY / BSCSCAN_API_KEY missing) — skipping contract source lookup');
     return null;
   }
 
