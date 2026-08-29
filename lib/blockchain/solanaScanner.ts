@@ -394,6 +394,7 @@ export async function scanSolanaToken(address: string): Promise<OnChainData> {
 
   const combinedData: OnChainData = {
     address,
+    contractSource: null,
     tokenName: staticData?.tokenName || "Unknown Solana Token",
     symbol: staticData?.symbol || "???",
     decimals: staticData?.decimals || 9,

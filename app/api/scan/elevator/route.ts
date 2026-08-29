@@ -17,6 +17,7 @@ import { detectWashTrading } from '@/lib/elevator/washTradingDetector';
 import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
 import crypto from 'crypto';
 import { saveSnapshot } from '@/lib/snapshots/snapshotService';
+import { fetchContractSource } from '@/lib/blockchain/contractSourceService';
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -318,9 +319,20 @@ export async function POST(request: NextRequest) {
             .map((tx: any) => tx.exchangeName as string)
         );
 
+        // Fetch verified contract source code for EVM chains
+        let contractSource = null;
+        if (detection.chain !== 'solana') {
+          try {
+            contractSource = await fetchContractSource(address, detection.chain);
+          } catch (_sourceErr: any) {
+            console.warn('[Elevator API] Contract source lookup failed (non-fatal):', _sourceErr.message);
+          }
+        }
+
         // Prepare result payload for snapshot and response
         const resultPayload = {
           rawData: {
+            contractSource,
             transactions: rawData.transactions,
             holders: rawData.holders,
             ohlcv: rawData.ohlcv,

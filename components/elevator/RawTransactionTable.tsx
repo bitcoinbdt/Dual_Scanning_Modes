@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, ChevronUp, Database, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Database, RefreshCw, FileCode2 } from 'lucide-react';
 import { 
   fetchCurrentPriceFromDexScreener,
   RawTransaction,
@@ -15,9 +15,11 @@ import { TxHashLink } from './TxHashLink';
 
 import { ExchangeFlowCard } from './ExchangeFlowCard';
 import { VerificationBadge } from './VerificationBadge';
+import { SourceCodeViewer } from '@/components/source/SourceCodeViewer';
 
 interface RawTransactionTableProps {
   rawData: {
+    contractSource?: any;
     transactions: any[];
     holders: HolderInfo[];
     ohlcv: OHLCVCandle[];
@@ -76,6 +78,7 @@ export function RawTransactionTable({
   tokenAddress,
   network = 'solana'
 }: RawTransactionTableProps) {
+  const [activeView, setActiveView] = useState<'txs' | 'source'>('txs');
   // Detect actual blockchain from data
   const detectedChain = rawData.blockchain || network;
 
@@ -451,8 +454,45 @@ export function RawTransactionTable({
         </div>
       )}
 
-      {/* Transaction List (Full Width) */}
-      <div className="space-y-4">
+      {/* View Switcher Tabs */}
+      <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+        <button
+          onClick={() => setActiveView('txs')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+            activeView === 'txs'
+              ? 'gradient-primary text-white shadow-lg'
+              : 'glass text-slate-400 hover:text-white'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Raw Transactions ({normalizedTransactions.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveView('source')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+            activeView === 'source'
+              ? 'gradient-primary text-white shadow-lg'
+              : 'glass text-slate-400 hover:text-white'
+          }`}
+        >
+          <FileCode2 className="w-4 h-4 text-purple-400" />
+          <span>Contract Source Code</span>
+          {rawData.contractSource && (
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          )}
+        </button>
+      </div>
+
+      {activeView === 'source' ? (
+        <SourceCodeViewer
+          contractSource={rawData.contractSource}
+          tokenAddress={tokenAddress}
+          network={detectedChain}
+        />
+      ) : (
+        /* Transaction List (Full Width) */
+        <div className="space-y-4">
         {/* Filters and Sorting */}
         <div className="glass-card p-4 rounded-xl border border-white/10">
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -616,39 +656,39 @@ export function RawTransactionTable({
             </table>
           </div>
         </div>
-        
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
-            <div className="text-xs text-slate-400">
-              Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
-                <span className="text-xs text-slate-400">Page</span>
-                <span className="text-xs text-white font-bold">{page}</span>
-                <span className="text-xs text-slate-400">of {totalPages}</span>
-              </div>
-              <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 glass-card rounded-xl border border-white/10">
+              <div className="text-xs text-slate-400">
+                Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, sortedTransactions.length)} of {sortedTransactions.length} transactions
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-lg">
+                  <span className="text-xs text-slate-400">Page</span>
+                  <span className="text-xs text-white font-bold">{page}</span>
+                  <span className="text-xs text-slate-400">of {totalPages}</span>
+                </div>
+                <button
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="px-4 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
     </motion.div>
   );

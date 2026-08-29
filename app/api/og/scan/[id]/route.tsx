@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GET /api/og/scan/[id]
  *
  * Dynamic Open Graph image generator for shared scan result pages.
@@ -10,7 +10,7 @@ import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 import { getSnapshot } from '@/lib/snapshots/snapshotService';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 const CHAIN_COLORS: Record<string, string> = {
   solana: '#9945FF',

@@ -55,6 +55,7 @@ export interface OnChainData {
       priceUsd: number;
     }[];
   };
+  contractSource?: import('@/lib/blockchain/contractSourceService').ContractSourceData | null;
 }
 
 export interface ElevatorData extends OnChainData {

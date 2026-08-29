@@ -36,6 +36,7 @@ const MarketIntelligenceCard = dynamic(() => import('@/components/MarketIntellig
 const RawTransactionTable = dynamic(() => import('@/components/elevator/RawTransactionTable').then(mod => mod.RawTransactionTable));
 const InsufficientCreditsModal = dynamic(() => import('@/components/credits/InsufficientCreditsModal').then(mod => mod.InsufficientCreditsModal));
 const DeepScanResultView = dynamic(() => import('@/components/deep_scan/DeepScanResultView').then(mod => mod.DeepScanResultView));
+const TokenSourceCodeCard = dynamic(() => import('@/components/TokenSourceCodeCard').then(mod => mod.TokenSourceCodeCard));
 
 const CHAINS = [
   { id: 'solana', label: 'Solana' },
@@ -459,6 +460,7 @@ function HomePageContent() {
             <TokenOverviewCard token={tokenData} />
             <AdvancedRiskMetricsCard token={tokenData} />
             <TokenAuditCard token={tokenData} />
+            <TokenSourceCodeCard token={tokenData} />
             <MarketIntelligenceCard token={tokenData} />
           </div>
         )}

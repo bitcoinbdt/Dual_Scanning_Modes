@@ -12,6 +12,7 @@ import { fetchMarketDataWithFallback } from './marketDataFallback';
 import { OnChainData, StaticData, ChainId } from './types';
 import axios from 'axios';
 import { fetchTokenCreationInfo } from '../elevator/collectors/solana/birdeye';
+import { fetchContractSource } from './contractSourceService';
 
 // Public RPCs round-robin configuration
 const CHAIN_NAMES: Record<string, string> = {
@@ -469,8 +470,17 @@ export async function scanEVMToken(
     console.warn(`[EVM Presale Detection] Failed: ${err.message}`);
   }
 
+  // Fetch verified contract source code (EVM only, safe fallback)
+  let contractSource = null;
+  try {
+    contractSource = await fetchContractSource(address, chainId);
+  } catch (err: any) {
+    console.warn(`[EVM Contract Source] Fetch failed: ${err.message}`);
+  }
+
   const combinedData: OnChainData = {
     address,
+    contractSource,
     tokenName: finalTokenName,
     symbol: finalSymbol,
     decimals: staticData?.decimals || 18,

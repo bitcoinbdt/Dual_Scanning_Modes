@@ -8,6 +8,7 @@
 // Core Data Types
 // ============================================================================
 import type { CanonicalClmmProfile } from '../providers/adapter-types';
+import type { ContractSourceData } from './contractSourceService';
 export interface Transaction {
   hash: string;
   fullHash?: string;
@@ -306,6 +307,7 @@ export interface OnChainData {
   isPreGraduation?: boolean;
   launchpadPlatform?: 'pump' | 'launchlab' | 'none';
   meta?: ScanMetadata;
+  contractSource?: ContractSourceData | null;
 }
 
 export interface ScanResult {
@@ -343,6 +345,7 @@ export interface BasicScanResponse {
   timestamp: string;
   recentTransactions: Transaction[];
   liquidityInfo?: LiquidityInfo;
+  contractSource?: ContractSourceData | null;
 }
 
 export interface AddressValidation {
