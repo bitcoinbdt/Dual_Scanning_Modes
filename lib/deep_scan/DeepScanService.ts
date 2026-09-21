@@ -697,8 +697,23 @@ export class DeepScanService {
     // all resolve to the same EvidenceNode without any static string mismatch.
 
     if (ammResult.status === 'ok') {
-      const sim1k = ammResult.simulations.find(s => s.positionSizeUsd === 1000);
-      const sim50k = ammResult.simulations.find(s => s.positionSizeUsd === 50000);
+      // FIX-6.1: Config default position sizes are [1k, 5k, 25k, 100k, 500k].
+      // The old lookup for 50k always returned undefined → evidence impact was
+      // always 0 → signal always ACCEPTABLE. Use the largest meaningful position
+      // that actually exists in the simulation set.
+      const findSim = (size: number) =>
+        ammResult.simulations.find(s => s.positionSizeUsd === size);
+      const sim1k =
+        findSim(1000) ??
+        findSim(500) ??
+        ammResult.simulations[0];
+      const largeSim =
+        findSim(100_000) ??
+        findSim(50_000) ??
+        findSim(25_000) ??
+        findSim(5_000) ??
+        ammResult.simulations[ammResult.simulations.length - 1];
+
       const ammNode = EvidenceMapper.buildAmmPoolEvidence({
         poolAddress: ammResult.poolAddress || 'unknown',
         liquidityUsd: finalLiquidity,
@@ -708,7 +723,7 @@ export class DeepScanService {
         swapFee: ammResult.swapFeeUsed ?? 0.003,
         snapshotAt: ammResult.poolSnapshotAt || Math.floor(Date.now() / 1000),
         impactAt1k: sim1k?.priceImpactPct ?? 0,
-        impactAt50k: sim50k?.priceImpactPct ?? 0,
+        impactAt50k: largeSim?.priceImpactPct ?? 0, // param name kept for backward compat
       });
       evidenceNodes.push(ammNode);
       // Write canonical ID back into the engine result
@@ -827,6 +842,23 @@ export class DeepScanService {
       limitations.push(
         'Holder provider returned insufficient data. Whale behavior confidence is reduced.'
       );
+    }
+
+    // FIX-6.9: Reduce evidence confidence when data quality is degraded.
+    // EvidenceMapper does not know about staleness; DeepScanService does.
+    const preliminaryStale =
+      elevatorResult?.collectedAt
+        ? (Math.floor(Date.now() / 1000) - elevatorResult.collectedAt) > FRESHNESS_THRESHOLDS.TRANSACTIONS
+        : false;
+
+    if (preliminaryStale) {
+      for (const node of evidenceNodes) {
+        const original = node.confidence;
+        node.confidence = Math.max(20, Math.round(original * 0.7));
+        node.sources = node.sources.concat([
+          `Confidence reduced from ${original} → ${node.confidence} (stale data warning active)`,
+        ]);
+      }
     }
 
     const compiledEvidence = EvidenceMapper.collectEvidence(evidenceNodes);
@@ -1014,6 +1046,8 @@ export class DeepScanService {
         elevatorDataReused: elevatorReused,
         transactionCount: txs.length,
         ohlcvCandleCount: ohlcv.length,
+        // FIX-6.7: Explicit holder data availability
+        holderDataSource: holderDataset.status,
       },
       limitations,
       scanId,
@@ -1278,6 +1312,8 @@ export class DeepScanService {
         transactionCount: txs.length,
         ohlcvCandleCount: ohlcv.length,
         freshness,
+        // FIX-6.7: Explicit holder data availability
+        holderDataSource: holderDataset.status,
       },
       limitations,
       overallConfidence: riskScoreResult.confidence,

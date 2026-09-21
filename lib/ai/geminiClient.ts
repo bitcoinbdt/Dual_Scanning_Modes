@@ -36,18 +36,15 @@ export interface GeminiResponse {
 export async function queryGemini(
   prompt: string,
   systemInstruction?: string,
-  timeoutMs = 15_000
+  timeoutMs = 15_000,
+  opts?: { requireSearchGrounding?: boolean }
 ): Promise<GeminiResponse> {
   const client = getClient();
-  // Prefer the fastest current-generation model first.
-  // gemini-3.5-flash is the primary target — supported by AQ. format API keys.
-  // Fall back progressively through the 3.x line, with gemini-2.0-flash as
-  // a last-resort emergency fallback until all 3.x models are confirmed stable.
+  // FIX-6.4: Only verified Google Gemini models. The previous 3.x-flash names
+  // do not exist and caused 3 wasted requests per call.
   const models = [
-    'gemini-3.5-flash',
-    'gemini-3.7-flash',
-    'gemini-3.0-flash',
-    'gemini-2.0-flash', // Emergency fallback — remove after Gemini 3.x confirmed stable
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
   ];
   let lastError: any = null;
 
@@ -67,6 +64,12 @@ export async function queryGemini(
       
       // If quota (429) limit is hit or search grounding fails due to API restrictions, retry without it
       if (errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('resource_exhausted')) {
+        // FIX-6.5: When the caller requires search grounding, do NOT retry without it.
+        // Retrying without search produces hallucinated URLs for news/listing queries.
+        if (opts?.requireSearchGrounding === true) {
+          console.warn(`[GEMINI] Search grounding quota hit for ${model}, but caller requires search. Aborting.`);
+          throw new Error('[GEMINI] Search grounding unavailable (quota/error). No fallback per caller requirement.');
+        }
         console.warn(`[GEMINI] Search grounding quota hit for model ${model}. Retrying without search grounding...`);
         try {
           const result = await generateWithRetry(client, model, prompt, systemInstruction, false, timeoutMs);

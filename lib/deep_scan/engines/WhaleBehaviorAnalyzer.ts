@@ -67,16 +67,12 @@ export function analyzeWhaleBehavior(
 ): WhaleBehaviorResult {
   // ── Validation ──
 
-  // Guard: holder data explicitly declared unavailable (e.g. EVM chains without holder API).
+  // FIX-6.7: Guard: holder data explicitly declared unavailable (e.g. EVM chains without holder API).
   // IMPORTANT: Do NOT treat 'unavailable' as an empty-but-valid snapshot.
-  // Returning insufficient_data here is correct and intentional.
   if (holdersStatus === 'unavailable') {
     return {
-      status: 'insufficient_data',
-      reason:
-        'Whale behavior analysis requires an on-chain holder snapshot. ' +
-        'Holder data collection is not implemented for this chain. ' +
-        'When an EVM holder provider is integrated, set holdersStatus to \'available\'.',
+      status: 'unavailable',
+      reason: 'Holder distribution data unavailable — provider not configured or rate-limited',
       dataSemanticWarning: DATA_SEMANTIC_WARNING,
       supplyThresholdPct: SUPPLY_THRESHOLD_PCT,
       liquidityThresholdPct: LIQUIDITY_THRESHOLD_PCT,

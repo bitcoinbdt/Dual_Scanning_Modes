@@ -75,7 +75,10 @@ export class SocialRiskMapper {
     }
 
     // SOC-004: Inconsistent social links across indexers (phishing spoof warning)
-    if (!consistency.consistent && consistency.conflicts.length > 0) {
+    // FIX-6.6: Only fire SOC-004 when we have a POSITIVE determination of
+    // inconsistency (consistent === false). `null` means unknown — do not
+    // treat unknown as inconsistent.
+    if (consistency.consistent === false && consistency.conflicts.length > 0) {
       const conflictFields = consistency.conflicts.map(c => c.field).join(', ');
       signals.push({
         riskId: makeRiskId('SOC-004'),

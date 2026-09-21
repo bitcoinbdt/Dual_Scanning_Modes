@@ -391,13 +391,21 @@ export class SolanaCollector implements IBlockchainCollector {
 
       const collectionTime = Date.now() - startTime;
 
+      // FIX-6.7: Set holdersStatus dynamically based on data availability
+      const holdersStatus: 'available' | 'unavailable' | 'insufficient_data' =
+        walletData.holders.length > 0
+          ? 'available'
+          : (!this.birdeyeApiKey && !this.heliusApiKey)
+            ? 'unavailable'
+            : 'insufficient_data';
+
       const result: CollectorResult = {
         tokenSymbol, // FIX-2.1: Add extracted token symbol
         ohlcv,
         transactions,
         wallets: walletData.wallets,
         holders: walletData.holders,
-        holdersStatus: 'available',
+        holdersStatus,
         wallet_metrics: walletData.metrics,
         metrics,
         blockchain: 'solana',

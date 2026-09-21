@@ -1249,6 +1249,14 @@ export function DeepScanResultView({ result, tokenAddress, chain }: DeepScanResu
               {meta?.creatorAddress && (
                 <CopyableDeployer address={meta.creatorAddress} />
               )}
+              {/* FIX-6.7: Subtle warning badge when holder data source is unavailable */}
+              {result.dataQuality?.holderDataSource === 'unavailable' && (
+                <div className="text-xs flex items-center">
+                  <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold" title="Holder distribution data unavailable — provider not configured or rate-limited">
+                    ⚠ Holders: Unverified
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           <div className="sm:shrink-0">
@@ -1296,6 +1304,12 @@ export function DeepScanResultView({ result, tokenAddress, chain }: DeepScanResu
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isMarketDataStale && <span className="text-amber-400/50" title="Market price/liquidity data is older than threshold">⚠ Stale price</span>}
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isOhlcvStale && <span className="text-amber-400/50" title="OHLCV candles are older than threshold">⚠ Stale candles</span>}
           {!result.dataQuality?.staleDataWarning && result.dataQuality?.freshness?.isTransactionStale && <span className="text-amber-400/50" title="Recent transactions are older than threshold">⚠ Stale txs</span>}
+          {/* FIX-6.7: Holders status badge if unavailable */}
+          {result.dataQuality?.holderDataSource === 'unavailable' && (
+            <span className="text-amber-400/80 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded text-[9px] font-semibold" title="Holder distribution data unavailable — provider not configured or rate-limited">
+              ⚠ Holders: Unverified
+            </span>
+          )}
         </div>
 
       </div>

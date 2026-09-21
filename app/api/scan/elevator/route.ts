@@ -339,6 +339,13 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // FIX-6.12: Trust score denominator excludes inconclusive checks
+        const inconclusiveCount = verificationResult.inconclusiveCount ?? 0;
+        const conclusiveTotal = verificationResult.totalChecked - inconclusiveCount;
+        const trustScore = conclusiveTotal > 0
+          ? Math.round((verificationResult.verifiedCount / conclusiveTotal) * 100)
+          : 100; // If all inconclusive, don't penalize with 0
+
         // Prepare result payload for snapshot and response
         const resultPayload = {
           rawData: {
@@ -364,7 +371,8 @@ export async function POST(request: NextRequest) {
             trust_score: {
               verifiedCount: verificationResult.verifiedCount,
               totalChecked: verificationResult.totalChecked,
-              score: verificationResult.totalChecked > 0 ? Math.round((verificationResult.verifiedCount / verificationResult.totalChecked) * 100) : 100,
+              inconclusiveCount,
+              score: trustScore,
               discrepancies: verificationResult.discrepancies
             },
             wash_trading: {

@@ -22,19 +22,33 @@ export type AIProviderResult =
 export async function queryAI(
   prompt: string,
   systemInstruction?: string,
-  timeoutMs = 10_000
+  timeoutMs = 10_000,
+  opts?: { requireSearchGrounding?: boolean }
 ): Promise<AIProviderResult> {
   let geminiError = '';
 
   // 1. Try Gemini (primary)
+  const requireSearch = opts?.requireSearchGrounding === true;
   try {
-    const result = await queryGemini(prompt, systemInstruction, timeoutMs);
+    const result = await queryGemini(prompt, systemInstruction, timeoutMs, {
+      requireSearchGrounding: requireSearch,
+    });
     if (result.text) {
       return { provider: 'gemini', text: result.text, raw: result };
     }
   } catch (err: any) {
     geminiError = err.message || 'Gemini returned an empty response';
     console.warn(`[AI PROVIDER] Gemini primary failed: ${geminiError}`);
+  }
+
+  // FIX-6.5: When search grounding is required, do NOT fall back to Groq.
+  // Groq has no search tool; its output would be hallucinated.
+  if (requireSearch) {
+    return {
+      provider: 'none',
+      text: '',
+      error: `Search grounding required but unavailable: ${geminiError || 'Gemini quota/error'}`,
+    };
   }
 
   // 2. Fallback to Groq (only if GROQ_API_KEY is explicitly configured)

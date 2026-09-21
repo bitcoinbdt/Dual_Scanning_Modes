@@ -73,7 +73,11 @@ export class ExchangeListingAgent {
 
     try {
       const prompt = buildPrompt(tokenName, tokenSymbol, tokenAddress);
-      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 4_000);
+      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 4_000, {
+        // FIX-6.5: CEX listing search REQUIRES Google Search grounding. Without it,
+        // the model invents plausible-looking announcements that do not exist.
+        requireSearchGrounding: true,
+      });
 
       if (aiResult.provider === 'none') {
         return {

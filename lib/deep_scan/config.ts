@@ -270,10 +270,13 @@ export const DEEP_SCAN_CONFIG = {
   },
 
   // ── Capital Efficiency Policy ──
+  // FIX-6.8: Tightened thresholds based on observed production data.
+  // Ratio <= 10     → low sensitivity
+  // 10 < ratio < 30 → medium sensitivity
+  // ratio >= 30     → high sensitivity
   capitalEfficiency: {
-    /** MC to liquidity ratio limits for sensitivity classification */
     lowThreshold: 10,
-    highThreshold: 50,
+    highThreshold: 30,
   },
 
   // ── Risk Scoring Policy ──

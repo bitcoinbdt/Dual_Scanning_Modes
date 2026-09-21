@@ -48,6 +48,8 @@ export function generateTraderIntelligenceReport(params: {
     elevatorDataReused: boolean;
     transactionCount: number;
     ohlcvCandleCount: number;
+    // FIX-6.7: Explicit holder data availability
+    holderDataSource?: 'available' | 'unavailable' | 'insufficient_data';
   };
   limitations: string[];
   scanId: string;
@@ -59,9 +61,18 @@ export function generateTraderIntelligenceReport(params: {
   const regime = params.marketRegime?.regime ?? 'INSUFFICIENT_DATA';
   const regimeConf = params.marketRegime?.confidence ?? 0;
   
+  // FIX-6.2: Reconcile topRisks severity with the score. A single verified
+  // 'critical' or 'high' risk signal must override a low numeric score —
+  // otherwise the report contradicts its own risk panel.
+  const topRisks = params.riskScore.topRisks || [];
+  const hasCritical = topRisks.some(r => r.severity === 'critical');
+  const hasHigh = topRisks.some(r => r.severity === 'high');
+
   let traderCondition = 'Caution';
-  if (params.riskScore.overallRiskScore >= 75) {
+  if (hasCritical) {
     traderCondition = 'Extreme Risk';
+  } else if (hasHigh) {
+    traderCondition = 'High Risk';
   } else if (params.riskScore.overallRiskScore >= 50) {
     traderCondition = 'High Risk';
   } else if (params.riskScore.overallRiskScore < 30) {
@@ -70,7 +81,13 @@ export function generateTraderIntelligenceReport(params: {
 
   // Key Conclusion
   let keyConclusion = 'Trading activity is within typical parameters.';
-  if (params.riskScore.overallRiskScore >= 75) {
+  if (hasCritical) {
+    const first = topRisks.find(r => r.severity === 'critical');
+    keyConclusion = `EXTREME RISK: ${first?.riskName ?? 'Critical Risk Detected'} — ${first?.description ?? 'Immediate caution advised'}`;
+  } else if (hasHigh) {
+    const first = topRisks.find(r => r.severity === 'high');
+    keyConclusion = `HIGH RISK: ${first?.riskName ?? 'High Risk Detected'} — ${first?.description ?? 'Elevated risk profile'}`;
+  } else if (params.riskScore.overallRiskScore >= 75) {
     keyConclusion = 'EXTREME EXECUTION RISK: Thin liquidity pools combined with high holder concentration make exit pathways fragile.';
   } else if (regime === 'BREAKOUT' && params.buyerQuality.buyerQualityScore > 70) {
     keyConclusion = 'Volume BREAKOUT detected: last candle volume is anomalously high versus the 24h batch mean. Confirm on-chain before acting.';
@@ -117,36 +134,47 @@ export function generateTraderIntelligenceReport(params: {
   }
 
   // ── 4. Whale & Holder Risk ──
-  let holderRisk = `Whale holdings constitute ${params.whaleBehavior.totalWhaleSupplySharePct}% of supply (local batch balance observations). `;
+  // FIX-6.3: Only produce a numerical holder-risk narrative when whale analysis
+  // actually ran. When unavailable, say so explicitly — never present a default
+  // 0 as if it were an observation.
+  let holderRisk: string;
+  if (params.whaleBehavior.status !== 'ok') {
+    holderRisk =
+      `Whale analysis unavailable for this scan. ` +
+      `Reason: ${params.whaleBehavior.reason || 'on-chain holder snapshot not available for this chain.'} ` +
+      `The whale-exit and whale-behavior risk modules were excluded from the score.`;
+  } else {
+    holderRisk = `Whale holdings constitute ${params.whaleBehavior.totalWhaleSupplySharePct}% of supply (local batch balance observations). `;
 
-  // Phase classification narrative
-  if (params.whaleBehavior.phase === 'dormant') {
-    holderRisk += `Whale phase: DORMANT — identified large holders made zero buys or sells in this scan window. ` +
-      `This may reflect deliberate inactivity or a position established before the scan window. ` +
-      `Sudden re-activation is a tail risk not captured by this batch.`;
-  } else if (params.whaleBehavior.phase === 'distribution') {
-    holderRisk += `Whale phase: DISTRIBUTION — net outflow from large holders observed. `;
-  } else if (params.whaleBehavior.phase === 'accumulation') {
-    holderRisk += `Whale phase: ACCUMULATION — net inflow to large holders observed. `;
-  }
-
-  // Freshness composition summary (Phase 4)
-  const whaleCount = params.whaleBehavior.whales?.length ?? 0;
-  if (whaleCount > 0) {
-    const freshCount    = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'fresh').length;
-    const recentCount   = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'recent').length;
-    const estCount      = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'established').length;
-    const unknownCount  = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'unknown').length;
-    if (freshCount + recentCount + estCount > 0) {
-      holderRisk += ` Wallet freshness (90-day window): ${freshCount} fresh (<7d), ${recentCount} recent (7–30d), ${estCount} established (>30d), ${unknownCount} unknown.`;
+    // Phase classification narrative
+    if (params.whaleBehavior.phase === 'dormant') {
+      holderRisk += `Whale phase: DORMANT — identified large holders made zero buys or sells in this scan window. ` +
+        `This may reflect deliberate inactivity or a position established before the scan window. ` +
+        `Sudden re-activation is a tail risk not captured by this batch.`;
+    } else if (params.whaleBehavior.phase === 'distribution') {
+      holderRisk += `Whale phase: DISTRIBUTION — net outflow from large holders observed. `;
+    } else if (params.whaleBehavior.phase === 'accumulation') {
+      holderRisk += `Whale phase: ACCUMULATION — net inflow to large holders observed. `;
     }
-  }
 
-  // Exit simulation
-  if (params.whaleExit.status === 'ok') {
-    const sc50 = params.whaleExit.scenarios.find(s => s.label === '50%');
-    if (sc50 && sc50.status === 'ok') {
-      holderRisk += ` A simulated liquidation of 50% of whale batch balances would cause an estimated ${sc50.priceDeltaPct.toFixed(1)}% price drop on the primary pool.`;
+    // Freshness composition summary (Phase 4)
+    const whaleCount = params.whaleBehavior.whales?.length ?? 0;
+    if (whaleCount > 0) {
+      const freshCount    = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'fresh').length;
+      const recentCount   = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'recent').length;
+      const estCount      = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'established').length;
+      const unknownCount  = params.whaleBehavior.whales.filter(w => w.freshnessTag === 'unknown').length;
+      if (freshCount + recentCount + estCount > 0) {
+        holderRisk += ` Wallet freshness (90-day window): ${freshCount} fresh (<7d), ${recentCount} recent (7–30d), ${estCount} established (>30d), ${unknownCount} unknown.`;
+      }
+    }
+
+    // Exit simulation
+    if (params.whaleExit.status === 'ok') {
+      const sc50 = params.whaleExit.scenarios.find(s => s.label === '50%');
+      if (sc50 && sc50.status === 'ok') {
+        holderRisk += ` A simulated liquidation of 50% of whale batch balances would cause an estimated ${sc50.priceDeltaPct.toFixed(1)}% price drop on the primary pool.`;
+      }
     }
   }
 
@@ -162,7 +190,14 @@ export function generateTraderIntelligenceReport(params: {
   // ── 6. Buyer Quality Cohorts ──
   let buyerQualityAssessment = `Buyer Quality Score: ${params.buyerQuality.buyerQualityScore}/100. `;
   if (params.buyerQuality.status === 'ok') {
-    buyerQualityAssessment += `${(params.buyerQuality.cohortMetrics.returningBuyerRatio * 100).toFixed(1)}% returning buyers, with capital diversity rating ${params.buyerQuality.cohortMetrics.capitalDiversityIndex.toFixed(3)}.`;
+    // FIX-6.10: Phrase the diversity metric in plain language when extreme.
+    const cdi = params.buyerQuality.cohortMetrics.capitalDiversityIndex;
+    const diversityLabel =
+      cdi < 0.05 ? 'extreme concentration (near-uniform trade sizes missing)' :
+      cdi < 0.30 ? 'low diversity' :
+      cdi < 0.60 ? 'moderate diversity' :
+                   'high diversity';
+    buyerQualityAssessment += `${(params.buyerQuality.cohortMetrics.returningBuyerRatio * 100).toFixed(1)}% returning buyers, with capital diversity: ${diversityLabel} (raw: ${cdi.toFixed(3)}).`;
     const m = params.buyerQuality.cohortMetrics;
     if (m.profiledBuyerCount !== undefined && m.profiledBuyerCount > 0) {
       buyerQualityAssessment += ` Profiled ${m.profiledBuyerCount} buyer(s).`;

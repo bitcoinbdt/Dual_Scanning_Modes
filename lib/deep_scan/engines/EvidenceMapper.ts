@@ -41,6 +41,8 @@ export function resetEvidenceCounter(): void {
 // AMM Pool evidence
 // ─────────────────────────────────────────────
 
+// NOTE: impactAt50k is the price impact (in %) of a LARGE reference position.
+// With default config it maps to $100K; treat the name as legacy.
 export function buildAmmPoolEvidence(params: {
   poolAddress: string;
   liquidityUsd: number;
@@ -53,8 +55,12 @@ export function buildAmmPoolEvidence(params: {
   return {
     evidenceId: makeId('amm-pool'),
     fact: `Pool ${params.poolAddress} holds $${params.liquidityUsd.toFixed(2)} USD liquidity at spot price $${params.spotPriceUsd.toFixed(6)}/token (snapshot: ${new Date(params.snapshotAt * 1000).toISOString()}).`,
-    metric: `Price impact: $1K sell → ${params.impactAt1k.toFixed(2)}% | $50K sell → ${params.impactAt50k.toFixed(2)}%`,
+    // FIX-6.1: Label reflects that the large reference may be $100K under
+    // current config. The threshold logic (5% / 15%) is unchanged.
+    metric: `Price impact: $1K sell → ${params.impactAt1k.toFixed(2)}% | large reference sell → ${params.impactAt50k.toFixed(2)}%`,
     pattern: 'Constant-product AMM (Uniswap V2 model), fee = ' + (params.swapFee * 100).toFixed(1) + '%',
+    // FIX-6.1: With the corrected impact value, this now fires correctly when
+    // the large reference position has >15% or >5% impact.
     signal:
       params.impactAt50k > 15
         ? 'CRITICAL_EXECUTION_SLIPPAGE'
@@ -306,16 +312,26 @@ export function buildSocialEvidence(params: {
   twitterAgeDays: number | null;
   domainAgeDays: number | null;
   githubCommitDays: number | null;
-  consistent: boolean;
+  consistent: boolean | null;
   source: string;
 }): EvidenceNode {
   return {
     evidenceId: makeId('social-signals'),
     fact: `Off-chain presence loaded via ${params.source}. Website alive: ${params.websiteAlive ?? 'unknown'}. Twitter Account Age: ${params.twitterAgeDays != null ? params.twitterAgeDays + ' days' : 'unknown'}. Domain age: ${params.domainAgeDays != null ? params.domainAgeDays + ' days' : 'unknown'}. Github last commit: ${params.githubCommitDays != null ? params.githubCommitDays + ' days' : 'unknown'}.`,
-    metric: `Consistency: ${params.consistent ? 'Agreed across sources' : 'CONFLICT DETECTED'}`,
+    metric: `Consistency: ${
+      params.consistent === null ? 'Unknown (single source)' :
+      params.consistent ? 'Agreed across sources' : 'CONFLICT DETECTED'
+    }`,
     pattern: 'Off-chain Social Metadata Verification',
-    signal: params.consistent ? 'CONSISTENT_SOCIALS' : 'INCONSISTENT_SOCIALS',
-    traderImpact: params.consistent
+    // FIX-6.6: Tri-state. `null` (unknown) should not be reported as consistent.
+    signal: params.consistent === null
+      ? 'CONSISTENCY_UNKNOWN'
+      : params.consistent
+      ? 'CONSISTENT_SOCIALS'
+      : 'INCONSISTENT_SOCIALS',
+    traderImpact: params.consistent === null
+      ? 'Social links collected from single primary indexer; cross-indexer consistency verification not available.'
+      : params.consistent
       ? 'Social link audit confirms all indexers and directory sources point to identical web endpoints.'
       : 'Phishing warning: Social link audit found conflicting website or twitter links between indexers.',
     confidence: 90,

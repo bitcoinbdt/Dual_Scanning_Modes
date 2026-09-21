@@ -24,7 +24,9 @@ export interface SocialPresenceLinks {
 }
 
 export interface SocialConsistencyResult {
-  consistent: boolean;
+  // FIX-6.6: `null` means "cannot determine consistency" (only one source
+  // available). Do NOT default to `true`.
+  consistent: boolean | null;
   conflicts: Array<{
     field: 'website' | 'twitter' | 'telegram';
     values: Record<string, string>; // e.g. { dexscreener: "...", coingecko: "..." }
@@ -102,7 +104,7 @@ export class SocialMetadataCollector {
         websiteDomainAgeDays: data.website_domain_age_days,
         githubLastCommitDays: data.github_last_commit_days,
         consistency: {
-          consistent: data.social_consistent ?? true,
+          consistent: data.social_consistent ?? null,
           conflicts,
         },
         source: data.source ?? 'cache',
@@ -168,20 +170,11 @@ export class SocialMetadataCollector {
       console.warn('[SOCIAL COLLECTOR] DexScreener lookup failed:', err.message);
     }
 
-    // 2. Mock alternative provider check for consistency mapping (Priority 3: Codex mock)
-    // If we have an incoming token address, compare simulated alternatives
-    const codexWebsite = dexWebsite; // assume agreement by default
-    const codexTwitter = dexTwitter;
-    const codexTelegram = dexTelegram;
-
+    // FIX-6.6: Removed the mock second-source comparison. It always produced
+    // `consistent: true` because codexWebsite === dexWebsite by construction.
+    // Reporting consistency as `null` (unknown) is honest until a real second
+    // indexer (Codex, CoinGecko) is integrated.
     const conflicts: Array<{ field: 'website' | 'twitter' | 'telegram'; values: Record<string, string> }> = [];
-    // Inject consistency conflict simulation for verification
-    if (dexWebsite && codexWebsite && dexWebsite !== codexWebsite) {
-      conflicts.push({
-        field: 'website',
-        values: { dexscreener: dexWebsite, codex: codexWebsite }
-      });
-    }
 
     const links: SocialPresenceLinks = {
       website: dexWebsite,
@@ -300,7 +293,9 @@ export class SocialMetadataCollector {
       websiteDomainAgeDays,
       githubLastCommitDays,
       consistency: {
-        consistent: conflicts.length === 0,
+        // FIX-6.6: With a single source and no second opinion, we cannot verify
+        // consistency. Report `null` (unknown) rather than `true` (assumed).
+        consistent: null,
         conflicts,
       },
       source: 'dexscreener',

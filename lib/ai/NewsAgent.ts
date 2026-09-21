@@ -74,7 +74,11 @@ export class NewsAgent {
 
     try {
       const prompt = buildPrompt(tokenName, tokenSymbol);
-      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 4_000);
+      const aiResult = await queryAI(prompt, SYSTEM_INSTRUCTION, 4_000, {
+        // FIX-6.5: News retrieval REQUIRES Google Search grounding. Without it,
+        // the model invents plausible-looking article titles and URLs.
+        requireSearchGrounding: true,
+      });
 
       if (aiResult.provider === 'none') {
         return {

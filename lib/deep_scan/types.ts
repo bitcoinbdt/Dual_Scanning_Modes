@@ -848,6 +848,8 @@ export interface DeepScanResult {
     elevatorDataReused: boolean;
     transactionCount: number;
     ohlcvCandleCount: number;
+    // FIX-6.7: Explicit holder data availability
+    holderDataSource?: 'available' | 'unavailable' | 'insufficient_data';
     freshness?: {
       scanTime: number;
       cacheAgeSeconds?: number;
