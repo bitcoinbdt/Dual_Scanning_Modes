@@ -235,6 +235,13 @@ export interface WhaleEntry {
   observedBatchBalance: number;
   /** observedBatchBalance / totalSupply * 100 */
   supplySharePct: number;
+  /**
+   * Semantic alias for supplySharePct — clarifies that this value represents
+   * BATCH-NET-ACTIVITY share, not authoritative on-chain holding.
+   * Always populated by WhaleBehaviorAnalyzer; optional here only so that
+   * test mocks and future producers do not break type-checking.
+   */
+  batchNetActivitySharePct?: number;
   /** Liquidity share if pool reserve data is available */
   liquiditySharePct?: number;
   isAboveSupplyThreshold: boolean;
@@ -943,6 +950,8 @@ export interface ExecutableLiquidityResult {
   maxInputTokens: number | null;
   /** Expected USD output at the boundary */
   expectedOutputUsd: number | null;
+  // FIX-5.6: Expected output in quote-token units (semantic honesty)
+  expectedOutputQuote?: number | null;
   /** Reserve utilization at the boundary (0–1) */
   reserveUtilization: number | null;
   /** 'ok' | 'infeasible' (fee >= threshold) | 'invalid' (bad reserves) */

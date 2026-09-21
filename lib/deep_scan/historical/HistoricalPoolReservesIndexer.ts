@@ -276,9 +276,11 @@ export async function schedulePoolReservesIndexing(
     }
   }
 
-  // 2. Stale processing job recovery (15 mins timeout)
+  // 2. Stale processing job recovery (config-driven timeout)
   try {
-    const staleThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    // FIX-4.12: Config-driven stale job recovery threshold
+    const staleTimeoutMinutes = CFG.staleJobTimeoutMinutes ?? 15;
+    const staleThreshold = new Date(Date.now() - staleTimeoutMinutes * 60 * 1000).toISOString();
     const { data: recoveredJobs, error: recoverErr } = await supabase
       .from('historical_pool_indexing_jobs')
       .update({ status: 'pending', last_error: 'CLAIM_TIMEOUT_RECOVERY', updated_at: new Date().toISOString() })

@@ -48,18 +48,27 @@ export async function queryGroq(
   }
   messages.push({ role: 'user', content: prompt });
 
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('[GROQ] Request timed out')), timeoutMs)
-  );
+  // FIX-5.2: Attempt cancellation via signal; fall back to Promise.race if
+  // the SDK version does not support `signal` in request options.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const responsePromise = client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages,
-    max_tokens: 1024,
-    temperature: 0.3,
-  });
-
-  const response = await Promise.race([responsePromise, timeoutPromise]);
+  let response: any;
+  try {
+    response = await client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      max_tokens: 1024,
+      temperature: 0.3,
+    }, { signal: controller.signal });
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || err?.message?.toLowerCase().includes('abort')) {
+      throw new Error('[GROQ] Request timed out');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const text = response.choices?.[0]?.message?.content ?? '';
 
   return {

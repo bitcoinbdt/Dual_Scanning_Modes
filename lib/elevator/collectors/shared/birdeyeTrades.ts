@@ -106,7 +106,10 @@ export async function fetchBirdeyeTrades(
 
     return allItems.map((item: any): UniversalTransaction => {
       const isBuy = item.side === 'buy';
-      const wallet = item.owner?.toLowerCase() ?? '';
+      // FIX-3.5: Preserve casing if chain is Solana (future-proofing)
+      const isSolana = chain === ('solana' as any);
+      const rawOwner = item.owner ?? '';
+      const wallet = isSolana ? rawOwner : rawOwner.toLowerCase();
 
       return {
         hash: item.txHash ?? item.tx_hash ?? '',
@@ -118,7 +121,7 @@ export async function fetchBirdeyeTrades(
         priceUsd: parseFloat(item.priceUsd ?? item.price ?? '0') || 0,
         wallet,
         token: {
-          address: tokenAddress.toLowerCase(),
+          address: isSolana ? tokenAddress : tokenAddress.toLowerCase(),
           symbol: tokenSymbol
         },
         blockchain: chain,

@@ -49,6 +49,11 @@ interface GeckoTrade {
   };
 }
 
+// FIX-3.4: Preserve casing for Solana base58 addresses, lowercase EVM
+function normalizeForApi(addr: string, network: 'bsc' | 'eth' | 'solana' | string): string {
+  return network === 'solana' ? addr : addr.toLowerCase();
+}
+
 /**
  * Fetch top pools (by 24h volume) for a token on GeckoTerminal.
  */
@@ -57,7 +62,7 @@ async function fetchTokenPools(
   tokenAddress: string
 ): Promise<string[]> {
   const slug = NETWORK_SLUG[network];
-  const url = `${GECKO_API}/networks/${slug}/tokens/${tokenAddress.toLowerCase()}/pools`;
+  const url = `${GECKO_API}/networks/${slug}/tokens/${normalizeForApi(tokenAddress, network)}/pools`;
 
   try {
     const res = await fetch(`${url}?page=1`, {
@@ -103,7 +108,8 @@ async function fetchPoolTrades(
   limit: number
 ): Promise<GeckoTrade[]> {
   const slug = NETWORK_SLUG[network];
-  const url = `${GECKO_API}/networks/${slug}/pools/${poolAddress.toLowerCase()}/trades`;
+  // FIX-3.4: Use normalizeForApi for poolAddress
+  const url = `${GECKO_API}/networks/${slug}/pools/${normalizeForApi(poolAddress, network)}/trades`;
 
   const trades: GeckoTrade[] = [];
   let lastTimestamp: number | null = null;
@@ -179,7 +185,10 @@ function convertToUniversal(
     const attr = trade.attributes;
     const timestamp = Math.floor(new Date(attr.block_timestamp).getTime() / 1000);
     const kind = attr.kind; // 'buy' or 'sell' — directly from swap event
-    const wallet = attr.tx_from_address?.toLowerCase() ?? '';
+    // FIX-3.4: Do not lowercase wallet or token address if blockchain is solana
+    const wallet = attr.tx_from_address
+      ? (blockchain === 'solana' ? attr.tx_from_address : attr.tx_from_address.toLowerCase())
+      : '';
 
     // For a buy: wallet receives token (to = wallet), from = pool
     // For a sell: wallet sends token (from = wallet), to = pool
@@ -206,7 +215,7 @@ function convertToUniversal(
       priceUsd,           // ← exact swap price
       wallet,             // ← initiating wallet
       token: {
-        address: tokenAddress.toLowerCase(),
+        address: blockchain === 'solana' ? tokenAddress : tokenAddress.toLowerCase(),
         symbol: tokenSymbol
       },
       blockchain,

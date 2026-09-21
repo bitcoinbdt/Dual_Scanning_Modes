@@ -2,6 +2,7 @@ import axios from 'axios';
 
 interface VerificationResult {
   verifiedCount: number;
+  inconclusiveCount: number; // FIX-2.10: Track inconclusive checks
   totalChecked: number;
   discrepancies: Array<{
     hash: string;
@@ -23,6 +24,7 @@ export async function verifyTransactions(
 ): Promise<VerificationResult> {
   const result: VerificationResult = {
     verifiedCount: 0,
+    inconclusiveCount: 0, // FIX-2.10: Initialize inconclusiveCount
     totalChecked: 0,
     discrepancies: []
   };
@@ -47,8 +49,8 @@ export async function verifyTransactions(
     try {
       if (chain === 'solana') {
         if (!heliusApiKey) {
-          // If Helius key is missing, fallback to verified
-          result.verifiedCount++;
+          // FIX-2.10: Missing key is inconclusive — do NOT count as verified
+          result.inconclusiveCount++;
           continue;
         }
 
@@ -156,8 +158,8 @@ export async function verifyTransactions(
         }
       }
     } catch (err: any) {
-      // In case of timeout or public RPC rate limit, fallback to verified
-      result.verifiedCount++;
+      // FIX-2.10: Network/timeout errors are inconclusive — do NOT count as verified
+      result.inconclusiveCount++;
     }
   }
 

@@ -4,7 +4,8 @@ import { queryAlchemyRpc, isAlchemyConfigured } from './client';
  * Fetch raw getReserves() hex from a Uniswap V2 pool contract.
  * Selector: 0x0902f1ac
  */
-export async function fetchV2PoolReserves(poolAddress: string): Promise<string | null> {
+// FIX-3.2: Propagate chain parameter to queryAlchemyRpc
+export async function fetchV2PoolReserves(poolAddress: string, chain: string = 'eth'): Promise<string | null> {
   if (!isAlchemyConfigured()) return null;
   try {
     const result = await queryAlchemyRpc<string>('eth_call', [
@@ -13,7 +14,7 @@ export async function fetchV2PoolReserves(poolAddress: string): Promise<string |
         data: '0x0902f1ac', // getReserves()
       },
       'latest',
-    ]);
+    ], chain);
     return result;
   } catch (err) {
     console.warn(`[Alchemy V2 Reserves] Failed to fetch reserves for ${poolAddress}:`, err);
@@ -25,7 +26,8 @@ export async function fetchV2PoolReserves(poolAddress: string): Promise<string |
  * Fetch token0 address hex from a Uniswap V2 pool contract.
  * Selector: 0x0dfe1681
  */
-export async function fetchV2PoolToken0(poolAddress: string): Promise<string | null> {
+// FIX-3.2: Propagate chain parameter to queryAlchemyRpc
+export async function fetchV2PoolToken0(poolAddress: string, chain: string = 'eth'): Promise<string | null> {
   if (!isAlchemyConfigured()) return null;
   try {
     const result = await queryAlchemyRpc<string>('eth_call', [
@@ -34,7 +36,7 @@ export async function fetchV2PoolToken0(poolAddress: string): Promise<string | n
         data: '0x0dfe1681', // token0()
       },
       'latest',
-    ]);
+    ], chain);
     return result;
   } catch (err) {
     console.warn(`[Alchemy V2 Reserves] Failed to fetch token0 for ${poolAddress}:`, err);

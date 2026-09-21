@@ -40,54 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [followedWhales, setFollowedWhales] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    // Intercept global fetch to inject Authorization header for all local /api/ and /proxy/ requests
-    const originalFetch = window.fetch;
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      
-      let isLocalApi = false;
-      try {
-        const parsedUrl = new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined);
-        isLocalApi = parsedUrl.pathname.startsWith('/api/') || parsedUrl.pathname.startsWith('/proxy/');
-      } catch {
-        isLocalApi = url.startsWith('/api/') || url.startsWith('/proxy/');
-      }
-
-      if (isLocalApi) {
-        // Always get the freshest token from the Supabase session (auto-refreshes)
-        // Fall back to localStorage only as a secondary option
-        let token: string | null = null;
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          token = session?.access_token ?? null;
-          // Keep localStorage in sync with latest token
-          if (token) {
-            localStorage.setItem('authToken', token);
-          }
-        } catch {
-          token = localStorage.getItem('authToken');
-        }
-
-        if (token) {
-          const headers = new Headers(init?.headers);
-          
-          // If input is a Request object, merge its headers so we don't drop them
-          if (typeof Request !== 'undefined' && input instanceof Request) {
-            input.headers.forEach((value, key) => {
-              if (!headers.has(key)) {
-                headers.set(key, value);
-              }
-            });
-          }
-
-          if (!headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${token}`);
-          }
-          return originalFetch(input, { ...init, headers });
-        }
-      }
-      return originalFetch(input, init);
-    };
+    // FIX-1.10: Removed global window.fetch monkey-patch in favor of explicit Bearer token injection
 
     // Get initial session — keep sessionLoading=true until this resolves
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -139,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       subscription.unsubscribe();
-      window.fetch = originalFetch;
     };
   }, []);
 

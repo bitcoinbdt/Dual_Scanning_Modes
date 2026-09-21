@@ -81,6 +81,8 @@ interface RetryConfig {
   retryableErrors?: string[];
   retryableStatusCodes?: number[];
   onRetry?: (attempt: number, maxRetries: number, delay: number, error: Error) => void;
+  // FIX-4.5: Optional jitter mode
+  jitterMode?: 'none' | 'equal' | 'full';
 }
 
 /**
@@ -96,8 +98,11 @@ export async function retryWithBackoff<T>(
     maxDelay = 16000,
     backoffMultiplier = 2,
     retryableErrors = ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET'],
-    retryableStatusCodes = [429, 403, 503, 504],
-    onRetry = null
+    // FIX-4.5: Removed 403, added 408, 425, 500, 502
+    retryableStatusCodes = [408, 425, 429, 500, 502, 503, 504],
+    onRetry = null,
+    // FIX-4.5: Default equal jitter
+    jitterMode = 'equal',
   } = options;
 
   let lastError: RetryError | null = null;
@@ -125,14 +130,15 @@ export async function retryWithBackoff<T>(
       }
       
       // Calculate delay with exponential backoff
-      const delay = Math.min(
+      const baseDelay = Math.min(
         initialDelay * Math.pow(backoffMultiplier, attempt),
         maxDelay
       );
       
-      // Add jitter
-      const jitter = Math.random() * 500;
-      const finalDelay = delay + jitter;
+      // FIX-4.5: Jitter calculation (default 'equal' jitter: half fixed + half random)
+      let finalDelay = baseDelay;
+      if (jitterMode === 'equal') finalDelay = Math.floor(baseDelay / 2 + Math.random() * (baseDelay / 2));
+      if (jitterMode === 'full')  finalDelay = Math.floor(Math.random() * baseDelay);
       
       // Invoke retry callback if provided
       if (onRetry) {

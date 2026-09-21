@@ -485,7 +485,7 @@ export async function scanEVMToken(
     symbol: finalSymbol,
     decimals: staticData?.decimals || 18,
     totalSupply: dynamicData.totalSupply,
-    contractVerified: staticData?.contractVerified || false,
+    contractVerified: !!contractSource || (staticData?.contractVerified ?? false), // FIX-2.2: contract verified if source fetched
     network: staticData?.network || CHAIN_NAMES[chainId].toLowerCase(),
     recentTransactions: dynamicData.recentTransactions,
     networkHealth: dynamicData.networkHealth,

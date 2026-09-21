@@ -11,7 +11,8 @@ export interface UnlockSchedule {
   airdropPercentage: number;
 }
 
-const STREAMFLOW_PROGRAM_ID = 'strmqZ7p4zPQzRqpgNMbW2s1zCdHPF1cMkBCAwJWyEr';
+// FIX-3.7: Correct Streamflow program ID
+const STREAMFLOW_PROGRAM_ID = 'strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxfmKg5m';
 
 export class TokenUnlockTracker {
   /**

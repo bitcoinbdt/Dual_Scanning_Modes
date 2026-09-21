@@ -441,6 +441,7 @@ export function computeExecutableLiquidity(
       maxInputUsd: null,
       maxInputTokens: null,
       expectedOutputUsd: null,
+      expectedOutputQuote: null,
       reserveUtilization: null,
       status: 'invalid',
       reason: 'Invalid reserves or spot price',
@@ -455,6 +456,7 @@ export function computeExecutableLiquidity(
       maxInputUsd: 0,
       maxInputTokens: 0,
       expectedOutputUsd: 0,
+      expectedOutputQuote: 0,
       reserveUtilization: 0,
       status: 'infeasible',
       reason: `Swap fee (${(feeRate * 100).toFixed(2)}%) already meets or exceeds the ${label} threshold`,
@@ -471,6 +473,7 @@ export function computeExecutableLiquidity(
       maxInputUsd: 0,
       maxInputTokens: 0,
       expectedOutputUsd: 0,
+      expectedOutputQuote: 0,
       reserveUtilization: 0,
       status: 'infeasible',
       reason: 'Analytical formula yields non-positive result for this pool',
@@ -492,7 +495,12 @@ export function computeExecutableLiquidity(
     impactThresholdLabel: label,
     maxInputUsd: fp(maxInputUsd, 2),
     maxInputTokens: fp(maxInputTokens, 6),
+    // FIX-5.6: expectedOutputUsd is populated as if the quote token were USD.
+    // This is accurate for USDC/USDT pairs but only approximate for
+    // WETH/WBNB/WMATIC pairs. The new expectedOutputQuote field carries the
+    // same number with an honest name so consumers can decide how to treat it.
     expectedOutputUsd: fp(expectedOutputUsd, 2),
+    expectedOutputQuote: fp(expectedOutputUsd, 6),
     reserveUtilization: fp(reserveUtilization, 6),
     status: 'ok',
   };

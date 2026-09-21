@@ -14,6 +14,15 @@ function makeRiskId(code: string): string {
   return `${code}-${_socRiskCounter}`;
 }
 
+/**
+ * FIX-5.8: Reset the counter before each scan, mirroring EvidenceMapper.
+ * DeepScanService already resets EvidenceMapper via resetEvidenceCounter();
+ * we now call this alongside it.
+ */
+export function resetSocialRiskCounter(): void {
+  _socRiskCounter = 0;
+}
+
 export class SocialRiskMapper {
   /**
    * Evaluate collector facts and map them to standard RiskSignals.

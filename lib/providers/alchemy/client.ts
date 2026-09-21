@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { PROVIDER_CONFIG } from '../config';
 import { ProviderError } from '../types';
+import { retryWithBackoff } from '../../blockchain/retryUtils'; // FIX-4.1: Retry wrapper
 
 /**
  * Check if Alchemy is configured.
@@ -12,9 +13,11 @@ export function isAlchemyConfigured(): boolean {
 /**
  * Sends a JSON-RPC request to the Alchemy endpoint.
  */
+// FIX-3.1: Chain-aware queryAlchemyRpc
 export async function queryAlchemyRpc<T = any>(
   method: string,
-  params: any[] = []
+  params: any[] = [],
+  chain: string = 'eth'
 ): Promise<T> {
   if (!isAlchemyConfigured()) {
     throw new ProviderError(
@@ -26,24 +29,38 @@ export async function queryAlchemyRpc<T = any>(
   }
 
   const apiKey = process.env.ALCHEMY_API_KEY;
-  const baseUrl = PROVIDER_CONFIG.alchemy.baseUrl;
+  const baseUrlMap = PROVIDER_CONFIG.alchemy.baseUrlMap;
+  const baseUrl = (baseUrlMap && baseUrlMap[chain.toLowerCase()]) || PROVIDER_CONFIG.alchemy.baseUrl;
   const timeout = PROVIDER_CONFIG.alchemy.timeoutMs;
   const url = `${baseUrl}/${apiKey}`;
 
   try {
-    const response = await axios.post(
-      url,
+    // FIX-4.1: Wrap axios.post inside retryWithBackoff
+    const response = await retryWithBackoff(
+      async () =>
+        axios.post(
+          url,
+          {
+            jsonrpc: '2.0',
+            id: 1,
+            method,
+            params,
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            timeout,
+          }
+        ),
       {
-        jsonrpc: '2.0',
-        id: 1,
-        method,
-        params,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
+        maxRetries: 3,
+        initialDelay: 500,
+        maxDelay: 4000,
+        retryableStatusCodes: [408, 425, 429, 500, 502, 503, 504],
+        onRetry: (attempt, max, delay, err) => {
+          console.log(`[Alchemy] Retry ${attempt}/${max} in ${delay}ms: ${(err as any).message}`);
         },
-        timeout,
       }
     );
 
@@ -79,9 +96,10 @@ export async function queryAlchemyRpc<T = any>(
  * Basic health check to test connectivity.
  * Calls eth_blockNumber.
  */
-export async function testAlchemyHealth(): Promise<boolean> {
+// FIX-3.1: Chain-aware testAlchemyHealth
+export async function testAlchemyHealth(chain: string = 'eth'): Promise<boolean> {
   try {
-    const result = await queryAlchemyRpc('eth_blockNumber');
+    const result = await queryAlchemyRpc('eth_blockNumber', [], chain);
     return !!result;
   } catch {
     return false;

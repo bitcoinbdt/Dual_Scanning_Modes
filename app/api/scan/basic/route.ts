@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       try {
         const scanData = result.data.onChainData;
         const tokenSymbol: string | null = (scanData as any)?.symbol ?? null;
-        const tokenName: string | null = (scanData as any)?.name ?? null;
+        const tokenName: string | null = (scanData as any)?.tokenName ?? null; // FIX-2.7: OnChainData uses tokenName
         snapshotId = await saveSnapshot(
           'basic',
           validation.address!,
@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
           tokenSymbol,
           tokenName,
           { onChainData: result.data.onChainData, metadata: result.data.metadata },
-          user.id
+          user.id,
+          supabaseAdmin // FIX-1.8: pass service-role client to bypass RLS
         );
       } catch (snapErr: any) {
         console.warn('[Basic Scan API] Snapshot save failed (non-fatal):', snapErr.message);

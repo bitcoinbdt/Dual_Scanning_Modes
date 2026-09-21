@@ -9,6 +9,7 @@ export interface ProviderState {
   enabled: boolean;
   baseUrl: string;
   timeoutMs: number;
+  baseUrlMap?: Record<string, string>; // FIX-3.1: Chain-aware endpoint mapping
 }
 
 export interface ProviderConfig {
@@ -31,6 +32,23 @@ export const PROVIDER_CONFIG: ProviderConfig = {
     enabled: typeof process !== 'undefined' && !!process.env.ALCHEMY_API_KEY,
     baseUrl: 'https://eth-mainnet.g.alchemy.com/v2',
     timeoutMs: 10_000,
+    // FIX-3.1: Chain-specific Alchemy base URLs
+    baseUrlMap: {
+      eth: 'https://eth-mainnet.g.alchemy.com/v2',
+      ethereum: 'https://eth-mainnet.g.alchemy.com/v2',
+      '1': 'https://eth-mainnet.g.alchemy.com/v2',
+      bsc: 'https://bnb-mainnet.g.alchemy.com/v2',
+      binance: 'https://bnb-mainnet.g.alchemy.com/v2',
+      '56': 'https://bnb-mainnet.g.alchemy.com/v2',
+      polygon: 'https://polygon-mainnet.g.alchemy.com/v2',
+      '137': 'https://polygon-mainnet.g.alchemy.com/v2',
+      arbitrum: 'https://arb-mainnet.g.alchemy.com/v2',
+      '42161': 'https://arb-mainnet.g.alchemy.com/v2',
+      base: 'https://base-mainnet.g.alchemy.com/v2',
+      '8453': 'https://base-mainnet.g.alchemy.com/v2',
+      optimism: 'https://opt-mainnet.g.alchemy.com/v2',
+      '10': 'https://opt-mainnet.g.alchemy.com/v2',
+    },
   },
   uniswap: {
     enabled: typeof process !== 'undefined' && !!process.env.UNISWAP_API_KEY,

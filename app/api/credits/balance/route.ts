@@ -78,7 +78,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Profile missing — auto-create with 20 starter credits
+    // Profile missing — auto-create
+    // FIX-1.6: Conditional 20-credit bonus for fresh signups only
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const isFreshSignup = user.created_at && user.created_at > fiveMinAgo;
+    const { count: txCount } = await supabaseAdmin
+      .from('credit_transactions').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+    const starterBonus = (isFreshSignup && !txCount) ? 20 : 0;
+
     const displayName =
       (user.user_metadata?.name as string) ||
       (user.email?.split('@')[0] ?? 'User');
@@ -90,7 +97,7 @@ export async function GET(request: NextRequest) {
           id: user.id,
           email: user.email,
           display_name: displayName,
-          credits_balance: 20,
+          credits_balance: starterBonus,
         },
         { onConflict: 'id' }
       )

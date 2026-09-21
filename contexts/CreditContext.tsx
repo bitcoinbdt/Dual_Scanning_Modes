@@ -94,12 +94,14 @@ export function CreditProvider({ children }: { children: React.ReactNode }) {
     return balance.balance >= amount;
   }, [balance.balance]);
 
-  // Get color based on credit balance
+  // FIX-5.18: distinct red-500 color for zero/depleted credit balance
   const getCreditColor = useCallback((): string => {
-    if (balance.balance >= 100) return 'text-green-400';
-    if (balance.balance >= 20) return 'text-yellow-400';
-    if (balance.balance >= 10) return 'text-orange-400';
-    return 'text-red-400';
+    const b = Math.max(0, balance.balance);
+    if (b >= 100) return 'text-green-400';
+    if (b >= 20) return 'text-yellow-400';
+    if (b >= 10) return 'text-orange-400';
+    if (b > 0) return 'text-red-400';
+    return 'text-red-500'; // depleted / zero
   }, [balance.balance]);
 
   // Check if balance is low

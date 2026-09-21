@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { PROVIDER_CONFIG } from '../config';
 import { ProviderError } from '../types';
+import { retryWithBackoff } from '../../blockchain/retryUtils'; // FIX-4.3: Retry wrapper
 
 /**
  * Check if Helius is configured.
@@ -45,10 +46,18 @@ export async function fetchHeliusWalletTransactions(
   }
 
   try {
-    const response = await axios.get(url, {
-      params,
-      timeout,
-    });
+    // FIX-4.3: Wrap axios.get inside retryWithBackoff
+    const response = await retryWithBackoff(
+      async () => axios.get(url, { params, timeout }),
+      {
+        maxRetries: 3,
+        initialDelay: 400,
+        maxDelay: 3000,
+        onRetry: (attempt, max, delay, err) => {
+          console.log(`[Helius] Retry ${attempt}/${max} in ${delay}ms: ${(err as any).message}`);
+        },
+      }
+    );
 
     if (!Array.isArray(response.data)) {
       throw new ProviderError(

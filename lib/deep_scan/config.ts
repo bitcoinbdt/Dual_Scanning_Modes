@@ -240,6 +240,7 @@ export const DEEP_SCAN_CONFIG = {
     finalityBufferBlocks: 32,
     maxAttempts: 3,
     retentionDays: 30,
+    staleJobTimeoutMinutes: 15, // FIX-4.12: Config-driven stale job recovery threshold
   },
 
   // ── Market Regime Policy ──

@@ -272,8 +272,14 @@ export function analyzeVolumeConcentration(
   }));
 
   // ── Derived metrics ──
+  // FIX-5.5: If there are buys but zero sells, ratio is effectively infinite
+  // (max divergence). If there are neither, ratio is 0.
   const buySellRatio =
-    totalSellVolumeUsd > 0 ? round(totalBuyVolumeUsd / totalSellVolumeUsd, 4) : 0;
+    totalSellVolumeUsd > 0
+      ? round(totalBuyVolumeUsd / totalSellVolumeUsd, 4)
+      : totalBuyVolumeUsd > 0
+      ? Number.POSITIVE_INFINITY
+      : 0;
 
   const washVolumeRatio =
     totalVolumeUsd > 0 ? round(elevatorWashVolumeUsd / totalVolumeUsd, 4) : 0;

@@ -7,26 +7,27 @@ export interface CollectorConfig {
   tier: 'quick_peek' | 'standard' | 'professional' | 'institutional';
 }
 
+// FIX-1.1: Map credit spending to promised transaction limits (50, 100, 200, 500)
 export function getCollectorConfig(creditsSpent: number): CollectorConfig {
   if (creditsSpent <= 5) {
     return {
-      maxTransactions: 200,
+      maxTransactions: 50,
       tier: 'quick_peek'
     };
   } else if (creditsSpent <= 10) {
     return {
-      maxTransactions: 1000,
+      maxTransactions: 100,
       tier: 'standard'
     };
   } else if (creditsSpent <= 20) {
     return {
-      maxTransactions: 5000,
+      maxTransactions: 200,
       tier: 'professional'
     };
   } else {
     // 30 credits or more
     return {
-      maxTransactions: 10000,
+      maxTransactions: 500,
       tier: 'institutional'
     };
   }

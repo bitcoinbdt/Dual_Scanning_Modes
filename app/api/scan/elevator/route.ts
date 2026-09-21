@@ -8,6 +8,7 @@ import { getCollectorConfig } from '@/lib/elevator/collectors/config';
 import { detectChain, isChainSupported, getUnsupportedChainMessage } from '@/lib/elevator/utils/chainDetector';
 import { CollectorFactory } from '@/lib/elevator/collectors/CollectorFactory';
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import fs from 'fs';
 import path from 'path';
@@ -18,6 +19,12 @@ import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
 import crypto from 'crypto';
 import { saveSnapshot } from '@/lib/snapshots/snapshotService';
 import { fetchContractSource } from '@/lib/blockchain/contractSourceService';
+
+// FIX-1.8: Build service-role admin client for snapshot inserts (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 // Load CEX addresses
 const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
@@ -222,6 +229,9 @@ export async function POST(request: NextRequest) {
       config.maxTransactions
     );
 
+    // FIX-2.1: Elevator symbol extraction from collector result
+    const tokenSymbol = rawData.tokenSymbol || 'TOKEN';
+
     // NEW: Wash trading detection (batch-only, no external calls)
     const washResult = detectWashTrading(rawData.transactions);
     rawData.transactions = washResult.transactions;
@@ -338,7 +348,7 @@ export async function POST(request: NextRequest) {
             ohlcv: rawData.ohlcv,
             blockchain: rawData.blockchain, // Include detected blockchain
             token: {
-              symbol: 'TOKEN', // TODO: Get from token metadata
+              symbol: tokenSymbol, // FIX-1.7: Use extracted token symbol
               address: address
             },
             holder_spike: rawData.holder_spike,
@@ -392,10 +402,11 @@ export async function POST(request: NextRequest) {
             'elevator',
             address,
             detection.chain,
-            'TOKEN',
+            tokenSymbol, // FIX-1.7: Use extracted token symbol
             null,
             resultPayload,
-            userId
+            userId,
+            supabaseAdmin // FIX-1.8: pass service-role client to bypass RLS
           );
         } catch (snapErr: any) {
           console.warn('[Elevator Scan API] Snapshot save failed (non-fatal):', snapErr.message);

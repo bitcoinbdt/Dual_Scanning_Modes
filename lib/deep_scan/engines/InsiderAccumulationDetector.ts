@@ -107,7 +107,12 @@ export class InsiderAccumulationDetector {
             const totalBuyVolumeUsd = bucketTxs.reduce((sum, tx) => sum + (tx.amount * (tx.priceUsd || spotPriceUsd)), 0);
             const avgBuyUsd = totalBuyVolumeUsd / bucketTxs.length;
             const priceAtBuy = bucketTxs.reduce((sum, tx) => sum + (tx.priceUsd || spotPriceUsd), 0) / bucketTxs.length;
-            const priceAtEventPeak = Math.max(event.open, event.close, event.close); // Event peak estimation
+            // FIX-5.7: Use event.high when available with fallback to event.close
+            const priceAtEventPeak = Math.max(
+              event.open,
+              event.close,
+              event.high ?? event.close
+            );
             const impliedPnlPct = priceAtBuy > 0 ? ((priceAtEventPeak - priceAtBuy) / priceAtBuy) * 100 : 0;
 
             // Profitability filter: PnL > 20%

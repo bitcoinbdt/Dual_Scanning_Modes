@@ -8,12 +8,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import { DeepScanService } from '@/lib/deep_scan/DeepScanService';
 import { detectChain, isChainSupported } from '@/lib/elevator/utils/chainDetector';
 import { autoDetectChainId } from '@/lib/blockchain/evmScanner';
 import { saveSnapshot } from '@/lib/snapshots/snapshotService';
 import crypto from 'crypto';
+
+// FIX-1.8: Build service-role admin client for snapshot inserts (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const DEFAULT_DEEP_SCAN_COST = 15; // 15 credits standard cost
 
@@ -172,7 +179,8 @@ export async function POST(request: NextRequest) {
         result.tokenMetadata?.symbol ?? null,
         result.tokenMetadata?.name ?? null,
         result,
-        user.id
+        user.id,
+        supabaseAdmin // FIX-1.8: pass service-role client to bypass RLS
       );
     } catch (snapErr: any) {
       console.warn('[DEEP API] Snapshot save failed (non-fatal):', snapErr.message);

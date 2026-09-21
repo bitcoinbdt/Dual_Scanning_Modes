@@ -1,10 +1,12 @@
 import axios from 'axios';
 import { supabase } from '@/lib/supabase';
-import type {
-  ReferralCodeResponse,
-  ReferralHistoryResponse,
-  ApplyReferralRequest,
-  ApplyReferralResponse,
+import {
+  calculateReferralBonusFromTiers,
+  REFERRAL_BONUS_TIERS,
+  type ReferralCodeResponse,
+  type ReferralHistoryResponse,
+  type ApplyReferralRequest,
+  type ApplyReferralResponse,
 } from '@/types/referral';
 
 // Use the Next.js proxy rewrite (/proxy/api/*) so the browser never makes a
@@ -202,16 +204,9 @@ export function formatReferralUrl(code: string): string {
 /**
  * Calculate referral bonus based on package
  */
+// FIX-1.2: Delegate to canonical referral bonus calculation
 export function calculateReferralBonus(packageId: string, credits: number): number {
-  const bonusMap: Record<string, number> = {
-    starter: 0.10,  // 10%
-    basic: 0.15,    // 15%
-    pro: 0.20,      // 20%
-    premium: 0.25,  // 25%
-  };
-  
-  const bonusPercentage = bonusMap[packageId] || 0.10;
-  return Math.floor(credits * bonusPercentage);
+  return calculateReferralBonusFromTiers(packageId, credits);
 }
 
 /**

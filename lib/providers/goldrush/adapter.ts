@@ -341,7 +341,13 @@ export interface AdaptGoldrushWalletHistoryOpts {
  *   Undefined / null timestamps in items are skipped — never substituted.
  *   Returns null rather than inventing a profile from empty data.
  */
+// FIX-4.7: Cache cex-addresses.json in module-level memory
+let _cexAddressesCache: Record<string, string[]> | null = null;
+
+export function __resetCexAddressesCache(): void { _cexAddressesCache = null; }
+
 function getCexAddresses(): Record<string, string[]> {
+  if (_cexAddressesCache) return _cexAddressesCache;
   try {
     const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
     if (fs.existsSync(cexAddressesPath)) {
@@ -353,11 +359,13 @@ function getCexAddresses(): Record<string, string[]> {
           res[ch] = list.map((item: any) => String(item.address).toLowerCase());
         }
       }
+      _cexAddressesCache = res;
       return res;
     }
   } catch (err) {
-    console.error('[classifyFundingSource] Failed to load cex-addresses.json:', err);
+    console.error('[getCexAddresses] Failed to load cex-addresses.json:', err);
   }
+  _cexAddressesCache = {};
   return {};
 }
 

@@ -105,8 +105,9 @@ function CreditRequestsContent() {
         {requests.length === 0 ? (
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg border border-gray-700 p-12 text-center">
             <div className="text-6xl mb-4">📋</div>
+            {/* FIX-5.14: Fix double space grammar when filter === 'all' */}
             <h3 className="text-xl font-semibold text-white mb-2">
-              No {filter !== 'all' ? filter : ''} requests
+              No {filter === 'all' ? '' : `${filter} `}requests
             </h3>
             <p className="text-gray-400">
               {filter === 'pending'

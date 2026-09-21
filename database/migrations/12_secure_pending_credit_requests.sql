@@ -24,7 +24,7 @@ CREATE OR REPLACE VIEW admin.pending_credit_requests AS
   SELECT
     cpr.id,
     cpr.user_id,
-    cpr.package_id,
+    cpr.credit_package_id, -- FIX-1.5: Correct column name
     cpr.credits_amount,
     cpr.payment_method_id,
     cpr.transaction_hash,

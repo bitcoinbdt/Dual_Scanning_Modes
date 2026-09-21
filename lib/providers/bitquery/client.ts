@@ -2,6 +2,7 @@ import axios from 'axios';
 import { PROVIDER_CONFIG } from '../config';
 import { ProviderError } from '../types';
 import { getBitqueryAccessToken } from './auth';
+import { retryWithBackoff } from '../../blockchain/retryUtils'; // FIX-4.4: Retry wrapper
 
 /**
  * Check if Bitquery is fully configured.
@@ -32,15 +33,27 @@ export async function queryBitquery<T = any>(
   const timeout = PROVIDER_CONFIG.bitquery.timeoutMs;
 
   try {
-    const response = await axios.post(
-      url,
-      { query, variables },
+    // FIX-4.4: Wrap axios.post inside retryWithBackoff
+    const response = await retryWithBackoff(
+      async () =>
+        axios.post(
+          url,
+          { query, variables },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            timeout,
+          }
+        ),
       {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+        maxRetries: 3,
+        initialDelay: 600,
+        maxDelay: 5000,
+        onRetry: (attempt, max, delay, err) => {
+          console.log(`[Bitquery] Retry ${attempt}/${max} in ${delay}ms: ${(err as any).message}`);
         },
-        timeout,
       }
     );
 

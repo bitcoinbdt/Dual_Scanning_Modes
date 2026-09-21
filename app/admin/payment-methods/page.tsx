@@ -5,6 +5,17 @@ import AdminProtectedRoute from '@/components/admin/AdminProtectedRoute';
 import { PaymentMethod } from '@/types/creditPurchase';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+
+// FIX-1.10: Helper to retrieve auth token for explicit Bearer header
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || (typeof window !== 'undefined' ? localStorage.getItem('authToken') : null);
+  } catch {
+    return typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+  }
+}
 
 export default function AdminPaymentMethodsPage() {
   return (
@@ -83,7 +94,11 @@ function PaymentMethodsContent() {
 
   const loadPaymentMethods = async () => {
     try {
-      const response = await fetch('/api/admin/payment-methods');
+      // FIX-1.10: Explicit Bearer token injection
+      const token = await getAuthToken();
+      const response = await fetch('/api/admin/payment-methods', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
       if (!response.ok) throw new Error('Failed to load payment methods');
       const data = await response.json();
       setPaymentMethods(data.paymentMethods || []);
@@ -151,9 +166,14 @@ function PaymentMethodCard({ method, onSaveSuccess }: PaymentMethodCardProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // FIX-1.10: Explicit Bearer token injection
+      const token = await getAuthToken();
       const response = await fetch(`/api/admin/payment-methods/${method.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           address: address.trim(),
           instructions: instructions.trim() || null,

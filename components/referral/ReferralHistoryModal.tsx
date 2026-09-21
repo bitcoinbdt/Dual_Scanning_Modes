@@ -217,7 +217,9 @@ export default function ReferralHistoryModal({ isOpen, onClose }: ReferralHistor
                         {/* Additional Info for Rewarded */}
                         {referral.status === 'rewarded' && referral.firstPurchaseAmount && (
                           <div className="mt-3 pt-3 border-t border-white/5 text-xs text-slate-500">
-                            First purchase: {referral.firstPurchaseAmount} SOL
+                            {/* FIX-5.13: Amount is generic — do not assume SOL. Referral purchases
+                                are credit-based, not chain-native. */}
+                            First purchase: {referral.firstPurchaseAmount} credits
                           </div>
                         )}
                       </motion.div>
@@ -230,8 +232,9 @@ export default function ReferralHistoryModal({ isOpen, onClose }: ReferralHistor
               <div className="p-6 border-t border-white/10 bg-slate-900/30">
                 <div className="text-sm text-slate-400 text-center">
                   <p>💡 You earn bonus credits when referred users make their first purchase</p>
+                  {/* FIX-1.2: Update bonus range to 20-35% */}
                   <p className="mt-2">
-                    <span className="text-primary-400 font-medium">10-25% bonus</span> depending on package tier
+                    <span className="text-primary-400 font-medium">20-35% bonus</span> depending on package tier
                   </p>
                 </div>
               </div>

@@ -25,6 +25,7 @@ import { filterSystemAddresses } from '../../utils/addressFilter';
 import { aggregateTrades } from '../../utils/aggregateTrades';
 import { isGoldrushConfigured, fetchGoldrushTokenHolders } from '../../../providers/goldrush/client';
 import { adaptGoldrushHolders } from '../../../providers/goldrush/adapter';
+import { fetchTokenSymbol } from '../fetchSymbol';
 
 export class BscCollector implements IBlockchainCollector {
   private birdeyeApiKey: string;
@@ -129,6 +130,9 @@ export class BscCollector implements IBlockchainCollector {
   async collect(address: string, maxTransactions: number, tokenDecimals?: number): Promise<CollectorResult> {
     const startTime = Date.now();
 
+    // FIX-2.1: Extract token symbol via DexScreener/Birdeye
+    const tokenSymbol = await fetchTokenSymbol(this.getBlockchain(), address, this.birdeyeApiKey) ?? undefined;
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`[BscCollector] Starting collection for ${address}`);
     console.log(`[BscCollector] Max transactions: ${maxTransactions}`);
@@ -193,6 +197,7 @@ export class BscCollector implements IBlockchainCollector {
       }
 
       const result: CollectorResult = {
+        tokenSymbol, // FIX-2.1: Add extracted token symbol
         ohlcv,
         transactions,
         wallets: walletData.wallets,
@@ -208,8 +213,10 @@ export class BscCollector implements IBlockchainCollector {
       // Apply Holder Spike Detection (Feature 1)
       detectHolderSpike(result);
 
-      // Apply System Address Filtering (Feature 2)
-      const filtered = await filterSystemAddresses(walletData.holders, 'bsc');
+      // Apply System Address Filtering on the REAL on-chain holder list (FIX-2.12)
+      // Fall back to batch-derived wallets only when GoldRush holders are empty.
+      const holderSource = holders.length > 0 ? holders : walletData.holders;
+      const filtered = await filterSystemAddresses(holderSource, 'bsc');
       result.wallet_metrics.top_holders_filtered = filtered.slice(0, 10);
       result.wallet_metrics.top_10_wallets = filtered.slice(0, 10);
 

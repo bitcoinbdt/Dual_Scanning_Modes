@@ -8,32 +8,32 @@ import toast from 'react-hot-toast';
 export default function AuthCallbackClient() {
   const router = useRouter();
 
+  // FIX-5.16: onAuthStateChange listener instead of immediate getSession to prevent OAuth race condition
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Auth callback error:', error);
-          toast.error('Authentication failed. Please try again.');
-          router.push('/');
-          return;
-        }
+    let resolved = false;
 
-        if (session) {
-          toast.success('Successfully authenticated!');
-          router.push('/');
-        } else {
-          router.push('/');
-        }
-      } catch (err) {
-        console.error('Auth callback error:', err);
-        toast.error('Authentication error occurred.');
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
         router.push('/');
       }
-    };
+    }, 10000);
 
-    handleAuthCallback();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (resolved) return;
+
+      if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        toast.success('Successfully authenticated!');
+        router.push('/');
+      }
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   return (

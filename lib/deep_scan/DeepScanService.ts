@@ -21,6 +21,7 @@ import { enrichPoolsWithAlchemyReserves, enrichClmmPoolsWithSlot0 } from './pool
 import { NormalizedPoolState, LiquidityPool } from '../blockchain/types';
 import { enrichWhaleWallets, WALLET_INTELLIGENCE_LOOKBACK_DAYS } from './walletIntelligence';
 import { WhaleFreshnessTag } from './types';
+import { resetSocialRiskCounter } from '../social/SocialRiskMapper'; // FIX-5.8: Reset social-risk counter
 // Phase 5C — WalletQuality Infrastructure
 import { lookupWalletProfile, upsertWalletProfile, enqueueWalletEnrichmentJob } from './walletQualityCache';
 import { enrichTopWalletsSync } from './walletEnrichment';
@@ -159,6 +160,8 @@ export class DeepScanService {
     // Reset the evidence ID counter so every scan produces deterministic, consecutive IDs
     // starting at 1. This prevents ID drift and makes evidence references predictable.
     EvidenceMapper.resetEvidenceCounter();
+    // FIX-5.8: Reset the social-risk counter for deterministic IDs.
+    resetSocialRiskCounter();
 
     let network = input.network.toLowerCase();
     const address = input.tokenAddress;
@@ -526,11 +529,13 @@ export class DeepScanService {
     }
 
     // 4. Whale Exit Simulation
+    // FIX-5.4: Pass canonical isLargeCap flag to simulateWhaleExit
     const whaleExitResult = simulateWhaleExit(
       whaleResult.whales,
       finalPools,
       finalSpotPrice,
-      finalTotalSupply
+      finalTotalSupply,
+      isLargeCap
     );
 
     // Phase 5C: Wallet profile cache-first lookup + bounded sync enrichment for buyers

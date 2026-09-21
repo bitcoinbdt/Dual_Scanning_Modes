@@ -20,15 +20,16 @@ import Navigation from '@/components/layout/Navigation';
 import ReferralHistoryModal from '@/components/referral/ReferralHistoryModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReferralCode, copyToClipboard, generateShareText } from '@/services/referralApi';
-import type { ReferralCodeResponse } from '@/types/referral';
+import { REFERRAL_BONUS_TIERS, type ReferralCodeResponse } from '@/types/referral';
 import toast from 'react-hot-toast';
 
+// FIX-1.2: Referral tiers derived from canonical REFERRAL_BONUS_TIERS
 const REFERRAL_TIERS = [
-  { name: 'Starter', credits: 100, priceUsd: '$4.99', bonus: 20, bonusPct: 20, hot: false, best: false },
-  { name: 'Basic',   credits: 250, priceUsd: '$9.00', bonus: 50, bonusPct: 25, hot: false, best: false },
-  { name: 'Pro',     credits: 600, priceUsd: '$19.00', bonus: 150, bonusPct: 30, hot: true, best: false },
-  { name: 'Premium', credits: 1300, priceUsd: '$39.00', bonus: 400, bonusPct: 35, hot: false, best: true },
-];
+  { name: 'Starter', credits: 100,  priceUsd: '$4.99',  bonusPct: REFERRAL_BONUS_TIERS.starter.percentage * 100, hot: false, best: false },
+  { name: 'Basic',   credits: 250,  priceUsd: '$9.00',  bonusPct: REFERRAL_BONUS_TIERS.basic.percentage   * 100, hot: false, best: false },
+  { name: 'Pro',     credits: 600,  priceUsd: '$19.00', bonusPct: REFERRAL_BONUS_TIERS.pro.percentage     * 100, hot: true,  best: false },
+  { name: 'Premium', credits: 1300, priceUsd: '$39.00', bonusPct: REFERRAL_BONUS_TIERS.premium.percentage * 100, hot: false, best: true },
+].map(t => ({ ...t, bonus: Math.floor(t.credits * (t.bonusPct / 100)) }));
 
 const TERMS = [
   "Referral bonus is only awarded on the referred user's first credit purchase.",
@@ -347,7 +348,7 @@ export default function ReferralsClient() {
               { step: 1, title: 'Share Code', desc: 'Send your referral code to friends' },
               { step: 2, title: 'They Sign Up', desc: 'Friend uses your code during signup' },
               { step: 3, title: 'First Purchase', desc: 'They buy their first credits' },
-              { step: 4, title: 'Get Bonus', desc: 'Earn 20–35% bonus credits instantly' },
+              { step: 4, title: 'Get Bonus', desc: `Earn ${REFERRAL_BONUS_TIERS.starter.percentage * 100}-${REFERRAL_BONUS_TIERS.premium.percentage * 100}% bonus credits instantly` },
             ].map(({ step, title, desc }) => (
               <div key={step} className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold shrink-0">

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, Share2, Zap, Users, Gift, CheckCircle2 } from 'lucide-react';
 import { getReferralCode, copyToClipboard, formatReferralUrl, generateShareText } from '@/services/referralApi';
-import type { ReferralCodeResponse } from '@/types/referral';
+import { REFERRAL_BONUS_TIERS, type ReferralCodeResponse } from '@/types/referral';
 import toast from 'react-hot-toast';
 
 export default function ReferralDashboard() {
@@ -252,7 +252,8 @@ export default function ReferralDashboard() {
             </div>
             <div>
               <p className="font-medium text-slate-300 mb-1">Get Bonus</p>
-              <p className="text-slate-500">Earn 10-25% bonus</p>
+              {/* FIX-1.2: Update bonus range to 20-35% */}
+              <p className="text-slate-500">Earn {REFERRAL_BONUS_TIERS.starter.percentage * 100}-{REFERRAL_BONUS_TIERS.premium.percentage * 100}% bonus</p>
             </div>
           </div>
         </div>

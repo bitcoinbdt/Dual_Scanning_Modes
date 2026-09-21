@@ -61,10 +61,26 @@ interface ExtendedSecurityData extends SecurityData {
   hasBlacklist?: boolean;
   tradingCooldown?: boolean;
   ownerCanChangeBalance?: boolean;
+  canTakeBackOwnership?: boolean;
   totalSupply?: string;
   cachedAt?: string;
   source?: string;
   note?: string;
+  // FIX-2.3: Raw GoPlus snake_case string pass-throughs
+  is_honeypot?: string;
+  is_mintable?: string;
+  is_proxy?: string;
+  transfer_pausable?: string;
+  is_blacklisted?: string;
+  trading_cooldown?: string;
+  owner_change_balance?: string;
+  can_take_back_ownership?: string;
+  buy_tax?: string;
+  sell_tax?: string;
+  holder_count?: string;
+  total_supply?: string;
+  owner_address?: string;
+  creator_address?: string;
 }
 
 /**
@@ -84,21 +100,22 @@ export async function fetchGoPlusSecurity(
     const url = `${GOPLUS_BASE_URL}/token_security/${mappedChainId}?contract_addresses=${address}`;
     console.log(`[GOPLUS] 🔍 Fetching security data for ${address} on chain ${chainId}...`);
     
+    // FIX-4.6: Reduced timeout and retry budget to avoid 60s scan timeout
     // Wrap axios call with retry logic
     const response = await retryWithBackoff<{ data: GoPlusResponse }>(
       async () => {
         return await axios.get(url, { 
-          timeout: 10000,
+          timeout: 6000,
           headers: {
             'Accept': 'application/json'
           }
         });
       },
       {
-        maxRetries: 5,
-        initialDelay: 1000,
-        maxDelay: 16000,
-        retryableStatusCodes: [429, 503, 504],
+        maxRetries: 2,
+        initialDelay: 500,
+        maxDelay: 4000,
+        retryableStatusCodes: [429, 502, 503, 504],
         onRetry: (attempt, maxRetries, delay, error: any) => {
           const statusCode = error.response?.status;
           const errorType = statusCode === 429 ? 'Rate limit' : 
@@ -134,11 +151,27 @@ export async function fetchGoPlusSecurity(
       hasBlacklist: securityData.is_blacklisted === "1",
       tradingCooldown: securityData.trading_cooldown === "1",
       ownerCanChangeBalance: securityData.owner_change_balance === "1",
+      canTakeBackOwnership: securityData.can_take_back_ownership === "1",
       ownerAddress: securityData.owner_address || undefined,
       creatorAddress: securityData.creator_address || undefined,
       totalSupply: securityData.total_supply || "0",
       cachedAt: new Date().toISOString(),
-      source: "goplus"
+      source: "goplus",
+      // FIX-2.3: Raw string pass-throughs for snake_case fields
+      is_honeypot: securityData.is_honeypot,
+      is_mintable: securityData.is_mintable,
+      is_proxy: securityData.is_proxy,
+      transfer_pausable: securityData.transfer_pausable,
+      is_blacklisted: securityData.is_blacklisted,
+      trading_cooldown: securityData.trading_cooldown,
+      owner_change_balance: securityData.owner_change_balance,
+      can_take_back_ownership: securityData.can_take_back_ownership,
+      buy_tax: securityData.buy_tax ?? "",
+      sell_tax: securityData.sell_tax ?? "",
+      holder_count: securityData.holder_count ?? "0",
+      total_supply: securityData.total_supply ?? "0",
+      owner_address: securityData.owner_address ?? undefined,
+      creator_address: securityData.creator_address ?? undefined,
     };
 
     // Robust Tax Fallback: If GoPlus fails to parse the tax, try Honeypot.is
@@ -148,9 +181,10 @@ export async function fetchGoPlusSecurity(
     if ((buyTaxMissing || sellTaxMissing) && (chainId === '1' || chainId === '56')) {
       console.log(`[GOPLUS] ⚠️ GoPlus missing tax data. Falling back to Honeypot.is simulation...`);
       try {
+        // FIX-4.6: Reduced Honeypot timeout from 8000 to 3000
         const honeypotRes = await axios.get<HoneypotResponse>(
           `https://api.honeypot.is/v2/IsHoneypot?address=${address}&chainID=${chainId}`, 
-          { timeout: 8000 }
+          { timeout: 3000 }
         );
         
         if (honeypotRes.data && honeypotRes.data.simulationResult) {
@@ -203,12 +237,26 @@ export function getFallbackSecurityData(): ExtendedSecurityData {
     hasBlacklist: false,
     tradingCooldown: false,
     ownerCanChangeBalance: false,
+    canTakeBackOwnership: false,
     ownerAddress: undefined,
     creatorAddress: undefined,
     totalSupply: "0",
     cachedAt: new Date().toISOString(),
     source: "fallback",
-    note: "Security data unavailable - using safe defaults"
+    note: "Security data unavailable - using safe defaults",
+    // FIX-2.3: Default "0" strings for snake_case fields
+    is_honeypot: "0",
+    is_mintable: "0",
+    is_proxy: "0",
+    transfer_pausable: "0",
+    is_blacklisted: "0",
+    trading_cooldown: "0",
+    owner_change_balance: "0",
+    can_take_back_ownership: "0",
+    buy_tax: "0",
+    sell_tax: "0",
+    holder_count: "0",
+    total_supply: "0",
   };
 }
 

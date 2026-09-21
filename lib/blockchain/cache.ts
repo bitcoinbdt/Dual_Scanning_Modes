@@ -44,6 +44,14 @@ if (typeof setInterval !== 'undefined') {
   setInterval(cleanupExpiredEntries, 60 * 60 * 1000);
 }
 
+// FIX-3.3: Solana base58 addresses are case-sensitive. Lowercase only 42-char hex EVM addresses.
+export function normalizeCacheKey(address: string): string {
+  if (address.startsWith('0x') && address.length === 42) {
+    return address.toLowerCase();
+  }
+  return address;
+}
+
 // ============================================================================
 // Static Data Cache (Token Name, Symbol, Decimals)
 // ============================================================================
@@ -52,7 +60,7 @@ if (typeof setInterval !== 'undefined') {
  * Cache static token data permanently
  */
 export async function cacheStaticData(address: string, data: StaticData): Promise<void> {
-  const key = `static:${address.toLowerCase()}`;
+  const key = `static:${normalizeCacheKey(address)}`;
   staticCache.set(key, {
     data,
     expiry: Date.now() + STATIC_CACHE_TTL
@@ -63,7 +71,7 @@ export async function cacheStaticData(address: string, data: StaticData): Promis
  * Get cached static token data
  */
 export async function getStaticData(address: string): Promise<StaticData | null> {
-  const key = `static:${address.toLowerCase()}`;
+  const key = `static:${normalizeCacheKey(address)}`;
   const entry = staticCache.get(key);
   
   if (!entry) {
@@ -86,7 +94,7 @@ export async function getStaticData(address: string): Promise<StaticData | null>
  * Cache security data for 7 days
  */
 export async function cacheSecurityData(address: string, data: SecurityData): Promise<void> {
-  const key = `security:${address.toLowerCase()}`;
+  const key = `security:${normalizeCacheKey(address)}`;
   securityCache.set(key, {
     data,
     expiry: Date.now() + SECURITY_CACHE_TTL
@@ -97,7 +105,7 @@ export async function cacheSecurityData(address: string, data: SecurityData): Pr
  * Get cached security data
  */
 export async function getSecurityData(address: string): Promise<SecurityData | null> {
-  const key = `security:${address.toLowerCase()}`;
+  const key = `security:${normalizeCacheKey(address)}`;
   const entry = securityCache.get(key);
   
   if (!entry) {
@@ -136,7 +144,7 @@ export function clearAllCaches(): void {
  * Clear cache for a specific address
  */
 export function clearCacheForAddress(address: string): void {
-  const lowerAddress = address.toLowerCase();
-  staticCache.delete(`static:${lowerAddress}`);
-  securityCache.delete(`security:${lowerAddress}`);
+  const normAddress = normalizeCacheKey(address);
+  staticCache.delete(`static:${normAddress}`);
+  securityCache.delete(`security:${normAddress}`);
 }

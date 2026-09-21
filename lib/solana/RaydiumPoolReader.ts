@@ -7,6 +7,12 @@ export interface PoolReserves {
   source: 'api' | 'rpc_vaults';
 }
 
+// FIX-3.10: Minimum buffer length for Raydium AMM V4 pool layout
+// Offsets:
+// - coinVault (base token vault): offset 336..368 (32-byte PublicKey)
+// - pcVault (quote token vault): offset 368..400 (32-byte PublicKey)
+const MIN_RAYDIUM_V4_LEN = 400;
+
 export class RaydiumPoolReader {
   /**
    * Fetch Raydium AMM V4 or CPMM pool reserves without importing Raydium SDK
@@ -26,16 +32,14 @@ export class RaydiumPoolReader {
       const data = response.data?.data?.[0];
       if (data) {
         // Find pool reserves in returned payload
-        // API v3 usually returns reserves directly as strings
+        // API v3 returns raw integer reserve amounts in atomic units
         const baseReserveStr = data.mintAmountA || data.baseReserve || data.reserveA;
         const quoteReserveStr = data.mintAmountB || data.quoteReserve || data.reserveB;
 
         if (baseReserveStr !== undefined && quoteReserveStr !== undefined) {
-          const decimalsA = data.mintDecimalsA || 6;
-          const decimalsB = data.mintDecimalsB || 9;
-          
-          const baseReserve = BigInt(Math.round(Number(baseReserveStr) * Math.pow(10, decimalsA)));
-          const quoteReserve = BigInt(Math.round(Number(quoteReserveStr) * Math.pow(10, decimalsB)));
+          // FIX-3.9: Parse raw integer strings directly without 10^decimals multiplication
+          const baseReserve = BigInt(String(baseReserveStr).trim().split('.')[0] || '0');
+          const quoteReserve = BigInt(String(quoteReserveStr).trim().split('.')[0] || '0');
           
           return {
             baseReserve,
@@ -56,8 +60,8 @@ export class RaydiumPoolReader {
 
       if (accInfo && accInfo.data) {
         const buffer = accInfo.data;
-        // Raydium V4 AMM layout: coinVault at offset 336 (32 bytes), pcVault at offset 368 (32 bytes)
-        if (buffer.length >= 400) {
+        // FIX-3.10: Raydium V4 AMM layout: coinVault at offset 336 (32 bytes), pcVault at offset 368 (32 bytes)
+        if (buffer.length >= MIN_RAYDIUM_V4_LEN) {
           const coinVaultPubkey = new PublicKey(buffer.slice(336, 368));
           const pcVaultPubkey = new PublicKey(buffer.slice(368, 400));
 

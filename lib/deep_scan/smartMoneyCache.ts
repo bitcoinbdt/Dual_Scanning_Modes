@@ -88,19 +88,35 @@ export async function enqueueSmartMoneyIndexingJob(
   const ch   = chain.toLowerCase().trim();
   try {
     const supabase = getServiceClient();
-    // Insert pending job. If conflict, update to trigger pg_net dispatch.
-    await supabase
+    // FIX-4.9: Two-step enqueue to prevent stuck 'processing' jobs when ignoreDuplicates is true
+    // Step 1: try to INSERT fresh (fast path)
+    const { error: insertErr } = await supabase
       .from('indexing_jobs')
-      .upsert(
-        {
-          wallet_address: addr,
-          chain:          ch,
-          status:         'pending',
-          enqueued_at:    new Date().toISOString(),
-          updated_at:     new Date().toISOString(),
-        },
-        { onConflict: 'wallet_address,chain', ignoreDuplicates: true }
-      );
+      .insert({
+        wallet_address: addr,
+        chain:          ch,
+        status:         'pending',
+        enqueued_at:    new Date().toISOString(),
+        updated_at:     new Date().toISOString(),
+      });
+
+    // Step 2: on unique-violation (already exists), conditionally reset stale/pending
+    if (insertErr && insertErr.code === '23505') {
+      // Only reset jobs that are stuck (processing for >15 min) or already pending.
+      const staleThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      await supabase
+        .from('indexing_jobs')
+        .update({
+          status: 'pending',
+          enqueued_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('wallet_address', addr)
+        .eq('chain', ch)
+        .or(`status.eq.pending,and(status.eq.processing,updated_at.lt.${staleThreshold})`);
+    } else if (insertErr) {
+      console.warn('[SmartMoneyCache] Enqueue failed:', insertErr.message);
+    }
   } catch (err: any) {
     console.warn('[SmartMoneyCache] Enqueue exception:', err?.message);
   }

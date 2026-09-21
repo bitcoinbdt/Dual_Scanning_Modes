@@ -1,5 +1,11 @@
 import { CollectorResult } from '../collectors/types';
 
+// FIX-2.11: Chain-aware address normalization (Solana base58 addresses are case-sensitive)
+function normalizeAddr(addr: string, chain: 'solana' | 'eth' | 'bsc'): string {
+  if (chain === 'solana') return addr;
+  return addr.toLowerCase();
+}
+
 /**
  * Calculates holder spike metrics and updates the CollectorResult in place.
  */
@@ -14,8 +20,8 @@ export function detectHolderSpike(result: CollectorResult): void {
     return;
   }
   
-  // Find the latest transaction timestamp as the anchor for the scan
-  const latestTxSec = Math.max(...transactions.map(t => t.timestamp));
+  // FIX-2.11: Find the latest transaction timestamp using reduce to prevent stack overflow
+  const latestTxSec = transactions.reduce((max, t) => t.timestamp > max ? t.timestamp : max, 0);
   const windowStart = latestTxSec - 86400; // 24 hours window
   
   const recipientsBeforeWindow = new Set<string>();
@@ -24,7 +30,7 @@ export function detectHolderSpike(result: CollectorResult): void {
   // Categorize recipients based on transaction timing
   for (const tx of transactions) {
     if (!tx.to) continue;
-    const toAddress = tx.to.toLowerCase();
+    const toAddress = normalizeAddr(tx.to, result.blockchain);
     
     if (tx.timestamp < windowStart) {
       recipientsBeforeWindow.add(toAddress);
@@ -43,7 +49,8 @@ export function detectHolderSpike(result: CollectorResult): void {
   }
   
   const new_holders_24h = newHolders.size;
-  // Approximation of unique holders before the 24h window
+  // NOTE: Despite the field name, this counts unique recipients (not holders).
+  // See FIX-2.11 for rationale.
   const total_holders_before_24h = recipientsBeforeWindow.size;
   
   let holder_spike = false;

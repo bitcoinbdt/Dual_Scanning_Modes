@@ -80,11 +80,15 @@ export function simulateWhaleExit(
   whales: WhaleEntry[],
   pools: (NormalizedPoolState | LiquidityPool)[],
   spotPriceUsd: number,
-  totalSupply: number
+  totalSupply: number,
+  isLargeCap?: boolean
 ): WhaleExitResult {
   // ── Large-Cap Bypass Gate ──
+  // FIX-5.4: Prefer the canonical Large-Cap flag if provided; fall back to
+  // FDV-only when the flag is absent (backward compatibility).
   const fdv = totalSupply * spotPriceUsd;
-  if (fdv > 50_000_000) {
+  const largeCapDecision = isLargeCap === true || (isLargeCap === undefined && fdv > 50_000_000);
+  if (largeCapDecision) {
     return {
       status: 'insufficient_data',
       reason: 'Whale exit simulation skipped for Large-Cap tokens.',

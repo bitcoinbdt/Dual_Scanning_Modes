@@ -28,13 +28,11 @@ export function calculateMetrics(
   // Calculate price change percentage
   const priceChange = (lastClose - firstOpen) / firstOpen;
   
-  // Calculate volume metrics
-  const totalVolume = ohlcv.reduce((sum, candle) => sum + candle.volume, 0);
-  const avgVolume = totalVolume / ohlcv.length;
-  
-  // RF17: Wash trading indicator
-  // High volume but minimal price movement suggests artificial trading
-  const RF17 = (totalVolume > avgVolume) && (Math.abs(priceChange) < 0.02);
+  // FIX-2.8: Replace broken totalVolume > avgVolume logic with median-based high-volume-candle counter
+  const sortedVolumes = [...ohlcv.map(c => c.volume)].sort((a, b) => a - b);
+  const medianVolume = sortedVolumes[Math.floor(sortedVolumes.length / 2)] || 0;
+  const highVolumeCandles = ohlcv.filter(c => c.volume > medianVolume * 2).length;
+  const RF17 = highVolumeCandles >= 3 && Math.abs(priceChange) < 0.02;
   
   // W5: Total holder count
   const W5 = walletMetrics.total_holders;

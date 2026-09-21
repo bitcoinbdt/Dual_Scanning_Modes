@@ -1,62 +1,25 @@
-export interface Transaction {
-  hash: string;
-  fullHash?: string;
-  from: string;
-  to: string;
-  amount: string;
-  rawAmount?: number;
-  rawTimestamp?: number;
-  tokenSymbol?: string;
-  timestamp: string;
-  type?: 'Buy' | 'Sell' | 'Transfer';
-}
+// FIX-5.12: types/scanner.ts is now a compatibility shim. The canonical
+// definitions live in lib/blockchain/types.ts. This file re-exports the
+// canonical OnChainData and provides legacy aliases for fields that were
+// previously declared locally.
 
-export interface LiquidityPool {
-  pair: string;
-  dex: string;
-  liquidityUsd: number;
-  priceUsd?: number;
-}
+export type {
+  Transaction,
+  OnChainData,
+  LiquidityPool,
+  SecurityData,
+  LiquidityInfo,
+  CrossChainPoolInfo,
+  NetworkHealth,
+  ScanMetadata,
+} from '@/lib/blockchain/types';
 
-export interface OnChainData {
-  address: string;
-  network?: string;
-  tokenName: string;
-  symbol: string;
-  totalSupply: number;
-  recentVolume?: 'High' | 'Medium' | 'Low';
-  holderConcentration?: 'High' | 'Medium' | 'Low';
-  liquidityLocked: boolean;
-  contractVerified: boolean;
-  mintFunction: string;
-  freezable: string;
-  taxBuy: string;
-  taxSell: string;
-  washTradingPercentage?: number;
-  creatorAddress?: string;
-  deploymentDate?: string;
-  isPreGraduation?: boolean;
-  recentTransactions: Transaction[];
-  networkHealth: {
-    lastBlock: string;
-    blockReward: string;
-  };
-  liquidityInfo?: {
-    totalLiquidityUsd: number;
-    totalCrossChainLiquidityUsd?: number;
-    mainPools: LiquidityPool[];
-    crossChainPools?: {
-      chain: string;
-      dex: string;
-      pair: string;
-      tokenAddress: string;
-      poolAddress: string;
-      liquidityUsd: number;
-      priceUsd: number;
-    }[];
-  };
-  contractSource?: import('@/lib/blockchain/contractSourceService').ContractSourceData | null;
-}
+// Note: `ElevatorData` was declared locally as an extension of OnChainData.
+// It is retained below for UI backward compatibility but is NOT the
+// canonical shape. Consumers should migrate to reading from the flat
+// Elevator route payload shape directly.
+
+import type { OnChainData } from '@/lib/blockchain/types';
 
 export interface ElevatorData extends OnChainData {
   marketBehavior?: {
@@ -66,45 +29,13 @@ export interface ElevatorData extends OnChainData {
     transactionCount: number;
   };
   advancedAnalytics?: {
-    insiderThreat?: {
-      activeSnipers: number;
-      isDumping: boolean;
-      warning: boolean;
-    };
-    creatorFunding?: {
-      fundedBy: string;
-      pastRugCount: number;
-      riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
-    };
-    washTrading?: {
-      artificialPercentage: number;
-    };
-    giniCoefficient?: {
-      score: number;
-    };
-    holdingVelocity?: {
-      classification: string;
-      averageHoldTimeSeconds: number;
-    };
-    momentumHeatmap?: Array<{
-      time: string;
-      buy: number;
-      sell: number;
-      net: number;
-    }>;
+    insiderThreat?: { activeSnipers: number; isDumping: boolean; warning: boolean };
+    creatorFunding?: { fundedBy: string; pastRugCount: number; riskLevel: 'Low' | 'Medium' | 'High' | 'Critical' };
+    washTrading?: { artificialPercentage: number };
+    giniCoefficient?: { score: number };
+    holdingVelocity?: { classification: string; averageHoldTimeSeconds: number };
+    momentumHeatmap?: Array<{ time: string; buy: number; sell: number; net: number }>;
   };
-  topBuyers?: Array<{
-    wallet: string;
-    amount: number;
-    percentage: number;
-    tag: string;
-    winRate: number;
-  }>;
-  topSellers?: Array<{
-    wallet: string;
-    amount: number;
-    percentage: number;
-    tag: string;
-    winRate: number;
-  }>;
+  topBuyers?: Array<{ wallet: string; amount: number; percentage: number; tag: string; winRate: number }>;
+  topSellers?: Array<{ wallet: string; amount: number; percentage: number; tag: string; winRate: number }>;
 }

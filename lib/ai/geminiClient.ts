@@ -110,12 +110,23 @@ async function generateWithRetry(
     request.config.systemInstruction = systemInstruction;
   }
 
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`[GEMINI] Request timed out for model ${model}`)), timeoutMs)
-  );
+  // FIX-5.1: Use AbortController so timeout actually cancels the SDK request.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const responsePromise = client.models.generateContent(request);
-  const response: any = await Promise.race([responsePromise, timeoutPromise]);
+  let response: any;
+  try {
+    // The @google/genai SDK accepts `config.abortSignal`
+    request.config.abortSignal = controller.signal;
+    response = await client.models.generateContent(request);
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || controller.signal.aborted) {
+      throw new Error(`[GEMINI] Request timed out for model ${model}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   return {

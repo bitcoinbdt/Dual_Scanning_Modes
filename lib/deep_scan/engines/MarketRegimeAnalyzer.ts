@@ -154,8 +154,9 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   const volumeUp = volumeSlope > 0;
   const highVolatility = priceVolatility > cfg.volatilityLimit;
   
-  let regime: RegimeLabel = 'ACCUMULATION';
-  let regimeDescription = 'Price is consolidating on stable or rising volume, suggesting steady accumulation.';
+  // FIX-2.9: Change default to neutral explicit state
+  let regime: RegimeLabel = 'MOMENTUM';   // was 'ACCUMULATION'
+  let regimeDescription = 'Default classification pending signal evaluation.';
 
   if (priceDown && totalPriceChangePct < cfg.deadDrawdownLimit && volumeZScore < cfg.deadVolumeZScoreLimit) {
     regime = 'DEAD';
@@ -173,6 +174,11 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
       'Price is surging on anomalously high volume — the last candle volume is ' +
       `${volumeZScore.toFixed(1)} standard deviations above the 24h batch mean. ` +
       'This indicates a sharp breakout, not a gradual trend. Verify on-chain activity before acting.';
+  // FIX-5.9: A bull case with high volatility is intentionally classified as
+  // MOMENTUM (via the fallthrough catch-all added in Phase 2). A true volume
+  // spike would already have been captured by the BREAKOUT branch above
+  // (volumeZScore >= 2.0). The !highVolatility guard here ensures volatile
+  // momentum is not conflated with the cleaner BREAKOUT case.
   } else if (priceUp && volumeUp && !highVolatility) {
     regime = 'MOMENTUM';
     regimeDescription = 'Price is rising on expanding volume, indicating strong breakout momentum.';
@@ -185,6 +191,16 @@ export function analyzeMarketRegime(ohlcv: OHLCVCandle[]): MarketRegimeResult {
   } else if (priceDown && !volumeUp) {
     regime = 'LIQUIDITY_EXIT';
     regimeDescription = 'Price is sliding on descending volume, showing slow bleed-out of support.';
+  } else if (!priceUp && !priceDown && !volumeUp && !highVolatility) {
+    // FIX-2.9: Explicit catch-all before confidence calculation
+    regime = 'DEAD';
+    regimeDescription = 'Price and volume are both flat — no directional pressure detected.';
+  } else if (priceUp && volumeUp && highVolatility) {
+    regime = 'MOMENTUM';
+    regimeDescription = 'Price is rising on expanding volume with high volatility — volatile upside.';
+  } else if (priceDown && volumeUp && highVolatility) {
+    regime = 'LIQUIDITY_EXIT';
+    regimeDescription = 'Price is falling on rising volume with high volatility — aggressive distribution.';
   }
 
   // ── Confidence Score ──

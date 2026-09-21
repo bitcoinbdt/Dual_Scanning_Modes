@@ -7,7 +7,9 @@
  * Storage: Supabase `scan_snapshots` table (schema already migrated in Migration 13).
  */
 
+// FIX-1.8: Import SupabaseClient type for optional server client injection
 import { supabase } from '../supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { customAlphabet } from 'nanoid';
 
 // URL-safe nanoid alphabet — avoids visually ambiguous characters (0, O, l, I, 1)
@@ -47,6 +49,7 @@ export interface SnapshotRecord {
  * @param tokenName     - Token name for the snapshot record
  * @param resultJson    - The complete scan result payload (any JSON-serializable object)
  * @param userId        - Optional user ID for ownership tracking
+ * @param adminClient   - FIX-1.8: Optional service-role client to bypass RLS
  * @returns             - The generated snapshot ID (e.g. 'ds-K9mX2pQr')
  */
 export async function saveSnapshot(
@@ -56,12 +59,15 @@ export async function saveSnapshot(
   tokenSymbol: string | null,
   tokenName: string | null,
   resultJson: unknown,
-  userId?: string | null
+  userId?: string | null,
+  adminClient?: SupabaseClient // FIX-1.8: Optional server client injection
 ): Promise<string> {
   const prefix = SCAN_TYPE_PREFIXES[scanType];
   const id = `${prefix}-${nanoid()}`;
 
-  const { error } = await supabase.from('scan_snapshots').insert({
+  // FIX-1.8: Use injected adminClient if provided, otherwise fall back to anon client
+  const client = adminClient ?? supabase;
+  const { error } = await client.from('scan_snapshots').insert({
     id,
     scan_type: scanType,
     token_address: tokenAddress,
@@ -111,18 +117,8 @@ export async function getSnapshot(id: string): Promise<SnapshotRecord | null> {
     return null;
   }
 
-  // Increment view counter (non-blocking)
-  // Increment view counter (non-blocking)
-  (async () => {
-    try {
-      await supabase
-        .from('scan_snapshots')
-        .update({ view_count: (data.view_count ?? 0) + 1 })
-        .eq('id', id);
-    } catch (err) {
-      // Non-fatal error, ignore
-    }
-  })();
+  // FIX-1.9: Use RPC for atomic view count increment instead of fire-and-forget update
+  Promise.resolve(supabase.rpc('increment_snapshot_views', { p_id: id })).catch(() => {});
 
   return {
     id: data.id,

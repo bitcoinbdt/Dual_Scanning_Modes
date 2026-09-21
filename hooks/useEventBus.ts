@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://scanner.coinxera.com';
+// FIX-5.17: gate event bus on NEXT_PUBLIC_ENABLE_EVENT_BUS feature flag
+const EVENT_BUS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_EVENT_BUS === 'true';
 
 interface EventPayload {
   id?: string;
@@ -22,6 +24,11 @@ export function useEventBus() {
   const hasShownWarningRef = useRef(false);
 
   useEffect(() => {
+    // FIX-5.17: gate event bus on NEXT_PUBLIC_ENABLE_EVENT_BUS feature flag
+    if (!EVENT_BUS_ENABLED) {
+      return;
+    }
+
     // Only try to connect if backend URL is not the default Render URL
     // or if we're in development mode
     const isDev = process.env.NODE_ENV === 'development';

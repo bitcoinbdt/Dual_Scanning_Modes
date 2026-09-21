@@ -9,6 +9,17 @@ import { useCredits } from '@/contexts/CreditContext';
 import type { CreditPackage } from '@/types/credits';
 import type { PaymentMethod } from '@/types/creditPurchase';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
+
+// FIX-1.10: Helper to retrieve auth token for explicit Bearer header
+async function getAuthToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token || (typeof window !== 'undefined' ? localStorage.getItem('authToken') : null);
+  if (!token) {
+    throw new Error('You must be logged in to submit a request. Please sign in and try again.');
+  }
+  return token;
+}
 
 // Logo Renderer Component for Brands
 function PaymentMethodLogo({ name, className = "w-8 h-8" }: { name: string; className?: string }) {
@@ -124,9 +135,14 @@ function CreditsContent() {
     setPurchaseState('submitting');
 
     try {
+      // FIX-1.10: Explicit Bearer token injection
+      const token = await getAuthToken();
       const response = await fetch('/api/credits/submit-request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           credit_package_id: selectedPackage.id,
           credits_amount: selectedPackage.credits + Math.floor(selectedPackage.credits * selectedPackage.bonusPercentage / 100),

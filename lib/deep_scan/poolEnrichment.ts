@@ -46,10 +46,11 @@ export async function enrichPoolsWithAlchemyReserves(
     }
 
     try {
+      // FIX-3.2: Pass network to pool reserves callers
       // Fetch token0 and reserves in parallel to reduce per-pool latency
       const [token0Hex, reservesHex] = await Promise.all([
-        fetchV2PoolToken0(poolAddress),
-        fetchV2PoolReserves(poolAddress),
+        fetchV2PoolToken0(poolAddress, network),
+        fetchV2PoolReserves(poolAddress, network),
       ]);
 
       if (token0Hex && reservesHex) {
@@ -122,14 +123,15 @@ export async function enrichClmmPoolsWithSlot0(
     }
 
     try {
+      // FIX-3.2: Pass network to all 6 queryAlchemyRpc calls
       // Fetch slot0, liquidity, token0, token1, fee, tickSpacing in parallel
       const [slot0Hex, liquidityHex, token0Hex, token1Hex, feeHex, tickSpacingHex] = await Promise.all([
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x3850c7bd' }, 'latest']).catch(() => null),
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x1a6865d5' }, 'latest']).catch(() => null),
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x0dfe1681' }, 'latest']).catch(() => null),
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xd21220a7' }, 'latest']).catch(() => null),
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xddca3f43' }, 'latest']).catch(() => null),
-        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xd0c93a7c' }, 'latest']).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x3850c7bd' }, 'latest'], network).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x1a6865d5' }, 'latest'], network).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0x0dfe1681' }, 'latest'], network).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xd21220a7' }, 'latest'], network).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xddca3f43' }, 'latest'], network).catch(() => null),
+        queryAlchemyRpc<string>('eth_call', [{ to: poolAddress, data: '0xd0c93a7c' }, 'latest'], network).catch(() => null),
       ]);
 
       if (slot0Hex && liquidityHex) {

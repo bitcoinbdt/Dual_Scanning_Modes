@@ -23,10 +23,16 @@ import type {
   WalletCacheLookupResult,
 } from '../providers/adapter-types';
 
-// ── Cache TTL constants (in days) ──
-export const WALLET_CACHE_FRESH_DAYS = 12;  // Below this: FRESH_CACHE, no revalidation
-export const WALLET_CACHE_SWR_DAYS   = 15;  // 12–15: FRESH_CACHE + SWR revalidation
-export const WALLET_CACHE_STALE_DAYS = 15;  // >= 15: STALE_CACHE
+// FIX-5.10: Cache freshness windows (in days).
+//   < FRESH_DAYS               → 'fresh' (no revalidation)
+//   FRESH_DAYS..SWR_DAYS       → 'swr'   (async revalidation queued)
+//   >= STALE_DAYS              → 'stale' (used as fallback only)
+// SWR_DAYS == STALE_DAYS is intentional: the SWR band is [12, 15) and
+// everything >= 15 is stale. Do not diverge these without updating the
+// classifyWalletCacheAge logic accordingly.
+export const WALLET_CACHE_FRESH_DAYS = 12;
+export const WALLET_CACHE_SWR_DAYS   = 15;
+export const WALLET_CACHE_STALE_DAYS = 15;
 
 /**
  * Classify cache freshness from age in days (pure function — testable).
@@ -125,7 +131,10 @@ export async function upsertWalletProfile(
         transaction_count:   profile.transactionCount,
         active_days_count:   profile.activeDaysCount,
         funding_source:      profile.fundingSource ?? null,
-        funding_source_type: profile.fundingSourceType ?? 'unknown',
+        // FIX-5.11: Preserve NULL when fundingSourceType is null (no classification
+        // attempted). Only coerce to 'unknown' when the caller explicitly asked for
+        // a classification that failed. At the schema level, NULL is a valid value.
+        funding_source_type: profile.fundingSourceType ?? null,
         funding_tx_hash:     profile.fundingTxHash ?? null,
         last_updated_at:     lastSeenDate.toISOString(),
         provider:            profile.provenance,
@@ -156,12 +165,8 @@ export async function enqueueWalletEnrichmentJob(
   try {
     const supabase = getServiceClient();
 
-    // Stuck job protection: clean up jobs older than 1 hour to prevent indefinite blocks
-    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-    await supabase
-      .from('wallet_enrichment_jobs')
-      .delete()
-      .lt('enqueued_at', oneHourAgo);
+    // FIX-4.10: Removed per-call global DELETE — moved to a dedicated cleanup
+    // function (see cleanupStaleWalletEnrichmentJobs below), called by a cron.
 
     const { error } = await supabase
       .from('wallet_enrichment_jobs')
@@ -197,5 +202,26 @@ export async function completeEnrichmentJob(
       .eq('chain', chain);
   } catch (err: any) {
     console.warn('[WalletCache] Job completion failed:', err?.message);
+  }
+}
+
+// FIX-4.10: Dedicated cleanup function for stale wallet enrichment jobs (to be called by cron)
+export async function cleanupStaleWalletEnrichmentJobs(): Promise<number> {
+  try {
+    const supabase = getServiceClient();
+    const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
+    const { data, error } = await supabase
+      .from('wallet_enrichment_jobs')
+      .delete()
+      .lt('enqueued_at', oneHourAgo)
+      .select('address');
+    if (error) {
+      console.warn('[WalletCache] Stale cleanup failed:', error.message);
+      return 0;
+    }
+    return data?.length ?? 0;
+  } catch (err: any) {
+    console.warn('[WalletCache] Stale cleanup exception:', err?.message);
+    return 0;
   }
 }

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { PROVIDER_CONFIG } from '../config';
 import { ProviderError } from '../types';
+import { retryWithBackoff } from '../../blockchain/retryUtils'; // FIX-4.2: Retry wrapper
 
 /**
  * Check if GoldRush (Covalent) is configured.
@@ -28,13 +29,25 @@ export async function queryGoldrush<T = any>(endpoint: string): Promise<T> {
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   try {
-    const response = await axios.get(url, {
-      auth: {
-        username: apiKey || '',
-        password: '', // Blank password per Covalent spec
-      },
-      timeout,
-    });
+    // FIX-4.2: Wrap axios.get inside retryWithBackoff
+    const response = await retryWithBackoff(
+      async () =>
+        axios.get(url, {
+          auth: {
+            username: apiKey || '',
+            password: '', // Blank password per Covalent spec
+          },
+          timeout,
+        }),
+      {
+        maxRetries: 3,
+        initialDelay: 500,
+        maxDelay: 4000,
+        onRetry: (attempt, max, delay, err) => {
+          console.log(`[GoldRush] Retry ${attempt}/${max} in ${delay}ms: ${(err as any).message}`);
+        },
+      }
+    );
 
     if (response.data?.error) {
       throw new ProviderError(

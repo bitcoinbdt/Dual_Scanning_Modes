@@ -19,9 +19,23 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // FIX-1.4: Admin API server-side check
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const supabaseAnon = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  const { data: { user }, error: authError } = await supabaseAnon.auth.getUser(token);
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail || user?.email !== adminEmail) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const { id } = await params;
   try {
-    const admin = await requireAdmin();
+    const admin = user;
     const supabaseAdmin = getAdminClient();
 
     const body = await request.json();

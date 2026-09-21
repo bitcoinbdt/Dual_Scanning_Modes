@@ -14,6 +14,10 @@ export interface OHLCVCandle {
   timestamp: number;
   open: number;
   close: number;
+  // FIX-5.7: high/low added. Optional because upstream providers may not
+  // populate them; consumers must handle undefined.
+  high?: number;
+  low?: number;
   volume: number;
 }
 
@@ -85,6 +89,7 @@ export interface CollectorResult {
   wallet_metrics: WalletMetrics;
   metrics: CalculatedMetrics;
   blockchain: 'solana' | 'bsc' | 'eth';
+  tokenSymbol?: string; // FIX-1.7: Extracted token symbol when available
   collectionTime: number;  // Time taken to collect (ms)
   collectedAt?: number;    // Unix timestamp of when the collection occurred (seconds)
   holder_spike?: boolean;

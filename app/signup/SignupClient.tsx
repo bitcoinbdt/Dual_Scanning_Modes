@@ -82,8 +82,10 @@ function SignupPageContent() {
     try {
       if (!name.trim()) throw new Error('Name is required');
 
-      if (referral && !/^[A-Z0-9]{8}$/.test(referral)) {
-        throw new Error('Invalid referral code format. Must be 8 characters (letters and numbers).');
+      // FIX-5.15: Match the exact alphabet used by generateReferralCode in
+      // services/referralApi.ts: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' (no 0/O/1/I).
+      if (referral && !/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/.test(referral)) {
+        throw new Error('Invalid referral code format. Must be 8 characters (no 0, O, 1, or I).');
       }
 
       await signup(email, password, name, referral || undefined);

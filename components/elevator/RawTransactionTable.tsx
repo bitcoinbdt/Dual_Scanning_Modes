@@ -250,10 +250,23 @@ export function RawTransactionTable({
             });
           }
         } else {
-          // For trades (swaps): only display 1 row (the user's wallet side of the swap)
-          // Identify the user's wallet by picking the non-system wallet from the transfer
-          const wallet = isSystemAddress(transfer.from) ? transfer.to : transfer.from;
-          const action = isSystemAddress(transfer.from) ? 'BUY' : 'SELL';
+          // FIX-2.5: Prefer backend-supplied utx.type for trade action classification
+          const utxType = (tx as any).type as 'buy' | 'sell' | 'transfer' | undefined;
+          let action: 'BUY' | 'SELL';
+          let wallet: string | undefined;
+
+          if (utxType === 'buy') {
+            action = 'BUY';
+            wallet = (tx as any).wallet || transfer.to;
+          } else if (utxType === 'sell') {
+            action = 'SELL';
+            wallet = (tx as any).wallet || transfer.from;
+          } else {
+            // Fallback to heuristic only when backend type is missing/unknown
+            const fromIsSystem = isSystemAddress(transfer.from);
+            wallet = fromIsSystem ? transfer.to : transfer.from;
+            action = fromIsSystem ? 'BUY' : 'SELL';
+          }
           
           if (wallet && !isSystemAddress(wallet)) {
             flat.push({

@@ -169,6 +169,10 @@ export function calculateRiskScore(params: {
   let whaleExitConfidence = 0;
 
   if (whaleExitAvail === 'measured') {
+    // FIX-5.4: Large-Cap tokens are excluded upstream by WhaleExitSimulator,
+    // so if we reach 'measured' here, the token is not Large-Cap. This branch
+    // is retained for defensive completeness in case a future caller bypasses
+    // the upstream check.
     if (params.isLargeCap === true) {
       whaleExitScore = 0;
       whaleExitConfidence = 95;
@@ -501,8 +505,13 @@ export function calculateRiskScore(params: {
   let overallScore: number;
 
   if (availableModuleCount === 0) {
-    // No module produced measured data; score is meaningless — return 0.
+    // FIX-5.3: No module produced measured data. Base score starts at 0 (no
+    // behavioral signal to work with), but verified contract-risk penalties
+    // and social penalties still apply — these are objective on-chain facts,
+    // not behavioral inferences. Without this, a verified blacklist/pause flag
+    // could render as "0 LOW RISK".
     overallScore = 0;
+    overallScore = Math.min(100, overallScore + contractRiskPenalty + socialPenalty);
   } else {
     // Normalize: divide the sum of weighted contributions by the sum of measured weights
     // so the resulting score is still on the 0–100 scale regardless of how many modules contributed.

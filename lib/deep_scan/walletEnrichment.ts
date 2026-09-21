@@ -43,10 +43,12 @@ import {
 import type { WalletQualityProfile } from '../providers/adapter-types';
 
 /** Timeout (ms) for each individual page fetch during synchronous enrichment. */
-const PAGE_FETCH_TIMEOUT_MS = 3000;
+// FIX-4.11: Adjusted per-page timeout
+const PAGE_FETCH_TIMEOUT_MS = 2500;
 
 /** Timeout (ms) for the entire synchronous top-N enrichment batch. */
-export const SYNC_ENRICHMENT_TIMEOUT_MS = 1500;
+// FIX-4.11: Increased timeout from 1500 to 6000ms to allow multi-page walks
+export const SYNC_ENRICHMENT_TIMEOUT_MS = 6000;
 
 /**
  * Walk up to 5 pages of transactions from Helius for a Solana wallet.
@@ -234,8 +236,12 @@ export async function enrichTopWalletsSync(
 
   const settled = await Promise.allSettled(
     toEnrich.map(async (addr) => {
+      // FIX-4.11: Informative timeout rejection
       const timeoutRace = new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('sync_enrichment_timeout')), SYNC_ENRICHMENT_TIMEOUT_MS)
+        setTimeout(
+          () => reject(new Error(`sync_enrichment_timeout (${SYNC_ENRICHMENT_TIMEOUT_MS}ms) — background walk may continue`)),
+          SYNC_ENRICHMENT_TIMEOUT_MS
+        )
       );
       const profile = await Promise.race([enrichSingleWallet(addr, chain), timeoutRace]);
       return { addr, profile };

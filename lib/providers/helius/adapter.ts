@@ -13,7 +13,13 @@ export interface AdaptHeliusWalletHistoryOpts {
   fetchedAt: number;
 }
 
+// FIX-4.7: Cache cex-addresses.json in module-level memory
+let _cexAddressesCache: Record<string, string[]> | null = null;
+
+export function __resetCexAddressesCache(): void { _cexAddressesCache = null; }
+
 function getCexAddresses(): Record<string, string[]> {
+  if (_cexAddressesCache) return _cexAddressesCache;
   try {
     const cexAddressesPath = path.join(process.cwd(), 'data', 'cex-addresses.json');
     if (fs.existsSync(cexAddressesPath)) {
@@ -25,11 +31,13 @@ function getCexAddresses(): Record<string, string[]> {
           res[ch] = list.map((item: any) => String(item.address)); // Solana is case-sensitive base58
         }
       }
+      _cexAddressesCache = res;
       return res;
     }
   } catch (err) {
-    console.error('[classifySolanaFundingSource] Failed to load cex-addresses.json:', err);
+    console.error('[getCexAddresses] Failed to load cex-addresses.json:', err);
   }
+  _cexAddressesCache = {};
   return {};
 }
 

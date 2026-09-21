@@ -28,9 +28,12 @@ import { DEEP_SCAN_CONFIG } from '../config';
 const SUPPLY_THRESHOLD_PCT = DEEP_SCAN_CONFIG.whaleBehavior.supplyThresholdPct;
 const LIQUIDITY_THRESHOLD_PCT = DEEP_SCAN_CONFIG.whaleBehavior.liquidityThresholdPct;
 
+// FIX-2.13: Updated data semantic warning string
 const DATA_SEMANTIC_WARNING =
   'Whale balances are derived from the local transaction batch window only. ' +
-  'They are observations, not authoritative on-chain holder balances.';
+  '`observedBatchBalance`, `supplySharePct`, and `batchNetActivitySharePct` all ' +
+  'reflect BATCH-NET-ACTIVITY, not authoritative on-chain holdings. ' +
+  'They are observations, not facts about wallet state.';
 
 function round(n: number, dp = 4): number {
   const factor = Math.pow(10, dp);
@@ -185,6 +188,7 @@ export function analyzeWhaleBehavior(
       wallet, // preserves original case
       observedBatchBalance: round(holder.balance, 4),
       supplySharePct,
+      batchNetActivitySharePct: supplySharePct, // FIX-2.13: Semantic alias for supplySharePct
       liquiditySharePct,
       isAboveSupplyThreshold,
       isAboveLiquidityThreshold,

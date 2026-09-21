@@ -22,6 +22,27 @@ interface RugSignatureEntry {
   addedAt: string;
 }
 
+// FIX-4.8: Cache known_rug_signatures.json in module-level memory
+let _rugSignaturesCache: RugSignatureEntry[] | null = null;
+
+export function __resetRugSignaturesCache(): void { _rugSignaturesCache = null; }
+
+function loadRugSignatures(): RugSignatureEntry[] {
+  if (_rugSignaturesCache) return _rugSignaturesCache;
+  try {
+    const signaturesPath = path.join(process.cwd(), 'lib/reputation/data/known_rug_signatures.json');
+    if (fs.existsSync(signaturesPath)) {
+      const raw = fs.readFileSync(signaturesPath, 'utf8');
+      _rugSignaturesCache = JSON.parse(raw) as RugSignatureEntry[];
+      return _rugSignaturesCache;
+    }
+  } catch (err) {
+    console.warn('[RugPatternMatcher] Failed to load signatures:', err);
+  }
+  _rugSignaturesCache = [];
+  return [];
+}
+
 export class RugPatternMatcher {
   /**
    * Match contract and deployer behavior against known rug signatures
@@ -43,19 +64,14 @@ export class RugPatternMatcher {
       try {
         const selectors = this.extractFunctionSelectors(bytecode);
         
-        // Load signatures
-        const signaturesPath = path.join(process.cwd(), 'lib/reputation/data/known_rug_signatures.json');
-        if (fs.existsSync(signaturesPath)) {
-          const rawSignatures = fs.readFileSync(signaturesPath, 'utf8');
-          const templates: RugSignatureEntry[] = JSON.parse(rawSignatures);
-
-          for (const t of templates) {
-            const templateSet = new Set(t.functionSelectors);
-            const score = this.jaccardSimilarity(selectors, templateSet);
-            if (score > similarityScore) {
-              similarityScore = score;
-              similarTemplate = t.label;
-            }
+        // FIX-4.8: Use cached rug signatures
+        const templates = loadRugSignatures();
+        for (const t of templates) {
+          const templateSet = new Set(t.functionSelectors);
+          const score = this.jaccardSimilarity(selectors, templateSet);
+          if (score > similarityScore) {
+            similarityScore = score;
+            similarTemplate = t.label;
           }
         }
       } catch (err) {

@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { fetchOHLCV, fetchBirdeyeTransactions } from './birdeye';
 import { fetchTransactions as fetchSolanaTransactions } from './helius';
+import { fetchTokenSymbol } from '../fetchSymbol';
 import { buildWalletData as buildSolanaWalletData } from './walletEngine';
 import { calculateMetrics as calculateSolanaMetrics } from './metrics';
 import { detectHolderSpike } from '../../utils/holderSpike';
@@ -287,6 +288,9 @@ export class SolanaCollector implements IBlockchainCollector {
   async collect(address: string, maxTransactions: number, tokenDecimals?: number): Promise<CollectorResult> {
     const startTime = Date.now();
 
+    // FIX-2.1: Extract token symbol via DexScreener/Birdeye
+    const tokenSymbol = await fetchTokenSymbol(this.getBlockchain(), address, this.birdeyeApiKey) ?? undefined;
+
     console.log(`\n${'='.repeat(60)}`);
     console.log(`[SolanaCollector] Starting collection for ${address}`);
     console.log(`[SolanaCollector] Max transactions: ${maxTransactions}`);
@@ -388,6 +392,7 @@ export class SolanaCollector implements IBlockchainCollector {
       const collectionTime = Date.now() - startTime;
 
       const result: CollectorResult = {
+        tokenSymbol, // FIX-2.1: Add extracted token symbol
         ohlcv,
         transactions,
         wallets: walletData.wallets,

@@ -59,10 +59,19 @@ export interface ReferralHistoryResponse {
   total: number;
 }
 
-// Bonus tier mapping
-export const REFERRAL_BONUS_TIERS: Record<string, { percentage: number; credits: number }> = {
-  starter: { percentage: 10, credits: 5 },
-  basic: { percentage: 15, credits: 15 },
-  pro: { percentage: 20, credits: 40 },
-  premium: { percentage: 25, credits: 125 },
+// FIX-1.2: Referral bonus canonical source
+export interface ReferralBonusTier {
+  packageId: string;
+  percentage: number;
+}
+export const REFERRAL_BONUS_TIERS: Record<string, ReferralBonusTier> = {
+  starter: { packageId: 'starter', percentage: 0.20 },
+  basic:   { packageId: 'basic',   percentage: 0.25 },
+  pro:     { packageId: 'pro',     percentage: 0.30 },
+  premium: { packageId: 'premium', percentage: 0.35 },
 };
+export function calculateReferralBonusFromTiers(packageId: string, credits: number): number {
+  const tier = REFERRAL_BONUS_TIERS[packageId];
+  if (!tier) return 0;
+  return Math.floor(credits * tier.percentage);
+}
